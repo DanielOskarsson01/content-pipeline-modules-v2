@@ -1,0 +1,54 @@
+{
+  "id": "sitemap-parser",
+  "name": "Sitemap Parser",
+  "description": "Discover URLs from XML sitemaps for each company website",
+  "version": "1.0.0",
+  "step": 1,
+  "category": "crawling",
+  "cost": "cheap",
+  "data_operation_default": "add",
+
+  "requires_columns": ["website"],
+
+  "options": [
+    {
+      "name": "max_urls",
+      "type": "number",
+      "label": "Maximum URLs per site",
+      "description": "Limit how many URLs to extract per sitemap.",
+      "default": 500,
+      "min": 1,
+      "max": 10000
+    },
+    {
+      "name": "include_nested_sitemaps",
+      "type": "boolean",
+      "label": "Follow nested sitemaps",
+      "description": "If sitemap index found, follow child sitemaps.",
+      "default": true
+    },
+    {
+      "name": "url_pattern",
+      "type": "text",
+      "label": "URL filter pattern",
+      "description": "Only include URLs matching this pattern (regex). Leave empty for all.",
+      "default": ""
+    }
+  ],
+
+  "options_defaults": {
+    "max_urls": 500,
+    "include_nested_sitemaps": true,
+    "url_pattern": ""
+  },
+
+  "item_key": "url",
+
+  "output_schema": {
+    "display_type": "table",
+    "url": "string (required)",
+    "last_modified": "string (ISO date, if available)",
+    "change_frequency": "string",
+    "priority": "number"
+  }
+}
