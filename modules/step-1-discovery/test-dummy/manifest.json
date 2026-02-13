@@ -1,0 +1,55 @@
+{
+  "id": "test-dummy",
+  "name": "Test Dummy",
+  "description": "Returns fake data after a short delay — for testing the execution pipeline",
+  "version": "1.0.0",
+  "step": 1,
+  "category": "testing",
+  "cost": "cheap",
+  "data_operation_default": "add",
+
+  "requires_columns": [],
+
+  "options": [
+    {
+      "name": "delay_ms",
+      "type": "number",
+      "label": "Delay per entity (ms)",
+      "description": "How long to wait per entity to simulate work.",
+      "default": 1000,
+      "min": 100,
+      "max": 30000
+    },
+    {
+      "name": "items_per_entity",
+      "type": "number",
+      "label": "Items per entity",
+      "description": "How many fake items to generate per entity.",
+      "default": 3,
+      "min": 1,
+      "max": 50
+    },
+    {
+      "name": "fail_entity",
+      "type": "text",
+      "label": "Fail on entity name",
+      "description": "If an entity name matches this string, simulate a failure. Leave empty to succeed all.",
+      "default": ""
+    }
+  ],
+
+  "options_defaults": {
+    "delay_ms": 1000,
+    "items_per_entity": 3,
+    "fail_entity": ""
+  },
+
+  "item_key": "url",
+
+  "output_schema": {
+    "display_type": "table",
+    "url": "string (required)",
+    "title": "string",
+    "score": "number"
+  }
+}
