@@ -16,9 +16,9 @@
       "type": "number",
       "label": "Maximum URLs per site",
       "description": "Limit how many URLs to extract per sitemap.",
-      "default": 500,
+      "default": 10000,
       "min": 1,
-      "max": 10000
+      "max": 50000
     },
     {
       "name": "include_nested_sitemaps",
@@ -37,7 +37,7 @@
   ],
 
   "options_defaults": {
-    "max_urls": 500,
+    "max_urls": 10000,
     "include_nested_sitemaps": true,
     "url_pattern": ""
   },

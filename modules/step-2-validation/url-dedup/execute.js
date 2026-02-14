@@ -20,24 +20,34 @@ async function execute(input, options, tools) {
     case_insensitive
   } = options;
 
-  // Flatten all items across entities, keeping entity association
+  // Flatten all items across entities, keeping entity association.
+  // Supports two input formats:
+  //   1. Grouped: [{ name, items: [{ url, ... }] }]  — from previous step re-grouping
+  //   2. Flat:    [{ url, ... }]                       — from CSV upload or direct input
   const allItems = [];
   const byEntity = new Map();
+
   for (const entity of entities) {
-    if (!entity.items || entity.items.length === 0) {
-      logger.warn(`Skipping ${entity.name}: no items from previous step`);
-      byEntity.set(entity.name, []);
-      continue;
-    }
-    for (const item of entity.items) {
-      if (!item.url) {
-        logger.warn(`Skipping item in ${entity.name}: no url field`);
-        continue;
+    if (entity.items && entity.items.length > 0) {
+      // Grouped format: entity has name + items array
+      for (const item of entity.items) {
+        if (!item.url) {
+          logger.warn(`Skipping item in ${entity.name}: no url field`);
+          continue;
+        }
+        allItems.push({
+          ...item,
+          entity_name: entity.name || item.entity_name || 'unknown'
+        });
       }
+    } else if (entity.url) {
+      // Flat format: entity IS the item (from CSV upload or flat pool)
       allItems.push({
-        ...item,
-        entity_name: entity.name
+        ...entity,
+        entity_name: entity.entity_name || entity.name || 'unknown'
       });
+    } else {
+      logger.warn(`Skipping entity: no items array and no url field. Keys: ${Object.keys(entity).join(', ')}`);
     }
   }
 
@@ -85,6 +95,13 @@ async function execute(input, options, tools) {
   const uniqueCount = allItems.length - duplicateCount;
   logger.info(`Dedup complete: ${uniqueCount} unique, ${duplicateCount} duplicates`);
 
+  // Sort results: duplicates first, then unique — so they're immediately visible
+  results.sort((a, b) => {
+    if (a.status === "duplicate" && b.status !== "duplicate") return -1;
+    if (a.status !== "duplicate" && b.status === "duplicate") return 1;
+    return 0;
+  });
+
   // Group results by entity for the expected output format
   for (const result of results) {
     if (!byEntity.has(result.entity_name)) {
@@ -108,6 +125,10 @@ async function execute(input, options, tools) {
     });
   }
 
+  const description = duplicateCount > 0
+    ? `Found ${duplicateCount} duplicates. ${uniqueCount} unique of ${allItems.length} total`
+    : `${allItems.length} URLs — no duplicates found`;
+
   return {
     results: entityResults,
     summary: {
@@ -115,6 +136,7 @@ async function execute(input, options, tools) {
       total_items: allItems.length,
       unique: uniqueCount,
       duplicates: duplicateCount,
+      description,
       errors: []
     }
   };

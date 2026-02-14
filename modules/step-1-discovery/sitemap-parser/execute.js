@@ -83,11 +83,17 @@ async function execute(input, options, tools) {
     }
   }
 
+  const successCount = entities.length - errors.length;
+  const description = errors.length > 0
+    ? `${totalItems} URLs found across ${successCount} of ${entities.length} entities (${errors.length} failed)`
+    : `${totalItems} URLs found across ${entities.length} entities`;
+
   return {
     results,
     summary: {
       total_entities: entities.length,
       total_items: totalItems,
+      description,
       errors
     }
   };

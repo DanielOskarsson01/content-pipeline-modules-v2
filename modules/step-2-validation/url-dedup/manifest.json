@@ -60,6 +60,7 @@
 
   "output_schema": {
     "display_type": "table",
+    "selectable": true,
     "url": "string (required)",
     "original_url": "string",
     "duplicate_of": "string",
