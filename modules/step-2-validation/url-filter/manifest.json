@@ -1,0 +1,53 @@
+{
+  "id": "url-filter",
+  "name": "URL Pattern Filter",
+  "description": "Filter URLs by pattern matching and HTTP status code validation",
+  "version": "1.0.0",
+  "step": 2,
+  "category": "filtering",
+  "cost": "cheap",
+  "data_operation_default": "remove",
+
+  "requires_columns": ["url"],
+
+  "options": [
+    {
+      "name": "exclude_patterns",
+      "type": "textarea",
+      "label": "Exclude URL patterns",
+      "description": "One regex pattern per line. URLs matching any pattern will be removed.",
+      "default": ""
+    },
+    {
+      "name": "include_patterns",
+      "type": "textarea",
+      "label": "Include URL patterns",
+      "description": "One regex pattern per line. If set, only matching URLs are kept.",
+      "default": ""
+    },
+    {
+      "name": "check_status_codes",
+      "type": "boolean",
+      "label": "Check HTTP status codes",
+      "description": "Send HEAD requests to verify URLs return 200.",
+      "default": false
+    }
+  ],
+
+  "options_defaults": {
+    "exclude_patterns": "",
+    "include_patterns": "",
+    "check_status_codes": false
+  },
+
+  "item_key": "url",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": true,
+    "url": "string (required)",
+    "status": "string",
+    "matched_pattern": "string",
+    "entity_name": "string"
+  }
+}

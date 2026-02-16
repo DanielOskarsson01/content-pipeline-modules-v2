@@ -1,0 +1,46 @@
+{
+  "id": "rss-feeds",
+  "name": "RSS Feed Discovery",
+  "description": "Find RSS/Atom feeds by probing common feed paths on company websites",
+  "version": "1.0.0",
+  "step": 1,
+  "category": "news",
+  "cost": "cheap",
+  "data_operation_default": "add",
+
+  "requires_columns": ["website"],
+
+  "options": [
+    {
+      "name": "max_feeds",
+      "type": "number",
+      "label": "Maximum feeds per site",
+      "description": "Limit how many feed URLs to return per website.",
+      "default": 10,
+      "min": 1,
+      "max": 100
+    },
+    {
+      "name": "check_common_paths",
+      "type": "boolean",
+      "label": "Check common feed paths",
+      "description": "Try /feed, /rss, /atom.xml and other common feed locations.",
+      "default": true
+    }
+  ],
+
+  "options_defaults": {
+    "max_feeds": 10,
+    "check_common_paths": true
+  },
+
+  "item_key": "url",
+
+  "output_schema": {
+    "display_type": "table",
+    "url": "string (required)",
+    "feed_type": "string",
+    "title": "string",
+    "item_count": "number"
+  }
+}
