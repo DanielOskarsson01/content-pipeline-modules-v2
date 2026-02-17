@@ -136,6 +136,12 @@ async function execute(input, options, tools) {
     keptCount++;
   }
 
+  // Sort: flagged items (excluded, dead_link) first so they appear at top of results
+  results.sort((a, b) => {
+    const order = { excluded: 0, dead_link: 1, kept: 2 };
+    return (order[a.status] ?? 2) - (order[b.status] ?? 2);
+  });
+
   // Group results by entity for the expected output format
   const byEntity = new Map();
   for (const result of results) {

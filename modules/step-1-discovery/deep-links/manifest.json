@@ -1,0 +1,71 @@
+{
+  "id": "deep-links",
+  "name": "Deep Link Crawler",
+  "description": "Follow key pages from earlier discovery and extract links one level deeper",
+  "version": "1.0.0",
+  "step": 1,
+  "category": "crawling",
+  "cost": "medium",
+  "data_operation_default": "transform",
+
+  "requires_columns": ["website"],
+
+  "options": [
+    {
+      "name": "max_pages_per_entity",
+      "type": "number",
+      "label": "Maximum pages to crawl per company",
+      "description": "How many pages from the working pool to fetch and extract links from.",
+      "default": 10,
+      "min": 1,
+      "max": 50
+    },
+    {
+      "name": "max_urls_per_page",
+      "type": "number",
+      "label": "Maximum URLs per crawled page",
+      "description": "Limit how many new URLs to extract from each crawled page.",
+      "default": 50,
+      "min": 1,
+      "max": 200
+    },
+    {
+      "name": "crawl_patterns",
+      "type": "textarea",
+      "label": "URL path patterns to crawl",
+      "description": "One pattern per line. Pages whose URL path contains any of these strings will be crawled. Example: /about, /company, /partners, /products, /press",
+      "default": "/about\n/company\n/partners\n/products\n/solutions\n/press\n/news\n/blog"
+    },
+    {
+      "name": "same_domain_only",
+      "type": "boolean",
+      "label": "Same domain only",
+      "description": "Only include discovered links pointing to the same domain as the company homepage.",
+      "default": true
+    },
+    {
+      "name": "exclude_already_discovered",
+      "type": "boolean",
+      "label": "Exclude already discovered URLs",
+      "description": "Skip URLs that already exist in the working pool. Reduces noise but url-dedup in Step 2 handles this too.",
+      "default": true
+    }
+  ],
+
+  "options_defaults": {
+    "max_pages_per_entity": 10,
+    "max_urls_per_page": 50,
+    "crawl_patterns": "/about\n/company\n/partners\n/products\n/solutions\n/press\n/news\n/blog",
+    "same_domain_only": true,
+    "exclude_already_discovered": true
+  },
+
+  "item_key": "url",
+
+  "output_schema": {
+    "display_type": "table",
+    "url": "string (required)",
+    "found_on": "string (URL of the page this link was discovered on)",
+    "link_text": "string"
+  }
+}

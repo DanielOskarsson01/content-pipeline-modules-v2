@@ -1,0 +1,83 @@
+{
+  "id": "url-relevance",
+  "name": "URL Relevance Filter",
+  "description": "LLM-based URL relevance classification. Sends URL slugs, link text, and source location to an AI model to classify each as KEEP, MAYBE, or DROP for the target content type. Runs after url-dedup and url-filter to minimize token usage.",
+  "version": "1.0.0",
+  "step": 2,
+  "category": "filtering",
+  "cost": "cheap",
+  "data_operation_default": "remove",
+
+  "requires_columns": ["url"],
+
+  "options": [
+    {
+      "name": "ai_model",
+      "type": "select",
+      "label": "AI Model",
+      "description": "Which model to use for classification.",
+      "default": "haiku",
+      "values": ["haiku", "sonnet", "opus", "gpt-4o-mini", "gpt-4o"]
+    },
+    {
+      "name": "ai_provider",
+      "type": "select",
+      "label": "AI Provider",
+      "description": "Which LLM provider to use.",
+      "default": "anthropic",
+      "values": ["anthropic", "openai"]
+    },
+    {
+      "name": "keep_criteria",
+      "type": "textarea",
+      "label": "Keep criteria",
+      "description": "Comma-separated list of page types to classify as KEEP.",
+      "default": "about pages, team, leadership, partnerships, integrations, products overview, services overview, awards, milestones, company news, investors, careers, pricing, contact, press releases, compliance, regulatory, case studies, interviews, expansion, acquisitions, funding, annual reports"
+    },
+    {
+      "name": "drop_criteria",
+      "type": "textarea",
+      "label": "Drop criteria",
+      "description": "Comma-separated list of page types to classify as DROP.",
+      "default": "individual product pages, seasonal campaigns, single game pages, marketing landing pages, demo pages, how-to-play guides, promotional offers, individual blog posts about single products, holiday-themed content, affiliate landing pages, pagination, author archives, tag pages"
+    },
+    {
+      "name": "confidence_threshold",
+      "type": "select",
+      "label": "Confidence threshold",
+      "description": "How aggressively to filter uncertain URLs.",
+      "default": "balanced",
+      "values": ["keep_most", "balanced", "aggressive"]
+    },
+    {
+      "name": "max_urls_per_prompt",
+      "type": "number",
+      "label": "Max URLs per prompt",
+      "description": "Maximum number of URLs to send in a single LLM call. Larger batches use fewer API calls but may reduce accuracy.",
+      "default": 200,
+      "min": 10,
+      "max": 500
+    }
+  ],
+
+  "options_defaults": {
+    "ai_model": "haiku",
+    "ai_provider": "anthropic",
+    "keep_criteria": "about pages, team, leadership, partnerships, integrations, products overview, services overview, awards, milestones, company news, investors, careers, pricing, contact, press releases, compliance, regulatory, case studies, interviews, expansion, acquisitions, funding, annual reports",
+    "drop_criteria": "individual product pages, seasonal campaigns, single game pages, marketing landing pages, demo pages, how-to-play guides, promotional offers, individual blog posts about single products, holiday-themed content, affiliate landing pages, pagination, author archives, tag pages",
+    "confidence_threshold": "balanced",
+    "max_urls_per_prompt": 200
+  },
+
+  "item_key": "url",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": true,
+    "url": "string (required)",
+    "link_text": "string",
+    "source_location": "string",
+    "relevance": "string",
+    "entity_name": "string"
+  }
+}

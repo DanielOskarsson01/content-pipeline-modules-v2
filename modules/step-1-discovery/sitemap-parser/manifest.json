@@ -6,7 +6,7 @@
   "step": 1,
   "category": "crawling",
   "cost": "cheap",
-  "data_operation_default": "add",
+  "data_operation_default": "transform",
 
   "requires_columns": ["website"],
 

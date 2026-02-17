@@ -1,0 +1,61 @@
+{
+  "id": "page-links",
+  "name": "Page Link Extractor",
+  "description": "Extract URLs from homepage navigation, header, footer, and main content areas",
+  "version": "1.0.0",
+  "step": 1,
+  "category": "crawling",
+  "cost": "cheap",
+  "data_operation_default": "transform",
+
+  "requires_columns": ["website"],
+
+  "options": [
+    {
+      "name": "max_urls",
+      "type": "number",
+      "label": "Maximum URLs per site",
+      "description": "Limit how many URLs to extract per homepage.",
+      "default": 200,
+      "min": 1,
+      "max": 1000
+    },
+    {
+      "name": "include_footer",
+      "type": "boolean",
+      "label": "Include footer links",
+      "description": "Extract links from footer area. Useful for parent company, licensing, and legal pages.",
+      "default": true
+    },
+    {
+      "name": "include_body",
+      "type": "boolean",
+      "label": "Include body content links",
+      "description": "Extract links from main page body, not just navigation elements. Finds more URLs but includes lower-signal links.",
+      "default": false
+    },
+    {
+      "name": "same_domain_only",
+      "type": "boolean",
+      "label": "Same domain only",
+      "description": "Only include links pointing to the same domain as the homepage.",
+      "default": true
+    }
+  ],
+
+  "options_defaults": {
+    "max_urls": 200,
+    "include_footer": true,
+    "include_body": false,
+    "same_domain_only": true
+  },
+
+  "item_key": "url",
+
+  "output_schema": {
+    "display_type": "table",
+    "url": "string (required)",
+    "link_text": "string",
+    "source_location": "string (nav|header|footer|body)"
+  }
+}

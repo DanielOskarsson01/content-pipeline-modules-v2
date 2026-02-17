@@ -57,7 +57,7 @@ modules/
   "step": 1,
   "category": "example-category",
   "cost": "cheap",
-  "data_operation_default": "add",
+  "data_operation_default": "transform",
   "requires_columns": ["website"],
   "item_key": "url",
 
