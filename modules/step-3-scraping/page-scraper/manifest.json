@@ -1,0 +1,90 @@
+{
+  "id": "page-scraper",
+  "name": "Page Scraper",
+  "description": "Fetch HTML pages and extract text content from validated URLs",
+  "version": "1.0.0",
+  "step": 3,
+  "category": "scraping",
+  "cost": "expensive",
+  "data_operation_default": "transform",
+
+  "requires_columns": ["url"],
+
+  "options": [
+    {
+      "name": "request_timeout",
+      "type": "number",
+      "label": "Request timeout (ms)",
+      "description": "HTTP request timeout per URL in milliseconds.",
+      "default": 10000,
+      "min": 1000,
+      "max": 30000
+    },
+    {
+      "name": "max_content_length",
+      "type": "number",
+      "label": "Max extracted text (chars)",
+      "description": "Truncate extracted text to this many characters. Applied after HTML stripping.",
+      "default": 50000,
+      "min": 1000,
+      "max": 200000
+    },
+    {
+      "name": "delay_between_requests",
+      "type": "number",
+      "label": "Delay between requests (ms)",
+      "description": "Pause between HTTP requests to avoid rate limiting.",
+      "default": 500,
+      "min": 0,
+      "max": 5000
+    },
+    {
+      "name": "skip_non_html",
+      "type": "boolean",
+      "label": "Skip non-HTML responses",
+      "description": "Mark non-HTML content types (PDF, images) as 'skipped' instead of 'error'.",
+      "default": true
+    },
+    {
+      "name": "extract_meta",
+      "type": "boolean",
+      "label": "Extract meta description",
+      "description": "Extract meta description tag from HTML head.",
+      "default": true
+    }
+  ],
+
+  "options_defaults": {
+    "request_timeout": 10000,
+    "max_content_length": 50000,
+    "delay_between_requests": 500,
+    "skip_non_html": true,
+    "extract_meta": true
+  },
+
+  "item_key": "url",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": true,
+    "url": "string (required)",
+    "title": "string",
+    "word_count": "number",
+    "content_type": "string",
+    "status": "string (success | error | skipped)",
+    "error": "string | null",
+    "text_preview": "string",
+    "detail_schema": {
+      "header_fields": [
+        { "field": "url", "display": "link" },
+        "title",
+        "status",
+        "word_count"
+      ],
+      "sections": [
+        { "field": "text_content", "label": "Extracted Text", "display": "prose" },
+        { "field": "meta_description", "label": "Meta Description", "display": "text" }
+      ]
+    }
+  }
+}
