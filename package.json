@@ -1,0 +1,25 @@
+{
+  "name": "content-pipeline-modules-v2",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DanielOskarsson01/content-pipeline-modules-v2.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/DanielOskarsson01/content-pipeline-modules-v2/issues"
+  },
+  "homepage": "https://github.com/DanielOskarsson01/content-pipeline-modules-v2#readme",
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "linkedom": "^0.18.12"
+  }
+}

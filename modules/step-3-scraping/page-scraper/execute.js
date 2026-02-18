@@ -2,11 +2,14 @@
  * Page Scraper — Step 3 Scraping submodule
  *
  * Takes validated URLs from Step 2 working pool, fetches HTML content,
- * extracts text and metadata.
+ * extracts text and metadata using Mozilla Readability (Firefox Reader Mode algorithm).
  *
  * Data operation: TRANSFORM (＝) — same items enriched with content.
  * Selectable: true — user deselects failed/empty pages.
  */
+
+const { Readability } = require('@mozilla/readability');
+const { parseHTML } = require('linkedom');
 
 async function execute(input, options, tools) {
   const { entities } = input;
@@ -114,11 +117,11 @@ async function execute(input, options, tools) {
       }
     }
 
-    // Extract content from HTML
+    // Extract content from HTML using Readability (Firefox Reader Mode algorithm)
     const html = res.body;
     const title = extractTitle(html);
     const metaDescription = extract_meta ? extractMetaDescription(html) : null;
-    let textContent = extractText(html);
+    let textContent = extractTextReadability(html, item.url);
 
     // Truncate extracted text to max_content_length
     if (textContent.length > max_content_length) {
@@ -286,11 +289,44 @@ function extractMetaDescription(html) {
 }
 
 /**
- * Extract readable text content from HTML.
- * Strips scripts, styles, nav, footer, header. Prefers main/article if present.
+ * Extract readable text content from HTML using Mozilla Readability.
+ * This is the same algorithm used by Firefox Reader Mode — it identifies
+ * the main article content and strips navigation, ads, sidebars, etc.
+ * Falls back to regex extraction if Readability can't parse the page.
  */
-function extractText(html) {
-  // Try to find main content area first
+function extractTextReadability(html, url) {
+  try {
+    const { document } = parseHTML(html);
+
+    // Set the URL so Readability can resolve relative links
+    if (url) {
+      try { document.baseURI = url; } catch (_) { /* linkedom may not support this */ }
+    }
+
+    const reader = new Readability(document);
+    const article = reader.parse();
+
+    if (article && article.textContent && article.textContent.trim().length > 50) {
+      // Readability succeeded — clean up the text
+      return article.textContent
+        .replace(/[^\S\n]+/g, ' ')
+        .replace(/\n\s*\n/g, '\n\n')
+        .replace(/^\s+|\s+$/gm, '')
+        .trim();
+    }
+  } catch (_) {
+    // Readability failed — fall through to regex
+  }
+
+  // Fallback: regex-based extraction
+  return extractTextFallback(html);
+}
+
+/**
+ * Fallback regex-based text extraction.
+ * Used when Readability can't parse the page (e.g. non-article pages).
+ */
+function extractTextFallback(html) {
   let content = html;
 
   const mainMatch = html.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
@@ -301,31 +337,36 @@ function extractText(html) {
   } else if (articleMatch) {
     content = articleMatch[1];
   } else {
-    // Fall back to <body> content
     const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
     if (bodyMatch) {
       content = bodyMatch[1];
     }
   }
 
-  // Remove unwanted elements
   content = content
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, ' ')
-    .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, ' ')
-    .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, ' ')
-    .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, ' ')
-    .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, ' ');
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+    .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+    .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+    .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '')
+    .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, '');
 
-  // Strip remaining HTML tags
+  content = content
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(?:p|div|h[1-6]|li|tr|blockquote|section|article|figcaption)>/gi, '\n\n')
+    .replace(/<(?:p|div|h[1-6]|li|tr|blockquote|section|article|figcaption)[^>]*>/gi, '')
+    .replace(/<\/(?:ul|ol|table|dl)>/gi, '\n')
+    .replace(/<(?:hr)[^>]*\/?>/gi, '\n---\n');
+
   content = stripTags(content);
-
-  // Decode HTML entities
   content = decodeEntities(content);
 
-  // Collapse whitespace
-  content = content.replace(/\s+/g, ' ').trim();
+  content = content
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/\n\s*\n/g, '\n\n')
+    .replace(/^\s+|\s+$/gm, '')
+    .trim();
 
   return content;
 }
