@@ -74,6 +74,7 @@
   "output_schema": {
     "display_type": "table",
     "selectable": true,
+    "flagged_when": { "relevance": ["DROP"] },
     "url": "string (required)",
     "link_text": "string",
     "source_location": "string",

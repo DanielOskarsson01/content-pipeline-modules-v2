@@ -1,0 +1,122 @@
+{
+  "id": "seo-planner",
+  "name": "SEO Planner",
+  "description": "Keyword distribution planner. Maps target keywords to predefined article sections (overview, categories, tags, credentials, FAQ). Does NOT decide article structure (that is fixed in format_spec.md). Produces meta title/description and FAQ questions. Requires content-analyzer.",
+  "version": "1.3.0",
+  "step": 5,
+  "category": "planning",
+  "cost": "medium",
+  "data_operation_default": "add",
+  "requires_columns": [
+    "entity_name"
+  ],
+  "options": [
+    {
+      "name": "ai_model",
+      "type": "select",
+      "label": "AI Model",
+      "description": "Which model to use for SEO planning.",
+      "default": "haiku",
+      "values": [
+        "haiku",
+        "sonnet",
+        "opus",
+        "gpt-4o-mini",
+        "gpt-4o"
+      ]
+    },
+    {
+      "name": "ai_provider",
+      "type": "select",
+      "label": "AI Provider",
+      "description": "Which LLM provider to use.",
+      "default": "anthropic",
+      "values": [
+        "anthropic",
+        "openai"
+      ]
+    },
+    {
+      "name": "reference_docs",
+      "type": "doc_selector",
+      "label": "Reference Documents",
+      "description": "Reference docs for SEO planning. Key docs: keyword-summary.md (keyword packs), format_spec.md (section structure), tone_guide.md (voice rules)."
+    },
+    {
+      "name": "prompt",
+      "type": "textarea",
+      "label": "Planning prompt",
+      "description": "The prompt sent to the AI. Use {entity_content} for the analysis JSON and {doc:filename} for reference doc content.",
+      "default": "You are an SEO strategist for OnlyiGaming, a B2B directory for the iGaming industry.\n\nYour job is to create a keyword distribution plan — mapping which keywords the content writer should use in each section of the profile. You do NOT decide the article structure (that is fixed in the format spec). You do NOT write the article. You produce a keyword plan only.\n\n### INPUTS\n\n**Analysis from content-analyzer:**\n{entity_content}\n\n**Keyword data:**\n{doc:keyword-summary.md}\n\n**Format rules (defines the fixed section structure):**\n{doc:format_spec.md}\n\n**Tone rules:**\n{doc:tone_guide.md}\n\n### INSTRUCTIONS\n\nCreate an SEO plan as a JSON object. Follow these rules exactly:\n\n**1. TARGET KEYWORDS**\n\nSelect keywords relevant to this company based on the keyword data and the categories/tags from the analysis:\n- `primary`: 1 phrase that best describes the company's core offering\n- `secondary`: 2-4 phrases covering their main categories\n- `long_tail`: 3-5 specific phrases incorporating company name, categories, or differentiators\n\n**2. KEYWORD DISTRIBUTION — PER SECTION**\n\nThe article structure is FIXED (defined in format_spec.md). Do not invent sections. Map keywords to the predefined sections:\n\n- **Overview**: Which keywords should appear in the headline and first paragraph?\n- **Per category section**: For each category in the analysis (primary and secondary), which keywords from the keyword data should the writer weave into that section's heading and body?\n- **Per tag section**: For major tags, which keywords apply?\n- **Credentials**: Any keyword opportunities in the credentials section?\n- **FAQ**: Which long-tail keywords should be incorporated into questions and answers?\n\n**3. META TAGS**\n\n- `title`: ≤60 characters. Format: `{Company} — {Primary USP} | OnlyiGaming`\n- `description`: 150-160 characters. One compelling sentence summarizing company + value prop.\n- Include character counts for both.\n\n**4. FAQS**\n\nWrite 5 buyer-intent questions about this specific company:\n- Must be answerable from the source content in the analysis\n- Cover: offerings, markets, compliance, differentiators\n- Incorporate long-tail keywords where natural\n- Use keyword data FAQ suggestions when relevant to the company's categories\n- For each question, include `answer_brief` — a short direction note for the writer (not the actual answer)\n\n**5. TONE NOTES**\n\nOne short paragraph describing the specific tone for this company's profile.\n\n**6. WARNINGS**\n\nFlag any issues: meta length problems, thin source material for certain categories, keyword gaps.\n\n### OUTPUT FORMAT\n\nReturn ONLY a valid JSON object matching this schema:\n\n```json\n{\n  \"target_keywords\": {\n    \"primary\": \"string\",\n    \"secondary\": [\"string\"],\n    \"long_tail\": [\"string\"]\n  },\n  \"keyword_distribution\": {\n    \"overview\": {\n      \"headline_keywords\": [\"keywords to include in the overview headline\"],\n      \"body_keywords\": [\"keywords to weave into overview paragraphs\"]\n    },\n    \"categories\": [\n      {\n        \"category_slug\": \"slug from analysis\",\n        \"category_tier\": \"primary or secondary\",\n        \"heading_keywords\": [\"keywords for this category's heading\"],\n        \"body_keywords\": [\"keywords for this category's body text\"]\n      }\n    ],\n    \"tags\": [\n      {\n        \"tag_slug\": \"slug from analysis\",\n        \"keywords\": [\"keywords relevant to this tag section\"]\n      }\n    ],\n    \"credentials\": {\n      \"keywords\": [\"keywords for credentials section, if any\"]\n    },\n    \"faq\": {\n      \"keywords\": [\"long-tail keywords to incorporate into FAQ Q&As\"]\n    }\n  },\n  \"meta\": {\n    \"title\": \"string\",\n    \"title_chars\": 0,\n    \"description\": \"string\",\n    \"description_chars\": 0\n  },\n  \"faqs\": [\n    {\n      \"question\": \"string\",\n      \"answer_brief\": \"string — direction for writer, not the actual answer\",\n      \"target_keyword\": \"long-tail keyword this FAQ targets\"\n    }\n  ],\n  \"tone_notes\": \"string\",\n  \"warnings\": [\"string\"]\n}\n```\n\nReturn ONLY the JSON. No markdown fences, no explanation, no preamble.",
+      "maxLength": 10000
+    }
+  ],
+  "options_defaults": {
+    "ai_model": "haiku",
+    "ai_provider": "anthropic",
+    "reference_docs": [],
+    "prompt": "You are an SEO strategist for OnlyiGaming, a B2B directory for the iGaming industry.\n\nYour job is to create a keyword distribution plan — mapping which keywords the content writer should use in each section of the profile. You do NOT decide the article structure (that is fixed in the format spec). You do NOT write the article. You produce a keyword plan only.\n\n### INPUTS\n\n**Analysis from content-analyzer:**\n{entity_content}\n\n**Keyword data:**\n{doc:keyword-summary.md}\n\n**Format rules (defines the fixed section structure):**\n{doc:format_spec.md}\n\n**Tone rules:**\n{doc:tone_guide.md}\n\n### INSTRUCTIONS\n\nCreate an SEO plan as a JSON object. Follow these rules exactly:\n\n**1. TARGET KEYWORDS**\n\nSelect keywords relevant to this company based on the keyword data and the categories/tags from the analysis:\n- `primary`: 1 phrase that best describes the company's core offering\n- `secondary`: 2-4 phrases covering their main categories\n- `long_tail`: 3-5 specific phrases incorporating company name, categories, or differentiators\n\n**2. KEYWORD DISTRIBUTION — PER SECTION**\n\nThe article structure is FIXED (defined in format_spec.md). Do not invent sections. Map keywords to the predefined sections:\n\n- **Overview**: Which keywords should appear in the headline and first paragraph?\n- **Per category section**: For each category in the analysis (primary and secondary), which keywords from the keyword data should the writer weave into that section's heading and body?\n- **Per tag section**: For major tags, which keywords apply?\n- **Credentials**: Any keyword opportunities in the credentials section?\n- **FAQ**: Which long-tail keywords should be incorporated into questions and answers?\n\n**3. META TAGS**\n\n- `title`: ≤60 characters. Format: `{Company} — {Primary USP} | OnlyiGaming`\n- `description`: 150-160 characters. One compelling sentence summarizing company + value prop.\n- Include character counts for both.\n\n**4. FAQS**\n\nWrite 5 buyer-intent questions about this specific company:\n- Must be answerable from the source content in the analysis\n- Cover: offerings, markets, compliance, differentiators\n- Incorporate long-tail keywords where natural\n- Use keyword data FAQ suggestions when relevant to the company's categories\n- For each question, include `answer_brief` — a short direction note for the writer (not the actual answer)\n\n**5. TONE NOTES**\n\nOne short paragraph describing the specific tone for this company's profile.\n\n**6. WARNINGS**\n\nFlag any issues: meta length problems, thin source material for certain categories, keyword gaps.\n\n### OUTPUT FORMAT\n\nReturn ONLY a valid JSON object matching this schema:\n\n```json\n{\n  \"target_keywords\": {\n    \"primary\": \"string\",\n    \"secondary\": [\"string\"],\n    \"long_tail\": [\"string\"]\n  },\n  \"keyword_distribution\": {\n    \"overview\": {\n      \"headline_keywords\": [\"keywords to include in the overview headline\"],\n      \"body_keywords\": [\"keywords to weave into overview paragraphs\"]\n    },\n    \"categories\": [\n      {\n        \"category_slug\": \"slug from analysis\",\n        \"category_tier\": \"primary or secondary\",\n        \"heading_keywords\": [\"keywords for this category's heading\"],\n        \"body_keywords\": [\"keywords for this category's body text\"]\n      }\n    ],\n    \"tags\": [\n      {\n        \"tag_slug\": \"slug from analysis\",\n        \"keywords\": [\"keywords relevant to this tag section\"]\n      }\n    ],\n    \"credentials\": {\n      \"keywords\": [\"keywords for credentials section, if any\"]\n    },\n    \"faq\": {\n      \"keywords\": [\"long-tail keywords to incorporate into FAQ Q&As\"]\n    }\n  },\n  \"meta\": {\n    \"title\": \"string\",\n    \"title_chars\": 0,\n    \"description\": \"string\",\n    \"description_chars\": 0\n  },\n  \"faqs\": [\n    {\n      \"question\": \"string\",\n      \"answer_brief\": \"string — direction for writer, not the actual answer\",\n      \"target_keyword\": \"long-tail keyword this FAQ targets\"\n    }\n  ],\n  \"tone_notes\": \"string\",\n  \"warnings\": [\"string\"]\n}\n```\n\nReturn ONLY the JSON. No markdown fences, no explanation, no preamble."
+  },
+  "item_key": "entity_name",
+  "output_schema": {
+    "display_type": "cards",
+    "selectable": true,
+    "entity_name": "string",
+    "status": "string",
+    "primary_keyword": "string",
+    "keyword_plan_preview": "string",
+    "meta_title": "string",
+    "faq_count": "number",
+    "downloadable_fields": [
+      { "field": "seo_plan_json", "extension": "json", "label": "SEO Plan" }
+    ],
+    "detail_schema": {
+      "header_fields": [
+        "entity_name",
+        {
+          "field": "status",
+          "display": "badge"
+        },
+        "primary_keyword",
+        "faq_count"
+      ],
+      "sections": [
+        {
+          "field": "keywords_text",
+          "label": "Target Keywords",
+          "display": "text"
+        },
+        {
+          "field": "keyword_distribution_text",
+          "label": "Keyword Distribution",
+          "display": "prose"
+        },
+        {
+          "field": "meta_text",
+          "label": "Meta Tags",
+          "display": "text"
+        },
+        {
+          "field": "faqs_text",
+          "label": "FAQs",
+          "display": "prose"
+        },
+        {
+          "field": "tone_notes",
+          "label": "Tone Notes",
+          "display": "text"
+        },
+        {
+          "field": "warnings",
+          "label": "Warnings",
+          "display": "text"
+        },
+        {
+          "field": "error",
+          "label": "Error",
+          "display": "text"
+        }
+      ]
+    }
+  }
+}

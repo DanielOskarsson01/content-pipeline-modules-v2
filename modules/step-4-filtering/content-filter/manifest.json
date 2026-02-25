@@ -63,11 +63,15 @@
   "output_schema": {
     "display_type": "table",
     "selectable": true,
+    "flagged_when": { "filter_status": ["excluded"] },
     "url": "string (required)",
     "title": "string",
     "word_count": "number",
     "filter_status": "string (kept | excluded)",
     "filter_reason": "string | null",
+    "downloadable_fields": [
+      { "field": "text_content", "extension": "txt", "label": "Filtered Text" }
+    ],
     "detail_schema": {
       "header_fields": [
         { "field": "url", "display": "link" },

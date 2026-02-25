@@ -18,12 +18,13 @@ async function execute(input, options, tools) {
     request_timeout = 10000,
     max_content_length = 50000,
     delay_between_requests = 500,
+    concurrency = 8,
     skip_non_html = true,
     extract_meta = true,
   } = options;
 
   logger.info(
-    `Scraper config: timeout=${request_timeout}ms, max_content=${max_content_length}, delay=${delay_between_requests}ms, skip_non_html=${skip_non_html}, extract_meta=${extract_meta}`
+    `Scraper config: timeout=${request_timeout}ms, max_content=${max_content_length}, delay=${delay_between_requests}ms, concurrency=${concurrency}, skip_non_html=${skip_non_html}, extract_meta=${extract_meta}`
   );
 
   // Flatten all items across entities, keeping entity association.
@@ -56,103 +57,113 @@ async function execute(input, options, tools) {
     }
   }
 
-  logger.info(`Processing ${allItems.length} URLs for scraping`);
+  logger.info(`Processing ${allItems.length} URLs for scraping (concurrency: ${concurrency})`);
 
-  const results = [];
+  // Scrape a single item — pure function, no shared mutable state
+  function scrapeOne(item) {
+    return http.get(item.url, { timeout: request_timeout }).then((res) => {
+      // Check HTTP status
+      if (res.status >= 400) {
+        return buildErrorItem(item, `HTTP ${res.status}`);
+      }
+
+      // Check content type
+      const contentType = res.headers['content-type'] || '';
+      const isHtml = contentType.includes('text/html') || contentType.includes('application/xhtml');
+
+      if (!isHtml) {
+        if (skip_non_html) {
+          return {
+            url: item.url,
+            final_url: item.url,
+            title: null,
+            word_count: 0,
+            content_type: contentType.split(';')[0].trim(),
+            status: 'skipped',
+            error: `Non-HTML content: ${contentType.split(';')[0].trim()}`,
+            text_preview: '',
+            meta_description: null,
+            text_content: '',
+            entity_name: item.entity_name,
+          };
+        }
+        return buildErrorItem(item, `Non-HTML content: ${contentType.split(';')[0].trim()}`);
+      }
+
+      // Extract content from HTML using Readability (Firefox Reader Mode algorithm)
+      const html = res.body;
+      const title = extractTitle(html);
+      const metaDescription = extract_meta ? extractMetaDescription(html) : null;
+      let textContent = extractTextReadability(html, item.url);
+
+      // Truncate extracted text to max_content_length
+      if (textContent.length > max_content_length) {
+        logger.info(`Truncated text for ${item.url} from ${textContent.length} to ${max_content_length} chars`);
+        textContent = textContent.substring(0, max_content_length);
+      }
+
+      const wordCount = textContent.split(/\s+/).filter((w) => w.length > 0).length;
+      const finalUrl = detectFinalUrl(res, item.url);
+      const textPreview = textContent.length > 150
+        ? textContent.substring(0, 150) + '...'
+        : textContent;
+
+      return {
+        url: item.url,
+        final_url: finalUrl,
+        title,
+        word_count: wordCount,
+        content_type: contentType.split(';')[0].trim(),
+        status: 'success',
+        error: null,
+        text_preview: textPreview,
+        meta_description: metaDescription,
+        text_content: textContent,
+        entity_name: item.entity_name,
+      };
+    }).catch((err) => {
+      return buildErrorItem(item, `Fetch failed: ${err.message}`);
+    });
+  }
+
+  // Concurrent worker pool — N workers share an index counter.
+  // Node's single-threaded event loop makes nextIndex++ safe (no race).
+  const results = new Array(allItems.length);
+  let nextIndex = 0;
+  let doneCount = 0;
+  const workerDelay = concurrency > 1 ? Math.max(50, Math.round(delay_between_requests / concurrency)) : delay_between_requests;
+
+  async function worker() {
+    while (true) {
+      const idx = nextIndex++;
+      if (idx >= allItems.length) break;
+
+      // Stagger requests across workers to avoid burst
+      if (idx > 0 && workerDelay > 0) {
+        await sleep(workerDelay);
+      }
+
+      results[idx] = await scrapeOne(allItems[idx]);
+      doneCount++;
+      progress.update(doneCount, allItems.length, `Scraped ${doneCount} of ${allItems.length}`);
+    }
+  }
+
+  const workerCount = Math.min(concurrency, allItems.length);
+  const workers = [];
+  for (let i = 0; i < workerCount; i++) {
+    workers.push(worker());
+  }
+  await Promise.all(workers);
+
+  // Count outcomes
   let successCount = 0;
   let errorCount = 0;
   let skippedCount = 0;
-
-  for (let i = 0; i < allItems.length; i++) {
-    const item = allItems[i];
-
-    progress.update(i + 1, allItems.length, `Scraping ${i + 1} of ${allItems.length}: ${truncateUrl(item.url)}`);
-
-    // Delay between requests (skip for first request)
-    if (i > 0 && delay_between_requests > 0) {
-      await sleep(delay_between_requests);
-    }
-
-    let res;
-    try {
-      res = await http.get(item.url, { timeout: request_timeout });
-    } catch (err) {
-      results.push(buildErrorItem(item, `Fetch failed: ${err.message}`));
-      errorCount++;
-      continue;
-    }
-
-    // Check HTTP status
-    if (res.status >= 400) {
-      results.push(buildErrorItem(item, `HTTP ${res.status}`));
-      errorCount++;
-      continue;
-    }
-
-    // Check content type
-    const contentType = res.headers['content-type'] || '';
-    const isHtml = contentType.includes('text/html') || contentType.includes('application/xhtml');
-
-    if (!isHtml) {
-      if (skip_non_html) {
-        results.push({
-          url: item.url,
-          final_url: item.url,
-          title: null,
-          word_count: 0,
-          content_type: contentType.split(';')[0].trim(),
-          status: 'skipped',
-          error: `Non-HTML content: ${contentType.split(';')[0].trim()}`,
-          text_preview: '',
-          meta_description: null,
-          text_content: '',
-          entity_name: item.entity_name,
-        });
-        skippedCount++;
-        continue;
-      } else {
-        results.push(buildErrorItem(item, `Non-HTML content: ${contentType.split(';')[0].trim()}`));
-        errorCount++;
-        continue;
-      }
-    }
-
-    // Extract content from HTML using Readability (Firefox Reader Mode algorithm)
-    const html = res.body;
-    const title = extractTitle(html);
-    const metaDescription = extract_meta ? extractMetaDescription(html) : null;
-    let textContent = extractTextReadability(html, item.url);
-
-    // Truncate extracted text to max_content_length
-    if (textContent.length > max_content_length) {
-      textContent = textContent.substring(0, max_content_length);
-      logger.info(`Truncated text for ${item.url} from ${textContent.length} to ${max_content_length} chars`);
-    }
-
-    const wordCount = textContent.split(/\s+/).filter((w) => w.length > 0).length;
-
-    // Detect redirect (compare response URL if available, otherwise same as input)
-    const finalUrl = detectFinalUrl(res, item.url);
-
-    // First 150 chars of extracted text — visible in results table for quick review
-    const textPreview = textContent.length > 150
-      ? textContent.substring(0, 150) + '...'
-      : textContent;
-
-    results.push({
-      url: item.url,
-      final_url: finalUrl,
-      title,
-      word_count: wordCount,
-      content_type: contentType.split(';')[0].trim(),
-      status: 'success',
-      error: null,
-      text_preview: textPreview,
-      meta_description: metaDescription,
-      text_content: textContent,
-      entity_name: item.entity_name,
-    });
-    successCount++;
+  for (const r of results) {
+    if (r.status === 'success') successCount++;
+    else if (r.status === 'error') errorCount++;
+    else if (r.status === 'skipped') skippedCount++;
   }
 
   // Sort: errors and skipped first so they appear at top of results

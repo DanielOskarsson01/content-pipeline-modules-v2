@@ -33,10 +33,19 @@
       "name": "delay_between_requests",
       "type": "number",
       "label": "Delay between requests (ms)",
-      "description": "Pause between HTTP requests to avoid rate limiting.",
+      "description": "Total delay budget spread across workers. With 8 workers and 500ms delay, each worker waits ~62ms between requests.",
       "default": 500,
       "min": 0,
       "max": 5000
+    },
+    {
+      "name": "concurrency",
+      "type": "number",
+      "label": "Concurrent requests",
+      "description": "Number of URLs to fetch simultaneously. Higher = faster but may trigger rate limiting. 8 is a good balance.",
+      "default": 8,
+      "min": 1,
+      "max": 20
     },
     {
       "name": "skip_non_html",
@@ -58,6 +67,7 @@
     "request_timeout": 10000,
     "max_content_length": 50000,
     "delay_between_requests": 500,
+    "concurrency": 8,
     "skip_non_html": true,
     "extract_meta": true
   },
@@ -67,6 +77,7 @@
   "output_schema": {
     "display_type": "table",
     "selectable": true,
+    "flagged_when": { "status": ["dead_link", "error", "skipped"] },
     "url": "string (required)",
     "title": "string",
     "word_count": "number",
@@ -74,6 +85,9 @@
     "status": "string (success | error | skipped)",
     "error": "string | null",
     "text_preview": "string",
+    "downloadable_fields": [
+      { "field": "text_content", "extension": "txt", "label": "Scraped Text" }
+    ],
     "detail_schema": {
       "header_fields": [
         { "field": "url", "display": "link" },
