@@ -1,0 +1,67 @@
+{
+  "id": "media-output",
+  "name": "Media Output",
+  "description": "Validate and inventory media URLs from pipeline data. Detects logos and OG image candidates.",
+  "version": "1.0.0",
+  "step": 8,
+  "category": "media",
+  "cost": "medium",
+  "data_operation_default": "transform",
+
+  "requires_columns": [],
+
+  "options": [
+    {
+      "name": "validate_urls",
+      "type": "boolean",
+      "label": "Validate URLs",
+      "description": "Send HEAD requests to check each URL is accessible.",
+      "default": true
+    },
+    {
+      "name": "find_logo",
+      "type": "boolean",
+      "label": "Find company logo",
+      "description": "Attempt to find logo URLs from source citations (common patterns: /logo, /brand, favicon).",
+      "default": true
+    },
+    {
+      "name": "find_og_image",
+      "type": "boolean",
+      "label": "Find OG image candidates",
+      "description": "Identify potential Open Graph image URLs from media inventory.",
+      "default": true
+    },
+    {
+      "name": "max_urls_per_entity",
+      "type": "number",
+      "label": "Max URLs per entity",
+      "description": "Maximum number of media URLs to process per entity.",
+      "default": 50,
+      "min": 1,
+      "max": 200
+    }
+  ],
+
+  "options_defaults": {
+    "validate_urls": true,
+    "find_logo": true,
+    "find_og_image": true,
+    "max_urls_per_entity": 50
+  },
+
+  "item_key": "entity_name",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": true,
+    "entity_name": "string (required)",
+    "logo_found": "boolean",
+    "og_image_found": "boolean",
+    "total_media_urls": "number",
+    "validated_count": "number",
+    "broken_count": "number",
+    "status": "string",
+    "flagged_when": [{ "field": "status", "equals": "no_media" }]
+  }
+}

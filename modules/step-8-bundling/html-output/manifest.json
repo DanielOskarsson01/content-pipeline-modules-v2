@@ -1,0 +1,74 @@
+{
+  "id": "html-output",
+  "name": "HTML Output",
+  "description": "Convert pipeline Markdown to HTML with optional schema.org Organization JSON-LD.",
+  "version": "1.0.0",
+  "step": 8,
+  "category": "formatting",
+  "cost": "cheap",
+  "data_operation_default": "transform",
+
+  "requires_columns": [],
+
+  "options": [
+    {
+      "name": "include_schema_org",
+      "type": "boolean",
+      "label": "Include schema.org JSON-LD",
+      "description": "Generate schema.org Organization markup from analysis data.",
+      "default": true
+    },
+    {
+      "name": "css_template",
+      "type": "select",
+      "label": "CSS template",
+      "description": "Include minimal CSS styling.",
+      "default": "none",
+      "values": ["none", "basic", "article"]
+    },
+    {
+      "name": "include_sources_section",
+      "type": "boolean",
+      "label": "Include Sources section",
+      "description": "Convert [#n] citations to superscript anchor links with a Sources section.",
+      "default": true
+    },
+    {
+      "name": "wrap_in_document",
+      "type": "boolean",
+      "label": "Full HTML document",
+      "description": "Wrap output in <!DOCTYPE html> with <head>/<body>. Disable for HTML fragment.",
+      "default": false
+    }
+  ],
+
+  "options_defaults": {
+    "include_schema_org": true,
+    "css_template": "none",
+    "include_sources_section": true,
+    "wrap_in_document": false
+  },
+
+  "item_key": "entity_name",
+
+  "output_schema": {
+    "display_type": "content_cards",
+    "selectable": true,
+    "entity_name": "string (required)",
+    "html_size_kb": "number",
+    "has_schema_org": "boolean",
+    "heading_count": "number",
+    "content_preview": "string",
+    "detail_schema": {
+      "header_fields": [
+        "entity_name",
+        "html_size_kb",
+        "heading_count",
+        { "field": "has_schema_org", "display": "badge" }
+      ],
+      "sections": [
+        { "field": "final_html", "label": "HTML Output", "display": "prose" }
+      ]
+    }
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "id": "markdown-output",
+  "name": "Markdown Output",
+  "description": "Clean publishable Markdown with optional YAML frontmatter from pipeline content.",
+  "version": "1.0.0",
+  "step": 8,
+  "category": "formatting",
+  "cost": "cheap",
+  "data_operation_default": "transform",
+
+  "requires_columns": [],
+
+  "options": [
+    {
+      "name": "heading_style",
+      "type": "select",
+      "label": "Heading style",
+      "description": "Keep [Type Marker] prefixes for machine parsing, or strip them for clean CMS import.",
+      "default": "strip_markers",
+      "values": ["keep_markers", "strip_markers"]
+    },
+    {
+      "name": "citation_format",
+      "type": "select",
+      "label": "Citation format",
+      "description": "How to handle [#n] inline citations.",
+      "default": "footnotes",
+      "values": ["inline", "footnotes", "strip"]
+    },
+    {
+      "name": "include_frontmatter",
+      "type": "boolean",
+      "label": "Include YAML frontmatter",
+      "description": "Add YAML frontmatter header with entity name, categories, and tags.",
+      "default": true
+    },
+    {
+      "name": "include_meta_section",
+      "type": "boolean",
+      "label": "Include Meta section",
+      "description": "Keep the ## [Meta] section in output. Disable if meta goes in frontmatter or meta-output.",
+      "default": false
+    }
+  ],
+
+  "options_defaults": {
+    "heading_style": "strip_markers",
+    "citation_format": "footnotes",
+    "include_frontmatter": true,
+    "include_meta_section": false
+  },
+
+  "item_key": "entity_name",
+
+  "output_schema": {
+    "display_type": "content_cards",
+    "selectable": true,
+    "entity_name": "string (required)",
+    "word_count": "number",
+    "section_count": "number",
+    "has_frontmatter": "boolean",
+    "content_preview": "string",
+    "detail_schema": {
+      "header_fields": [
+        "entity_name",
+        "word_count",
+        "section_count",
+        { "field": "has_frontmatter", "display": "badge" }
+      ],
+      "sections": [
+        { "field": "final_markdown", "label": "Markdown Output", "display": "prose" }
+      ]
+    }
+  }
+}

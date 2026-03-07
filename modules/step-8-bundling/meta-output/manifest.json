@@ -1,0 +1,87 @@
+{
+  "id": "meta-output",
+  "name": "Meta Output",
+  "description": "Generate validated SEO metadata (title, description, keywords, OG tags) from pipeline data.",
+  "version": "1.0.0",
+  "step": 8,
+  "category": "seo",
+  "cost": "cheap",
+  "data_operation_default": "transform",
+
+  "requires_columns": [],
+
+  "options": [
+    {
+      "name": "max_title_length",
+      "type": "number",
+      "label": "Max title length",
+      "description": "Maximum characters for meta title.",
+      "default": 60,
+      "min": 30,
+      "max": 100
+    },
+    {
+      "name": "min_description_length",
+      "type": "number",
+      "label": "Min description length",
+      "description": "Minimum characters for meta description.",
+      "default": 150,
+      "min": 50,
+      "max": 200
+    },
+    {
+      "name": "max_description_length",
+      "type": "number",
+      "label": "Max description length",
+      "description": "Maximum characters for meta description.",
+      "default": 160,
+      "min": 100,
+      "max": 300
+    },
+    {
+      "name": "include_keywords_array",
+      "type": "boolean",
+      "label": "Include keywords array",
+      "description": "Assemble keywords from categories, tags, and target keywords.",
+      "default": true
+    },
+    {
+      "name": "include_og_tags",
+      "type": "boolean",
+      "label": "Include Open Graph tags",
+      "description": "Generate og:title, og:description, og:type meta tags.",
+      "default": true
+    },
+    {
+      "name": "include_twitter_tags",
+      "type": "boolean",
+      "label": "Include Twitter Card tags",
+      "description": "Generate twitter:card, twitter:title, twitter:description meta tags.",
+      "default": false
+    }
+  ],
+
+  "options_defaults": {
+    "max_title_length": 60,
+    "min_description_length": 150,
+    "max_description_length": 160,
+    "include_keywords_array": true,
+    "include_og_tags": true,
+    "include_twitter_tags": false
+  },
+
+  "item_key": "entity_name",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": true,
+    "entity_name": "string (required)",
+    "meta_title": "string",
+    "meta_description": "string",
+    "title_length": "number",
+    "description_length": "number",
+    "keyword_count": "number",
+    "status": "string",
+    "flagged_when": [{ "field": "status", "equals": "warning" }]
+  }
+}

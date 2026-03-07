@@ -1,0 +1,75 @@
+{
+  "id": "json-output",
+  "name": "JSON Output",
+  "description": "Assemble structured JSON per entity from all available data shapes (analysis, SEO plan, content).",
+  "version": "1.0.0",
+  "step": 8,
+  "category": "data",
+  "cost": "cheap",
+  "data_operation_default": "transform",
+
+  "requires_columns": [],
+
+  "options": [
+    {
+      "name": "output_format",
+      "type": "select",
+      "label": "Output format",
+      "description": "Preset field mappings for the JSON structure.",
+      "default": "strapi",
+      "values": ["strapi", "flat", "custom"]
+    },
+    {
+      "name": "include_markdown",
+      "type": "boolean",
+      "label": "Include markdown content",
+      "description": "Include content_markdown as a string field.",
+      "default": true
+    },
+    {
+      "name": "include_analysis",
+      "type": "boolean",
+      "label": "Include analysis data",
+      "description": "Include categories, tags, key_facts from analysis_json.",
+      "default": true
+    },
+    {
+      "name": "include_seo_plan",
+      "type": "boolean",
+      "label": "Include SEO plan",
+      "description": "Include target_keywords, meta, FAQs from seo_plan_json.",
+      "default": true
+    },
+    {
+      "name": "flatten_key_facts",
+      "type": "boolean",
+      "label": "Flatten key facts",
+      "description": "Hoist key_facts fields to top level instead of nested object.",
+      "default": false
+    }
+  ],
+
+  "options_defaults": {
+    "output_format": "strapi",
+    "include_markdown": true,
+    "include_analysis": true,
+    "include_seo_plan": true,
+    "flatten_key_facts": false
+  },
+
+  "item_key": "entity_name",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": true,
+    "entity_name": "string (required)",
+    "field_count": "number",
+    "json_size_kb": "number",
+    "has_markdown": "boolean",
+    "has_analysis": "boolean",
+    "has_seo_plan": "boolean",
+    "downloadable_fields": [
+      { "field": "final_json", "extension": "json", "label": "Download JSON" }
+    ]
+  }
+}
