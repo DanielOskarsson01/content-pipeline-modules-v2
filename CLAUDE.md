@@ -121,4 +121,30 @@ Step 2+ modules process `entity.items`, NOT top-level entity fields. Always chec
 
 ---
 
-## CURRENT PHASE: Waiting for skeleton Phase 4 (auto-discovery) before building real modules.
+## Step 8 Bundling — Data-Shape Routing
+
+Step 8 submodules use **data-shape routing**: they find input by checking which FIELDS exist on pool items (`content_markdown`, `analysis_json`, `seo_plan_json`), never by checking `source_submodule`. This allows new upstream producers to be added without modifying Step 8 code.
+
+```javascript
+// CORRECT — find by data shape
+const markdownItems = (entity.items || []).filter(item => item.content_markdown);
+
+// WRONG — never do this in Step 8
+const writerItems = entity.items.filter(item => item.source_submodule === 'content-writer');
+```
+
+All five Step 8 submodules use `requires_columns: []` (they read from pool items, not CSV columns), `item_key: "entity_name"`, and `data_operation_default: "transform"`.
+
+| Submodule | Category | Cost | Input shapes | Output |
+|-----------|----------|------|--------------|--------|
+| markdown-output | formatting | cheap | content_markdown + analysis_json | Clean .md with YAML frontmatter |
+| html-output | formatting | cheap | content_markdown + analysis_json | HTML with schema.org JSON-LD |
+| json-output | data | cheap | all three shapes | Strapi-ready/flat JSON |
+| meta-output | seo | cheap | seo_plan_json + analysis_json | Validated SEO metadata |
+| media-output | media | medium | analysis_json + content_markdown | Media URL manifest |
+
+**Dependencies:** `marked` (html-output), `js-yaml` (markdown-output) — added to root package.json.
+
+---
+
+## CURRENT PHASE: Phase 11 code complete. Pending full flow test with live pipeline data.
