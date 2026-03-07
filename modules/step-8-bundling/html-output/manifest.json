@@ -59,6 +59,9 @@
     "has_schema_org": "boolean",
     "heading_count": "number",
     "content_preview": "string",
+    "downloadable_fields": [
+      { "field": "final_html", "extension": "html", "label": "Download HTML" }
+    ],
     "detail_schema": {
       "header_fields": [
         "entity_name",

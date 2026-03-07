@@ -17,7 +17,7 @@
       "label": "Output format",
       "description": "Preset field mappings for the JSON structure.",
       "default": "strapi",
-      "values": ["strapi", "flat", "custom"]
+      "values": ["strapi", "flat"]
     },
     {
       "name": "include_markdown",

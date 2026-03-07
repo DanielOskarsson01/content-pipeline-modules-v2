@@ -85,8 +85,9 @@ function stripCitations(markdown) {
  * Remove the ## [Meta] section from markdown.
  */
 function removeMetaSection(markdown) {
-  // Match from ## [Meta] or ## Meta to the next ## heading or end of file
-  return markdown.replace(/^## \[?Meta\]?[\s\S]*?(?=^## |\Z)/gm, '').trim();
+  // Match from ## [Meta] or ## Meta to the next ## heading or end of string
+  // Meta is typically the last section, so match greedily to end
+  return markdown.replace(/\n## \[?Meta\]?[\s\S]*$/m, '').trim();
 }
 
 /**

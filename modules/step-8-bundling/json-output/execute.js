@@ -145,7 +145,6 @@ async function execute(input, options, tools) {
       if (output_format === 'flat') {
         jsonObj = buildFlatFormat(entity.name, data, opts);
       } else {
-        // 'strapi' or 'custom' — use Strapi format as default
         jsonObj = buildStrapiFormat(entity.name, data, opts);
       }
 

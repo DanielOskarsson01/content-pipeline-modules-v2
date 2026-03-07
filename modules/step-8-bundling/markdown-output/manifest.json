@@ -60,6 +60,9 @@
     "section_count": "number",
     "has_frontmatter": "boolean",
     "content_preview": "string",
+    "downloadable_fields": [
+      { "field": "final_markdown", "extension": "md", "label": "Download Markdown" }
+    ],
     "detail_schema": {
       "header_fields": [
         "entity_name",
