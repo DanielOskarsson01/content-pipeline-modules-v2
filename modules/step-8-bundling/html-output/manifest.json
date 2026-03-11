@@ -52,7 +52,7 @@
   "item_key": "entity_name",
 
   "output_schema": {
-    "display_type": "content_cards",
+    "display_type": "cards",
     "selectable": true,
     "entity_name": "string (required)",
     "html_size_kb": "number",

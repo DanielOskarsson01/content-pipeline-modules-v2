@@ -20,20 +20,27 @@ function buildStrapiFormat(entityName, data, opts) {
 
   if (opts.include_analysis && data.analysis) {
     const a = data.analysis;
+    // Categories: { primary: [{slug, why, source}], secondary: [{slug, ...}] }
     if (a.categories) {
-      obj.primary_category = a.categories.primary ? (a.categories.primary.name || a.categories.primary) : null;
-      obj.secondary_category = a.categories.secondary ? (a.categories.secondary.name || a.categories.secondary) : null;
-      if (a.categories.primary && a.categories.primary.slug) {
-        obj.primary_category_slug = a.categories.primary.slug;
+      if (Array.isArray(a.categories.primary) && a.categories.primary.length > 0) {
+        obj.primary_category = a.categories.primary[0].slug;
+        obj.primary_category_slug = a.categories.primary[0].slug;
       }
-      if (a.categories.secondary && a.categories.secondary.slug) {
-        obj.secondary_category_slug = a.categories.secondary.slug;
+      if (Array.isArray(a.categories.secondary) && a.categories.secondary.length > 0) {
+        obj.secondary_category = a.categories.secondary[0].slug;
+        obj.secondary_category_slug = a.categories.secondary[0].slug;
       }
+      // All category slugs as flat array
+      obj.categories = [
+        ...(Array.isArray(a.categories.primary) ? a.categories.primary.map(c => c.slug) : []),
+        ...(Array.isArray(a.categories.secondary) ? a.categories.secondary.map(c => c.slug) : []),
+      ];
     }
+    // Tags: { existing: [{slug}], suggested_new: [{label}] }
     if (a.tags) {
       const tags = [];
-      if (Array.isArray(a.tags.existing)) tags.push(...a.tags.existing.map(t => t.name || t));
-      if (Array.isArray(a.tags.suggested_new)) tags.push(...a.tags.suggested_new.map(t => t.name || t));
+      if (Array.isArray(a.tags.existing)) tags.push(...a.tags.existing.map(t => t.slug || t));
+      if (Array.isArray(a.tags.suggested_new)) tags.push(...a.tags.suggested_new.map(t => t.label || t.slug || t));
       obj.tags = tags;
     }
     if (a.key_facts) {

@@ -45,7 +45,6 @@
   "output_schema": {
     "display_type": "table",
     "selectable": true,
-    "flagged_when": { "status": ["excluded"] },
     "url": "string (required)",
     "status": "string",
     "matched_pattern": "string",

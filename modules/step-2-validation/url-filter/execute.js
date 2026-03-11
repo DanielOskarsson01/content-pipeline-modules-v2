@@ -75,12 +75,7 @@ async function execute(input, options, tools) {
     // Check exclude patterns
     const excludeMatch = matchesAnyPattern(item.url, excludeRegexes);
     if (excludeMatch) {
-      results.push({
-        url: item.url,
-        status: 'excluded',
-        matched_pattern: excludeMatch,
-        entity_name: item.entity_name,
-      });
+      logger.info(`Excluded: ${item.url} (matched: ${excludeMatch})`);
       excludedCount++;
       continue;
     }
@@ -89,44 +84,29 @@ async function execute(input, options, tools) {
     if (includeRegexes.length > 0) {
       const includeMatch = matchesAnyPattern(item.url, includeRegexes);
       if (!includeMatch) {
-        results.push({
-          url: item.url,
-          status: 'excluded',
-          matched_pattern: 'no include match',
-          entity_name: item.entity_name,
-        });
+        logger.info(`Excluded: ${item.url} (no include match)`);
         excludedCount++;
         continue;
       }
     }
 
-    // Check HTTP status code (uses GET — tools.http has no HEAD method)
+    // Check HTTP status code via HEAD request
     if (check_status_codes) {
       try {
-        const res = await http.get(item.url, { timeout: 5000 });
+        const res = await http.head(item.url, { timeout: 5000 });
         if (res.status < 200 || res.status >= 400) {
-          results.push({
-            url: item.url,
-            status: 'dead_link',
-            matched_pattern: `HTTP ${res.status}`,
-            entity_name: item.entity_name,
-          });
+          logger.info(`Dead link: ${item.url} (HTTP ${res.status})`);
           deadLinkCount++;
           continue;
         }
       } catch (err) {
-        results.push({
-          url: item.url,
-          status: 'dead_link',
-          matched_pattern: `Error: ${err.message}`,
-          entity_name: item.entity_name,
-        });
+        logger.info(`Dead link: ${item.url} (${err.message})`);
         deadLinkCount++;
         continue;
       }
     }
 
-    // URL passed all checks
+    // URL passed all checks — only kept items go into results
     results.push({
       url: item.url,
       status: 'kept',
@@ -135,12 +115,6 @@ async function execute(input, options, tools) {
     });
     keptCount++;
   }
-
-  // Sort: flagged items (excluded, dead_link) first so they appear at top of results
-  results.sort((a, b) => {
-    const order = { excluded: 0, dead_link: 1, kept: 2 };
-    return (order[a.status] ?? 2) - (order[b.status] ?? 2);
-  });
 
   // Group results by entity for the expected output format
   const byEntity = new Map();

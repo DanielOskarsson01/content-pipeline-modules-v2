@@ -99,24 +99,27 @@ function buildFrontmatter(entityName, analysisItems) {
   if (analysisItems.length > 0) {
     const analysis = analysisItems[0].analysis_json;
     if (analysis) {
+      // Categories: { primary: [{slug, why, source}], secondary: [{slug, ...}] }
       if (analysis.categories) {
-        fm.categories = [];
-        if (analysis.categories.primary) {
-          fm.categories.push(analysis.categories.primary.name || analysis.categories.primary);
+        const cats = [];
+        if (Array.isArray(analysis.categories.primary)) {
+          cats.push(...analysis.categories.primary.map(c => c.slug || c.name || String(c)));
         }
-        if (analysis.categories.secondary) {
-          fm.categories.push(analysis.categories.secondary.name || analysis.categories.secondary);
+        if (Array.isArray(analysis.categories.secondary)) {
+          cats.push(...analysis.categories.secondary.map(c => c.slug || c.name || String(c)));
         }
+        if (cats.length > 0) fm.categories = cats;
       }
+      // Tags: { existing: [{slug, why}], suggested_new: [{label, why, evidence}] }
       if (analysis.tags) {
-        const tagNames = [];
+        const tagSlugs = [];
         if (Array.isArray(analysis.tags.existing)) {
-          tagNames.push(...analysis.tags.existing.map(t => t.name || t));
+          tagSlugs.push(...analysis.tags.existing.map(t => t.slug || t.name || String(t)));
         }
         if (Array.isArray(analysis.tags.suggested_new)) {
-          tagNames.push(...analysis.tags.suggested_new.map(t => t.name || t));
+          tagSlugs.push(...analysis.tags.suggested_new.map(t => t.label || t.slug || String(t)));
         }
-        if (tagNames.length > 0) fm.tags = tagNames;
+        if (tagSlugs.length > 0) fm.tags = tagSlugs;
       }
     }
   }

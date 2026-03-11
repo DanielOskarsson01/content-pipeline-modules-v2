@@ -88,16 +88,16 @@ function buildSchemaOrg(entityName, analysisJson) {
   const kf = analysisJson.key_facts;
   if (kf) {
     if (kf.founded) schema.foundingDate = String(kf.founded);
-    if (kf.HQ) schema.address = { '@type': 'PostalAddress', 'addressLocality': kf.HQ };
+    if (kf.headquarters) schema.address = { '@type': 'PostalAddress', 'addressLocality': kf.headquarters };
     if (kf.employees) schema.numberOfEmployees = { '@type': 'QuantitativeValue', 'value': kf.employees };
     if (kf.awards && Array.isArray(kf.awards) && kf.awards.length > 0) {
-      schema.award = kf.awards;
+      schema.award = kf.awards.map(a => typeof a === 'string' ? a : a.detail || String(a));
     }
     if (kf.licenses && Array.isArray(kf.licenses) && kf.licenses.length > 0) {
       schema.hasCredential = kf.licenses.map(lic => ({
         '@type': 'EducationalOccupationalCredential',
         'credentialCategory': 'license',
-        'name': typeof lic === 'string' ? lic : lic.name || String(lic),
+        'name': typeof lic === 'string' ? lic : lic.detail || lic.name || String(lic),
       }));
     }
     if (kf.key_people && Array.isArray(kf.key_people) && kf.key_people.length > 0) {
@@ -112,9 +112,10 @@ function buildSchemaOrg(entityName, analysisJson) {
     }
   }
 
-  // Description from categories
-  if (analysisJson.categories && analysisJson.categories.primary) {
-    const catName = analysisJson.categories.primary.name || analysisJson.categories.primary;
+  // Description from categories — primary is an array of {slug, why, source}
+  if (analysisJson.categories && Array.isArray(analysisJson.categories.primary) && analysisJson.categories.primary.length > 0) {
+    const catSlug = analysisJson.categories.primary[0].slug || '';
+    const catName = catSlug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     schema.description = `${entityName} is a company in the ${catName} industry.`;
   }
 

@@ -15,22 +15,22 @@ function assembleKeywords(analysisJson, seoPlanJson) {
   const keywords = new Set();
 
   if (analysisJson) {
-    // Categories
+    // Categories: { primary: [{slug}], secondary: [{slug}] }
     if (analysisJson.categories) {
-      if (analysisJson.categories.primary) {
-        keywords.add(analysisJson.categories.primary.name || String(analysisJson.categories.primary));
+      if (Array.isArray(analysisJson.categories.primary)) {
+        for (const c of analysisJson.categories.primary) keywords.add(c.slug || String(c));
       }
-      if (analysisJson.categories.secondary) {
-        keywords.add(analysisJson.categories.secondary.name || String(analysisJson.categories.secondary));
+      if (Array.isArray(analysisJson.categories.secondary)) {
+        for (const c of analysisJson.categories.secondary) keywords.add(c.slug || String(c));
       }
     }
-    // Tags
+    // Tags: { existing: [{slug}], suggested_new: [{label}] }
     if (analysisJson.tags) {
       if (Array.isArray(analysisJson.tags.existing)) {
-        for (const t of analysisJson.tags.existing) keywords.add(t.name || String(t));
+        for (const t of analysisJson.tags.existing) keywords.add(t.slug || String(t));
       }
       if (Array.isArray(analysisJson.tags.suggested_new)) {
-        for (const t of analysisJson.tags.suggested_new) keywords.add(t.name || String(t));
+        for (const t of analysisJson.tags.suggested_new) keywords.add(t.label || t.slug || String(t));
       }
     }
   }
