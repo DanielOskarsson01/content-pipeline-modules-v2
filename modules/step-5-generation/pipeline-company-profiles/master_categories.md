@@ -18,7 +18,7 @@
 ### strategy-consulting — Strategy Consulting
 Strategy consultants provide high-level guidance to gambling operators and suppliers regarding market entry, product focus, and pricing models. These experts deliver specific outputs including market sizing reports, competitor benchmarking, and OKR roadmaps to ensure sustainable growth. A primary function involves evaluating "build-vs-buy" technology strategies and calculating the compliance cost-to-serve in regulated jurisdictions, helping leadership teams navigate complex tax implications and local partnering requirements.
 
-### licensing-regulatory-consulting — Licensing & Regulatory Consulting
+### licensing-and-regulatory-consulting — Licensing & Regulatory Consulting
 Securing a gambling license requires navigating complex global regulations to select the optimal jurisdiction for your business model. Consultants in this field manage the full application lifecycle, drafting mandatory policies for Anti-Money Laundering (AML) and Responsible Gaming while assembling technical evidence for regulators. Post-licensing services include managing annual audits, handling corporate control notifications, and maintaining the "good standing" status required to operate legally in markets like the UK, Malta, or US states.
 
 ### corporate-services — Corporate Services
@@ -33,10 +33,10 @@ Marketing consultants advise on acquisition strategies, market positioning, and 
 ### crm-consulting — CRM Consulting
 Since player retention drives long-term profitability, CRM consultants design comprehensive lifecycle programs covering onboarding, cross-selling, and reactivation. They assist in selecting the right CRM tools and defining the logic for player segmentation and automated bonus offers. Projects prioritize data governance to meet GDPR standards while focusing on improving critical KPIs such as churn reduction, deposit frequency, and Average Revenue Per User (ARPU).
 
-### mergers-acquisitions — Mergers & Acquisitions
+### mergers-and-acquisitions — Mergers & Acquisitions
 Buying or selling a gambling business requires rigorous due diligence regarding licensing validity, technology ownership, and player database quality. M&A advisors guide buy-side and sell-side teams through valuations and regulatory approval processes, including complex change-of-control notifications. Outputs include detailed synergy models, "red flag" reports on compliance risks, and integration roadmaps to merge personnel and platforms without disrupting ongoing revenue streams.
 
-### compliance-regulatory-services — Compliance & Regulatory Services
+### compliance-and-regulatory-services — Compliance & Regulatory Services
 Compliance firms assist operators and suppliers in meeting the continuous demands of gambling regulations across multiple territories. These providers offer advisory services, managed teams, or software platforms to handle licensing applications, audit preparation, and ongoing reporting. Solutions frequently cover broader legal obligations including GDPR privacy laws and jurisdiction-specific anti-money laundering directives, ensuring that the business avoids fines and license suspensions.
 
 ### aml-solutions — AML Solutions
@@ -48,10 +48,10 @@ Identity verification is essential for confirming player age and eligibility dur
 ### responsible-gaming — Responsible Gaming
 Protecting players from gambling-related harm is a critical regulatory mandate and a key part of corporate social responsibility. Solutions in this sector provide self-exclusion tools, deposit limits, and real-time behavioral monitoring to detect problem gambling patterns. Companies also offer policy design and audit services to ensure player protection frameworks integrate correctly with regulator-mandated central systems, helping operators intervene early with at-risk customers.
 
-### game-security-fair-play — Game Security & Fair Play
+### game-security-and-fair-play — Game Security & Fair Play
 Operators must demonstrate to players and regulators that their games are secure and operate with genuine randomness. Providers conduct audits on Random Number Generators (RNG) and perform penetration testing on platforms to identify cybersecurity vulnerabilities. Certification seals from these firms serve as proof that the gaming environment is tamper-proof and fair, which is often a mandatory requirement for entering new regulated markets.
 
-### game-testing-certification — Game Testing & Certification
+### game-testing-and-certification — Game Testing & Certification
 Before launching in a regulated market, games must be verified by an accredited independent test lab. These labs inspect the Random Number Generator, payout percentages (RTP), and mathematical models to ensure they meet specific technical standards. Certification acts as the final approval allowing a game to be released globally, ensuring that the math works as advertised and complies with local laws in jurisdictions like the UK, Italy, or New Jersey.
 
 ### fraud-prevention — Fraud Prevention
@@ -111,10 +111,10 @@ Jackpot solutions link games together to create pooled or progressive prize fund
 ### live-casino-studios — Live Casino Studios
 Live casino studios stream real-time games including blackjack and roulette using professional dealers in broadcast-quality sets. They provide the video technology, RNG-certified equipment, and player interaction tools needed for the broadcast. This sector is critical for operators aiming to offer an immersive, authentic casino atmosphere online that bridges the gap between retail and digital gaming.
 
-### data-analytics — Data & Analytics
+### data-and-analytics — Data & Analytics
 The gambling industry generates massive datasets which require specialized tools for analysis and visualization. Providers offer data warehouses and dashboards to track KPIs such as Gross Gaming Revenue (GGR), player behavior, and marketing performance. Consultants in this space also build custom reporting frameworks to audit operational strategy, helping management make evidence-based decisions to improve profitability.
 
-### ai-machine-learning — AI & Machine Learning
+### ai-and-machine-learning — AI & Machine Learning
 Artificial intelligence is utilized to personalize player experiences and manage operational risk at scale. Vendors provide algorithms for churn prediction, player segmentation, and fraud detection. Automating these complex decisions allows operators to improve efficiency and deliver tailored offers to individual users, such as recommending games based on past play history.
 
 ### cro-solutions — CRO Solutions
@@ -168,7 +168,7 @@ Specialized software automates the heavy lifting of acquisition and retention ma
 ### crm-platforms — CRM Platforms
 Centralized systems for storing and analyzing player data are essential for modern operations. CRM platforms allow operators to segment audiences based on behavior and deliver personalized promotions. They are critical for managing touchpoints across web, mobile, and email to increase retention and lifetime value by keeping players active and engaged.
 
-### crm-vip-management — CRM & VIP Management
+### crm-and-vip-management — CRM & VIP Management
 High-value players contribute a significant portion of revenue and require a tailored management approach. This category covers tools and services used to identify VIPs and manage tiered reward programs. Strategies often involve dedicated account managers and personalized operational flows to build long-term loyalty and prevent these valuable players from switching to competitors.
 
 ### gamification — Gamification
@@ -210,7 +210,7 @@ Manufacturers design and build the physical cabinets and hardware for land-based
 ### retail-systems — Retail Systems
 Managing land-based betting shops or casinos requires specialized hardware and software. These systems handle betting terminals, cash management, and real-time reporting for physical locations. Modern solutions connect retail play with online accounts to create a seamless "single-wallet" experience, allowing players to bet in-store and withdraw online.
 
-### ui-ux-graphic-design — UI UX and Graphic Design
+### ui-ux-and-graphic-design — UI UX and Graphic Design
 The interface design directly impacts player conversion and retention rates. Specialized agencies create intuitive, compliant layouts that simplify navigation and betting. They balance attractive branding with the functional requirements of complex betting slips and game lobbies to maximize usability and ensure players can find their favorite games easily.
 
 ### elearning-solutions — Elearning Solutions
@@ -261,5 +261,5 @@ General consultancy firms provide broad advisory services across multiple areas 
 ### regulatory-reporting-tools — Regulatory Reporting Tools
 Regulatory reporting tools automate the generation and submission of compliance reports required by gambling authorities. These platforms handle data aggregation from multiple systems to produce jurisdiction-specific reports covering financial transactions, player activity, and responsible gaming metrics. Automation reduces manual errors and ensures operators meet tight filing deadlines across multiple jurisdictions simultaneously.
 
-### creative-production — Creative Production - Graphic Audio and Video
+### creative-production-graphic-audio-and-video — Creative Production - Graphic, Audio and Video
 Creative production agencies deliver visual, audio, and video content tailored to the iGaming sector. Services include game marketing trailers, brand identity packages, banner ad production, and promotional video content. These firms understand the specific compliance requirements around gambling advertising and produce assets that meet regulatory standards while maintaining creative impact across multiple markets and channels.

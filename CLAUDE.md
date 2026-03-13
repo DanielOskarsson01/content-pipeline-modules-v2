@@ -147,4 +147,9 @@ All five Step 8 submodules use `requires_columns: []` (they read from pool items
 
 ---
 
-## CURRENT PHASE: Phase 11 code complete. Pending full flow test with live pipeline data.
+## CURRENT PHASE: Phase 11 code complete. Flow test in progress (entity name + column alias fixes applied to skeleton).
+
+**Modules repo status (2026-03-13):**
+- Commit `7a0f815`: live testing bug fixes (data shapes, display types, url-filter auto-remove)
+- `master_categories.md` change: NOT yet committed
+- Full end-to-end flow test still pending (skeleton fixes being applied first)
