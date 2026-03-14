@@ -82,6 +82,20 @@
     "description_length": "number",
     "keyword_count": "number",
     "status": "string",
-    "flagged_when": [{ "field": "status", "equals": "warning" }]
+    "flagged_when": [{ "field": "status", "equals": "warning" }],
+    "detail_schema": {
+      "header_fields": [
+        "entity_name",
+        { "field": "status", "display": "badge" },
+        "title_length",
+        "description_length",
+        "keyword_count"
+      ],
+      "sections": [
+        { "field": "meta_title", "label": "Meta Title", "display": "text" },
+        { "field": "meta_description", "label": "Meta Description", "display": "text" },
+        { "field": "meta_json", "label": "Full Meta Object", "display": "prose" }
+      ]
+    }
   }
 }

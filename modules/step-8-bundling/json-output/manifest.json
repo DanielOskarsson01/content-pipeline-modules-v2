@@ -70,6 +70,19 @@
     "has_seo_plan": "boolean",
     "downloadable_fields": [
       { "field": "final_json", "extension": "json", "label": "Download JSON" }
-    ]
+    ],
+    "detail_schema": {
+      "header_fields": [
+        "entity_name",
+        "field_count",
+        "json_size_kb",
+        { "field": "has_markdown", "display": "badge" },
+        { "field": "has_analysis", "display": "badge" },
+        { "field": "has_seo_plan", "display": "badge" }
+      ],
+      "sections": [
+        { "field": "final_json", "label": "JSON Output", "display": "prose" }
+      ]
+    }
   }
 }

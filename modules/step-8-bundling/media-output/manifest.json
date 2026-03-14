@@ -62,6 +62,19 @@
     "validated_count": "number",
     "broken_count": "number",
     "status": "string",
-    "flagged_when": [{ "field": "status", "equals": "no_media" }]
+    "flagged_when": [{ "field": "status", "equals": "no_media" }],
+    "detail_schema": {
+      "header_fields": [
+        "entity_name",
+        { "field": "status", "display": "badge" },
+        { "field": "logo_found", "display": "badge" },
+        { "field": "og_image_found", "display": "badge" },
+        "total_media_urls",
+        "broken_count"
+      ],
+      "sections": [
+        { "field": "media_manifest", "label": "Media Manifest", "display": "prose" }
+      ]
+    }
   }
 }
