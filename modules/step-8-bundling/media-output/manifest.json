@@ -73,6 +73,8 @@
         "broken_count"
       ],
       "sections": [
+        { "field": "logo_url", "label": "Logo URL", "display": "link" },
+        { "field": "og_image_url", "label": "OG Image URL", "display": "link" },
         { "field": "media_manifest", "label": "Media Manifest", "display": "prose" }
       ]
     }
