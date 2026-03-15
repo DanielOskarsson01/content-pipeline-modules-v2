@@ -243,6 +243,7 @@ async function execute(input, options, tools) {
       total_items: allItems.length,
       browser_attempted: browserTotal,
       browser_success: browserSuccess,
+      errors: browserErrors,
       browser_errors: browserErrors,
       passed_through: passThrough.length,
       description,
