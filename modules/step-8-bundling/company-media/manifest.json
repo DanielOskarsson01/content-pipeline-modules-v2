@@ -1,0 +1,102 @@
+{
+  "id": "company-media",
+  "name": "Company Media",
+  "description": "Find company logos, OG images, team photos, product screenshots, and award badges by fetching key pages.",
+  "version": "2.0.0",
+  "step": 8,
+  "category": "media",
+  "cost": "medium",
+  "data_operation_default": "transform",
+
+  "requires_columns": [],
+
+  "options": [
+    {
+      "name": "find_logo",
+      "type": "boolean",
+      "label": "Find company logo",
+      "description": "Fetch homepage and look for logo images. Prefers horizontal/dark variants suitable for light backgrounds.",
+      "default": true
+    },
+    {
+      "name": "find_team_photos",
+      "type": "boolean",
+      "label": "Find team/people photos",
+      "description": "Fetch /about, /team, /leadership pages and extract photos of founders/CEO/key people.",
+      "default": true
+    },
+    {
+      "name": "find_product_screenshots",
+      "type": "boolean",
+      "label": "Find product screenshots",
+      "description": "Fetch /products, /solutions, /platform pages and extract product/software screenshots.",
+      "default": true
+    },
+    {
+      "name": "find_awards",
+      "type": "boolean",
+      "label": "Find award badge images",
+      "description": "Look for award-related images on pages mentioning awards or certifications.",
+      "default": true
+    },
+    {
+      "name": "validate_urls",
+      "type": "boolean",
+      "label": "Validate image URLs",
+      "description": "Send HEAD requests to verify each discovered image URL is accessible.",
+      "default": true
+    },
+    {
+      "name": "max_pages_per_entity",
+      "type": "number",
+      "label": "Max pages to fetch per entity",
+      "description": "Maximum number of pages to fetch per entity (homepage + subpages).",
+      "default": 8,
+      "min": 1,
+      "max": 20
+    }
+  ],
+
+  "options_defaults": {
+    "find_logo": true,
+    "find_team_photos": true,
+    "find_product_screenshots": true,
+    "find_awards": true,
+    "validate_urls": true,
+    "max_pages_per_entity": 8
+  },
+
+  "item_key": "entity_name",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": true,
+    "entity_name": "string (required)",
+    "logo_url": "string",
+    "og_image_url": "string",
+    "team_photo_count": "number",
+    "screenshot_count": "number",
+    "award_count": "number",
+    "status": "string",
+    "flagged_when": { "status": ["no_media"] },
+    "detail_schema": {
+      "header_fields": [
+        "entity_name",
+        { "field": "status", "display": "badge" },
+        { "field": "logo_url", "display": "image" },
+        "team_photo_count",
+        "screenshot_count",
+        "award_count"
+      ],
+      "sections": [
+        { "field": "logo_url", "label": "Company Logo", "display": "image" },
+        { "field": "og_image_url", "label": "OG Image", "display": "image" },
+        { "field": "team_photos_json", "label": "Team / People Photos", "display": "image_grid" },
+        { "field": "screenshots_json", "label": "Product Screenshots", "display": "image_grid" },
+        { "field": "awards_json", "label": "Award Badges", "display": "image_grid" },
+        { "field": "all_logos_json", "label": "All Logo Variants Found", "display": "image_grid" },
+        { "field": "media_summary", "label": "Discovery Summary", "display": "prose" }
+      ]
+    }
+  }
+}
