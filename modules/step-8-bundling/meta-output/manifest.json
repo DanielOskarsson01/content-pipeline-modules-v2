@@ -82,7 +82,7 @@
     "description_length": "number",
     "keyword_count": "number",
     "status": "string",
-    "flagged_when": [{ "field": "status", "equals": "warning" }],
+    "flagged_when": { "status": ["warning"] },
     "detail_schema": {
       "header_fields": [
         "entity_name",

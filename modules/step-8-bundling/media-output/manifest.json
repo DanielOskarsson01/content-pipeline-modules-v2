@@ -62,7 +62,7 @@
     "validated_count": "number",
     "broken_count": "number",
     "status": "string",
-    "flagged_when": [{ "field": "status", "equals": "no_media" }],
+    "flagged_when": { "status": ["no_media"] },
     "detail_schema": {
       "header_fields": [
         "entity_name",
