@@ -7,6 +7,7 @@
   "category": "scraping",
   "cost": "expensive",
   "data_operation_default": "transform",
+  "sort_order": 1,
 
   "requires_columns": ["url"],
 
