@@ -1,0 +1,97 @@
+{
+  "id": "browser-scraper",
+  "name": "Browser Scraper",
+  "description": "Re-scrape pages that failed text extraction using a real browser (Playwright Chromium). Targets pages where HTTP fetch returned success but Readability extracted < 50 words — typically JS-rendered SPAs. Run page-scraper first, then browser-scraper on failures.",
+  "version": "1.0.0",
+  "step": 3,
+  "category": "scraping",
+  "cost": "expensive",
+  "data_operation_default": "transform",
+  "sort_order": 2,
+
+  "requires_columns": ["url"],
+
+  "options": [
+    {
+      "name": "request_timeout",
+      "type": "number",
+      "label": "Browser timeout (ms)",
+      "description": "Timeout per page for browser rendering. SPAs may need 15-30 seconds.",
+      "default": 20000,
+      "min": 5000,
+      "max": 60000
+    },
+    {
+      "name": "wait_for_network_idle",
+      "type": "boolean",
+      "label": "Wait for network idle",
+      "description": "Wait until no network requests for 500ms. Slower but more reliable for SPAs.",
+      "default": true
+    },
+    {
+      "name": "min_word_threshold",
+      "type": "number",
+      "label": "Re-scrape threshold (words)",
+      "description": "Only re-scrape pages with word_count below this value. Pages above are passed through unchanged.",
+      "default": 50,
+      "min": 10,
+      "max": 500
+    },
+    {
+      "name": "max_content_length",
+      "type": "number",
+      "label": "Max extracted text (chars)",
+      "description": "Truncate extracted text to this many characters.",
+      "default": 50000,
+      "min": 1000,
+      "max": 200000
+    },
+    {
+      "name": "concurrency",
+      "type": "number",
+      "label": "Concurrent browser tabs",
+      "description": "Number of pages to render simultaneously. Browser is heavier than HTTP — keep low (2-4).",
+      "default": 3,
+      "min": 1,
+      "max": 8
+    }
+  ],
+
+  "options_defaults": {
+    "request_timeout": 20000,
+    "wait_for_network_idle": true,
+    "min_word_threshold": 50,
+    "max_content_length": 50000,
+    "concurrency": 3
+  },
+
+  "item_key": "url",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": true,
+    "url": "string (required)",
+    "title": "string",
+    "word_count": "number",
+    "scrape_method": "string",
+    "status": "string",
+    "error": "string",
+    "text_preview": "string",
+    "flagged_when": { "status": ["error"] },
+    "downloadable_fields": [
+      { "field": "text_content", "extension": "txt", "label": "Scraped Text" }
+    ],
+    "detail_schema": {
+      "header_fields": [
+        { "field": "url", "display": "link" },
+        "title",
+        { "field": "status", "display": "badge" },
+        "word_count",
+        "scrape_method"
+      ],
+      "sections": [
+        { "field": "text_content", "label": "Extracted Text", "display": "prose" }
+      ]
+    }
+  }
+}
