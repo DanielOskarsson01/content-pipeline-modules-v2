@@ -65,14 +65,11 @@ async function execute(input, options, tools) {
   let deadLinkCount = 0;
   const errors = [];
 
+  // Phase 1: fast regex filtering (no I/O)
+  const patternPassed = [];
   for (let i = 0; i < allItems.length; i++) {
     const item = allItems[i];
 
-    if (i % 50 === 0 || i === allItems.length - 1) {
-      progress.update(i + 1, allItems.length, `Filtering URL ${i + 1} of ${allItems.length}`);
-    }
-
-    // Check exclude patterns
     const excludeMatch = matchesAnyPattern(item.url, excludeRegexes);
     if (excludeMatch) {
       logger.info(`Excluded: ${item.url} (matched: ${excludeMatch})`);
@@ -80,7 +77,6 @@ async function execute(input, options, tools) {
       continue;
     }
 
-    // Check include patterns (if set, URL must match at least one)
     if (includeRegexes.length > 0) {
       const includeMatch = matchesAnyPattern(item.url, includeRegexes);
       if (!includeMatch) {
@@ -90,30 +86,62 @@ async function execute(input, options, tools) {
       }
     }
 
-    // Check HTTP status code via HEAD request
-    if (check_status_codes) {
-      try {
-        const res = await http.head(item.url, { timeout: 5000 });
-        if (res.status < 200 || res.status >= 400) {
-          logger.info(`Dead link: ${item.url} (HTTP ${res.status})`);
-          deadLinkCount++;
-          continue;
-        }
-      } catch (err) {
-        logger.info(`Dead link: ${item.url} (${err.message})`);
-        deadLinkCount++;
-        continue;
-      }
-    }
+    patternPassed.push(item);
+  }
 
-    // URL passed all checks — only kept items go into results
-    results.push({
-      url: item.url,
-      status: 'kept',
-      matched_pattern: null,
-      entity_name: item.entity_name,
-    });
-    keptCount++;
+  logger.info(`Pattern filtering: ${patternPassed.length} passed, ${excludedCount} excluded`);
+
+  // Phase 2: HTTP status check (batched for concurrency)
+  if (check_status_codes && patternPassed.length > 0) {
+    const BATCH_SIZE = 20;
+    const TIMEOUT = 3000;
+    let checked = 0;
+
+    for (let i = 0; i < patternPassed.length; i += BATCH_SIZE) {
+      const batch = patternPassed.slice(i, i + BATCH_SIZE);
+
+      const batchResults = await Promise.allSettled(
+        batch.map(async (item) => {
+          try {
+            const res = await http.head(item.url, { timeout: TIMEOUT });
+            return { item, alive: res.status >= 200 && res.status < 400, detail: `HTTP ${res.status}` };
+          } catch (err) {
+            return { item, alive: false, detail: err.message };
+          }
+        })
+      );
+
+      for (const settled of batchResults) {
+        const { item, alive, detail } = settled.value || settled.reason || {};
+        if (!alive) {
+          logger.info(`Dead link: ${item.url} (${detail})`);
+          deadLinkCount++;
+        } else {
+          results.push({
+            url: item.url,
+            status: 'kept',
+            matched_pattern: null,
+            entity_name: item.entity_name,
+          });
+          keptCount++;
+        }
+      }
+
+      checked += batch.length;
+      progress.update(checked, patternPassed.length, `Checking status ${checked} of ${patternPassed.length}`);
+    }
+  } else {
+    // No status check — all pattern-passed items are kept
+    for (const item of patternPassed) {
+      results.push({
+        url: item.url,
+        status: 'kept',
+        matched_pattern: null,
+        entity_name: item.entity_name,
+      });
+      keptCount++;
+    }
+    progress.update(patternPassed.length, patternPassed.length, `${patternPassed.length} URLs passed`);
   }
 
   // Group results by entity for the expected output format
