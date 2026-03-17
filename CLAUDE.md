@@ -153,3 +153,17 @@ All five Step 8 submodules use `requires_columns: []` (they read from pool items
 - Commit `7a0f815`: live testing bug fixes (data shapes, display types, url-filter auto-remove)
 - `master_categories.md` change: NOT yet committed
 - Full end-to-end flow test still pending (skeleton fixes being applied first)
+
+## Decision Log
+
+This project uses automated decision logging via a PostToolUse hook.
+A shell script fires after every Claude tool call and writes session checkpoints to Supabase every 60 minutes — zero tokens, fully automatic.
+
+For important decisions, write a detailed entry:
+
+```sql
+INSERT INTO decision_log (project_name, entry_type, summary, decision_made, alternatives_rejected, reasoning, source)
+VALUES ('content-pipeline-modules-v2', 'decision', 'What was decided', 'The choice made', 'What was rejected', 'Why this choice', 'manual');
+```
+
+Entry types: decision | progress | blocker | idea

@@ -154,7 +154,11 @@ async function execute(input, options, tools) {
     progress.update(i + 1, entities.length, `Processing ${entity.name}`);
 
     // Data-shape routing: find by field presence
-    const markdownItems = (entity.items || []).filter(item => item.content_markdown);
+    // For content_markdown: prefer AI-written items (have section_count from
+    // content-writer) over raw scraped items (from page-scraper).
+    const allMarkdownItems = (entity.items || []).filter(item => item.content_markdown);
+    const writtenItems = allMarkdownItems.filter(item => item.section_count !== undefined);
+    const markdownItems = writtenItems.length > 0 ? writtenItems : allMarkdownItems;
     const analysisItems = (entity.items || []).filter(item => item.analysis_json);
 
     if (!markdownItems.length) {
