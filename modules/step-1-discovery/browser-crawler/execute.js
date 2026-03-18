@@ -35,6 +35,10 @@ async function execute(input, options, tools) {
     throw new Error('Browser tools not available. Playwright must be installed on the server.');
   }
 
+  if (!tools.http || !tools.http.get) {
+    throw new Error('HTTP tools not available. Required for Wayback Machine fallback.');
+  }
+
   if (!entity.website) {
     return {
       entity_name: entity.name,
@@ -82,6 +86,14 @@ async function execute(input, options, tools) {
       }
 
       homepageHtml = typeof waybackRes.body === 'string' ? waybackRes.body : String(waybackRes.body);
+
+      // Wayback returns 200 with error page when no snapshot exists
+      if (homepageHtml.includes('Wayback Machine has not archived that URL') ||
+          homepageHtml.includes('The Wayback Machine has not archived that URL') ||
+          homepageHtml.includes('This URL has been excluded from the Wayback Machine')) {
+        throw new Error('No Wayback Machine snapshot available');
+      }
+
       // Use the original URL as base (not the archive.org URL) so links resolve correctly
       resolvedBaseUrl = baseUrl;
       usedWaybackMachine = true;
@@ -377,10 +389,11 @@ function extractDomain(url) {
  */
 function stripWaybackUrl(url) {
   if (!url) return null;
-  const waybackMatch = url.match(/^https?:\/\/web\.archive\.org\/web\/\d+\*?\/(https?:\/\/.+)$/);
+  // Match Wayback URLs with optional timestamp modifiers (if_, js_, cs_, im_, etc.)
+  const waybackMatch = url.match(/^https?:\/\/web\.archive\.org\/web\/\d+(?:[a-z_]*)?\/(https?:\/\/.+)$/);
   if (waybackMatch) return waybackMatch[1].split('#')[0].split('?')[0];
-  // Some Wayback links use relative /web/... paths that got resolved against the base
-  if (url.includes('web.archive.org')) return null;
+  // Filter out all archive.org links (toolbar, donate, etc.)
+  if (url.includes('archive.org')) return null;
   return url;
 }
 
