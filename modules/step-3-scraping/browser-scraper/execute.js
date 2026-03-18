@@ -275,6 +275,12 @@ function extractTextReadability(html, url) {
   return extractTextFallback(html);
 }
 
+/**
+ * Fallback text extraction with CMS/page-builder awareness.
+ * Extraction priority: <main> → <article> → CMS content selectors → <body>
+ * Handles Elementor, WordPress, Divi, WPBakery, and other page builders
+ * that don't use semantic HTML (<article>/<main> tags).
+ */
 function extractTextFallback(html) {
   let content = html;
 
@@ -286,8 +292,37 @@ function extractTextFallback(html) {
   } else if (articleMatch) {
     content = articleMatch[1];
   } else {
-    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-    if (bodyMatch) content = bodyMatch[1];
+    // CMS / page-builder content selectors — tried before falling back to <body>
+    const cmsPatterns = [
+      // WordPress standard
+      /<div[^>]+class="[^"]*\bentry-content\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+      /<div[^>]+class="[^"]*\bpost-content\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+      /<div[^>]+class="[^"]*\bpage-content\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+      // Elementor
+      /<div[^>]+class="[^"]*\belementor-widget-text-editor\b[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/i,
+      /<div[^>]+class="[^"]*\belementor-widget-theme-post-content\b[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/i,
+      /<div[^>]+data-widget_type="text-editor[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/i,
+      // ARIA role
+      /<[^>]+role=["']main["'][^>]*>([\s\S]*?)<\/[a-z]+>/i,
+      // Other common CMS patterns
+      /<div[^>]+class="[^"]*\bcontent-area\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+      /<div[^>]+class="[^"]*\bsite-content\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+      /<div[^>]+id=["']content["'][^>]*>([\s\S]*?)<\/div>/i,
+    ];
+
+    let cmsMatch = null;
+    for (const pattern of cmsPatterns) {
+      cmsMatch = html.match(pattern);
+      if (cmsMatch && cmsMatch[1].length > 100) break;
+      cmsMatch = null;
+    }
+
+    if (cmsMatch) {
+      content = cmsMatch[1];
+    } else {
+      const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+      if (bodyMatch) content = bodyMatch[1];
+    }
   }
 
   content = content

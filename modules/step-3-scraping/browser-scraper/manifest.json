@@ -1,7 +1,7 @@
 {
   "id": "browser-scraper",
   "name": "Browser Scraper",
-  "description": "Re-scrape pages that failed text extraction using a real browser (Playwright Chromium). Targets pages where HTTP fetch returned success but Readability extracted < 50 words — typically JS-rendered SPAs. Run page-scraper first, then browser-scraper on failures.",
+  "description": "Re-scrape pages that failed text extraction using Playwright Chromium with CMS-aware fallback (Elementor, WordPress, Divi). Targets pages where page-scraper extracted < 50 words — JS-rendered SPAs, page-builder sites, Cloudflare-protected pages.",
   "version": "1.0.0",
   "step": 3,
   "category": "scraping",

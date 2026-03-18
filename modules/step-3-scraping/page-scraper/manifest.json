@@ -1,7 +1,7 @@
 {
   "id": "page-scraper",
   "name": "Page Scraper",
-  "description": "Fetch HTML pages and extract text content from validated URLs",
+  "description": "Fetch HTML pages and extract text content using Readability with CMS-aware fallback (Elementor, WordPress, Divi). First scraper in Step 3 — handles most sites via HTTP.",
   "version": "1.0.0",
   "step": 3,
   "category": "scraping",
