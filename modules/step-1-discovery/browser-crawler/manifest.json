@@ -1,0 +1,77 @@
+{
+  "id": "browser-crawler",
+  "name": "Browser Link Crawler",
+  "description": "Extract URLs using a headless browser (Playwright). Fallback for Cloudflare-protected or JS-heavy sites where HTTP-based crawlers fail. Crawls homepage + key internal pages.",
+  "version": "1.0.0",
+  "step": 1,
+  "category": "crawling",
+  "cost": "expensive",
+  "data_operation_default": "transform",
+  "sort_order": 4,
+
+  "requires_columns": ["website"],
+
+  "options": [
+    {
+      "name": "max_urls",
+      "type": "number",
+      "label": "Maximum URLs per site",
+      "description": "Limit how many URLs to extract per entity.",
+      "default": 300,
+      "min": 1,
+      "max": 1000
+    },
+    {
+      "name": "max_depth_pages",
+      "type": "number",
+      "label": "Internal pages to crawl",
+      "description": "How many key internal pages (blog, news, about, etc.) to follow from the homepage for deeper link discovery.",
+      "default": 5,
+      "min": 0,
+      "max": 20
+    },
+    {
+      "name": "request_timeout",
+      "type": "number",
+      "label": "Page timeout (ms)",
+      "description": "Timeout per page fetch in milliseconds. Increase for very slow sites.",
+      "default": 20000,
+      "min": 5000,
+      "max": 60000
+    },
+    {
+      "name": "same_domain_only",
+      "type": "boolean",
+      "label": "Same domain only",
+      "description": "Only include links pointing to the same domain as the homepage.",
+      "default": true
+    },
+    {
+      "name": "concurrency",
+      "type": "number",
+      "label": "Concurrent page fetches",
+      "description": "How many internal pages to fetch in parallel. Higher = faster but more resource-heavy.",
+      "default": 2,
+      "min": 1,
+      "max": 4
+    }
+  ],
+
+  "options_defaults": {
+    "max_urls": 300,
+    "max_depth_pages": 5,
+    "request_timeout": 20000,
+    "same_domain_only": true,
+    "concurrency": 2
+  },
+
+  "item_key": "url",
+
+  "output_schema": {
+    "display_type": "table",
+    "url": "string (required)",
+    "link_text": "string",
+    "source_location": "string (nav|header|footer|body)",
+    "found_on": "string (URL of the page where this link was found)"
+  }
+}
