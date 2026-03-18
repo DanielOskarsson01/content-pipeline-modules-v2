@@ -8,6 +8,9 @@
   "cost": "cheap",
   "data_operation_default": "transform",
 
+  "depends_on": [],
+  "usage_notes": "Development/testing only. Generates fake data to verify pipeline execution without hitting real websites. Set fail_entity to test error handling.",
+
   "requires_columns": [],
 
   "options": [

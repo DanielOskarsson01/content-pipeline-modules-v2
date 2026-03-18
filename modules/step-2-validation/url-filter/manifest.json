@@ -8,6 +8,9 @@
   "cost": "cheap",
   "data_operation_default": "remove",
 
+  "depends_on": ["url-dedup"],
+  "usage_notes": "Run after url-dedup. Use exclude_patterns to remove known junk paths (/wp-admin/, /cart/, /login/). Enable check_status_codes only for small URL sets — sends HEAD request per URL.",
+
   "requires_columns": ["url"],
 
   "options": [

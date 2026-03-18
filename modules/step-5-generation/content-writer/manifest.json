@@ -7,6 +7,10 @@
   "category": "generation",
   "cost": "expensive",
   "data_operation_default": "add",
+
+  "depends_on": ["content-analyzer", "seo-planner"],
+  "usage_notes": "Requires both content-analyzer and seo-planner to have completed. Use sonnet for production-quality content; haiku produces acceptable drafts. Increase max_source_chars for companies with extensive source material.",
+
   "requires_columns": [
     "entity_name",
     "text_content"

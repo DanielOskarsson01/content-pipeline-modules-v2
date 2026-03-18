@@ -9,6 +9,9 @@
   "data_operation_default": "transform",
   "sort_order": 1,
 
+  "depends_on": [],
+  "usage_notes": "Always run first — cheapest and fastest discovery method. Most well-structured sites have XML sitemaps. Returns the most URLs with the least cost.",
+
   "requires_columns": ["website"],
 
   "options": [

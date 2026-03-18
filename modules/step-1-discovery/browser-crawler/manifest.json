@@ -9,6 +9,9 @@
   "data_operation_default": "transform",
   "sort_order": 4,
 
+  "depends_on": [],
+  "usage_notes": "Expensive fallback for Cloudflare-protected or JS-heavy sites where HTTP-based crawlers return 403 or empty results. Falls back to Wayback Machine if browser also fails. Only run on entities that returned 0 URLs from cheaper crawlers.",
+
   "requires_columns": ["website"],
 
   "options": [

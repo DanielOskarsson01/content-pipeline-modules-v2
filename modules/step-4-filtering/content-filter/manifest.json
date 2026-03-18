@@ -8,6 +8,9 @@
   "cost": "cheap",
   "data_operation_default": "remove",
 
+  "depends_on": ["page-scraper"],
+  "usage_notes": "Set min_word_count to 0 to keep all pages regardless of length. Disable require_english for multilingual sites. Add domain-specific title keywords to exclude (e.g. 'casino' for non-casino companies).",
+
   "requires_columns": ["url", "text_content"],
 
   "options": [

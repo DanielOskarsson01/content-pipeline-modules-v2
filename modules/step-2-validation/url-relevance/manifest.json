@@ -8,6 +8,9 @@
   "cost": "cheap",
   "data_operation_default": "remove",
 
+  "depends_on": ["url-dedup", "url-filter"],
+  "usage_notes": "Run last in Step 2 to minimize LLM token spend. Haiku is sufficient — classification from URL slugs is simple. Switch to sonnet only if too many relevant pages are being dropped. Increase max_urls_per_prompt to 500 for large batches.",
+
   "requires_columns": ["url"],
 
   "options": [

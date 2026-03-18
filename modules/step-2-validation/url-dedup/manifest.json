@@ -8,6 +8,9 @@
   "cost": "cheap",
   "data_operation_default": "remove",
 
+  "depends_on": [],
+  "usage_notes": "Run first in Step 2. Removes duplicates before expensive operations. All defaults are safe — disable normalize_www only if www and non-www versions serve different content.",
+
   "requires_columns": ["url"],
 
   "options": [

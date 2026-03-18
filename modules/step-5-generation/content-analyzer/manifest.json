@@ -7,6 +7,10 @@
   "category": "analysis",
   "cost": "expensive",
   "data_operation_default": "transform",
+
+  "depends_on": [],
+  "usage_notes": "Pure fact extraction — haiku is sufficient and cost-effective. Increase max_content_chars for entities with extensive source material (50+ scraped pages). Runs independently of seo-planner.",
+
   "requires_columns": [
     "text_content",
     "entity_name"

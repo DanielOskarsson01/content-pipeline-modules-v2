@@ -8,6 +8,9 @@
   "cost": "cheap",
   "data_operation_default": "transform",
 
+  "depends_on": ["seo-planner"],
+  "usage_notes": "Validates SEO metadata against length constraints. Default title/description lengths follow Google's current display limits. Enable twitter_tags if publishing to platforms with Twitter Card support.",
+
   "requires_columns": [],
 
   "options": [

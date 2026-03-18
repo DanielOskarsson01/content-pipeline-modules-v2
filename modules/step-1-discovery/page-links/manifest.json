@@ -9,6 +9,9 @@
   "data_operation_default": "transform",
   "sort_order": 2,
 
+  "depends_on": [],
+  "usage_notes": "Run alongside sitemap-parser. Catches nav/header/footer links that sitemaps miss (about pages, partner pages, team pages). Enable include_body only if nav links are sparse.",
+
   "requires_columns": ["website"],
 
   "options": [

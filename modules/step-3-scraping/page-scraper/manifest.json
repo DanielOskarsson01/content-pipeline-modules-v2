@@ -9,6 +9,9 @@
   "data_operation_default": "transform",
   "sort_order": 1,
 
+  "depends_on": [],
+  "usage_notes": "Run first in Step 3. Handles most sites via HTTP fetch + Readability. Increase concurrency for large URL sets (100+), decrease for rate-limited sites. Default timeout (10s) is fine for most sites.",
+
   "requires_columns": ["url"],
 
   "options": [

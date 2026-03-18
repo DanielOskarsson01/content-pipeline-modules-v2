@@ -9,6 +9,9 @@
   "data_operation_default": "transform",
   "sort_order": 2,
 
+  "depends_on": ["page-scraper"],
+  "usage_notes": "Run after page-scraper. Only re-scrapes pages where Readability extracted fewer than min_word_threshold words. Expensive (Playwright per page). Reduce concurrency on memory-constrained servers.",
+
   "requires_columns": ["url"],
 
   "options": [
