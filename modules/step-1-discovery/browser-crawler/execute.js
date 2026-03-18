@@ -5,11 +5,16 @@
  * Fallback for Cloudflare-protected or JS-heavy sites where HTTP-based
  * crawlers (page-links, deep-links) return 403 or empty results.
  *
+ * If browser fetch fails (403, connection error), falls back to the
+ * Wayback Machine (web.archive.org) to get the most recent cached snapshot
+ * via plain HTTP — no proxy or stealth needed.
+ *
  * Native per-entity module: receives input.entity (single entity),
  * returns { entity_name, items, meta }.
  *
  * Algorithm:
  *   1. Fetch homepage with headless browser
+ *   1b. If browser fails → try Wayback Machine latest snapshot
  *   2. Extract sectioned links (nav/header/footer/body)
  *   3. Identify key internal pages (blog, news, about, etc.)
  *   4. Fetch internal pages concurrently, extract more links
@@ -49,6 +54,7 @@ async function execute(input, options, tools) {
   // 1. Fetch homepage with browser
   let homepageHtml;
   let resolvedBaseUrl;
+  let usedWaybackMachine = false;
   try {
     const res = await browser.fetch(baseUrl, {
       timeout: request_timeout,
@@ -62,21 +68,50 @@ async function execute(input, options, tools) {
     homepageHtml = typeof res.body === 'string' ? res.body : String(res.body);
     // Use post-redirect URL as base for all link resolution
     resolvedBaseUrl = res.url || baseUrl;
-  } catch (err) {
-    logger.error(`Homepage fetch failed: ${err.message}`);
-    return {
-      entity_name: entity.name,
-      items: [],
-      error: err.message,
-      meta: { total_found: 0, pages_crawled: 0, errors: 1 }
-    };
+  } catch (browserErr) {
+    // 1b. Fallback: try Wayback Machine latest snapshot via plain HTTP
+    logger.warn(`Browser fetch failed (${browserErr.message}) — trying Wayback Machine`);
+    try {
+      const waybackRes = await tools.http.get(
+        `https://web.archive.org/web/${baseUrl}`,
+        { timeout: request_timeout }
+      );
+
+      if (waybackRes.status >= 400) {
+        throw new Error(`Wayback Machine returned HTTP ${waybackRes.status}`);
+      }
+
+      homepageHtml = typeof waybackRes.body === 'string' ? waybackRes.body : String(waybackRes.body);
+      // Use the original URL as base (not the archive.org URL) so links resolve correctly
+      resolvedBaseUrl = baseUrl;
+      usedWaybackMachine = true;
+      logger.info(`Wayback Machine fallback succeeded for ${baseUrl}`);
+    } catch (waybackErr) {
+      logger.error(`Both browser and Wayback Machine failed for ${baseUrl}`);
+      logger.error(`  Browser: ${browserErr.message}`);
+      logger.error(`  Wayback: ${waybackErr.message}`);
+      return {
+        entity_name: entity.name,
+        items: [],
+        error: `Browser: ${browserErr.message}; Wayback: ${waybackErr.message}`,
+        meta: { total_found: 0, pages_crawled: 0, errors: 1 }
+      };
+    }
   }
 
   const baseDomain = extractDomain(resolvedBaseUrl);
 
   // 2. Extract sectioned links from homepage
-  const homepageLinks = extractSectionedLinks(homepageHtml, resolvedBaseUrl);
-  logger.info(`Homepage: ${homepageLinks.length} links extracted`);
+  let homepageLinks = extractSectionedLinks(homepageHtml, resolvedBaseUrl);
+
+  // If we used Wayback Machine, links may have archive.org prefixes — strip them
+  if (usedWaybackMachine) {
+    homepageLinks = homepageLinks
+      .map(link => ({ ...link, url: stripWaybackUrl(link.url) }))
+      .filter(link => link.url !== null);
+  }
+
+  logger.info(`Homepage: ${homepageLinks.length} links extracted${usedWaybackMachine ? ' (via Wayback Machine)' : ''}`);
 
   // Tag all homepage links with found_on
   for (const link of homepageLinks) {
@@ -119,21 +154,43 @@ async function execute(input, options, tools) {
         const pageUrl = keyPages[idx];
 
         try {
-          logger.info(`Depth-2: fetching ${pageUrl}`);
-          const res = await browser.fetch(pageUrl, {
-            timeout: request_timeout,
-            waitForNetworkIdle: true,
-          });
+          let html, resolvedPageUrl;
 
-          if (res.status >= 400) {
-            logger.warn(`Depth-2: HTTP ${res.status} for ${pageUrl}`);
-            pageResults[idx] = [];
-            continue;
+          if (usedWaybackMachine) {
+            // Homepage needed Wayback — use it for depth-2 pages too
+            logger.info(`Depth-2 (Wayback): fetching ${pageUrl}`);
+            const res = await tools.http.get(
+              `https://web.archive.org/web/${pageUrl}`,
+              { timeout: request_timeout }
+            );
+            if (res.status >= 400) {
+              logger.warn(`Depth-2 (Wayback): HTTP ${res.status} for ${pageUrl}`);
+              pageResults[idx] = [];
+              continue;
+            }
+            html = typeof res.body === 'string' ? res.body : String(res.body);
+            resolvedPageUrl = pageUrl;
+          } else {
+            logger.info(`Depth-2: fetching ${pageUrl}`);
+            const res = await browser.fetch(pageUrl, {
+              timeout: request_timeout,
+              waitForNetworkIdle: true,
+            });
+            if (res.status >= 400) {
+              logger.warn(`Depth-2: HTTP ${res.status} for ${pageUrl}`);
+              pageResults[idx] = [];
+              continue;
+            }
+            html = typeof res.body === 'string' ? res.body : String(res.body);
+            resolvedPageUrl = res.url || pageUrl;
           }
 
-          const html = typeof res.body === 'string' ? res.body : String(res.body);
-          const resolvedPageUrl = res.url || pageUrl;
-          const links = extractLinks(html, resolvedPageUrl);
+          let links = extractLinks(html, resolvedPageUrl);
+          if (usedWaybackMachine) {
+            links = links
+              .map(l => ({ ...l, url: stripWaybackUrl(l.url) }))
+              .filter(l => l.url !== null);
+          }
 
           pageResults[idx] = links.map(l => ({
             ...l,
@@ -194,6 +251,7 @@ async function execute(input, options, tools) {
       returned: limited.length,
       pages_crawled: 1 + keyPages.length,
       depth_pages: keyPages.length,
+      wayback_fallback: usedWaybackMachine,
       errors: 0
     }
   };
@@ -310,6 +368,20 @@ function extractDomain(url) {
   } catch {
     return '';
   }
+}
+
+/**
+ * Strip Wayback Machine URL wrapper to get the original URL.
+ * Wayback URLs look like: https://web.archive.org/web/20260227123456/https://example.com/page
+ * Returns the original URL, or null if it's an archive.org internal link.
+ */
+function stripWaybackUrl(url) {
+  if (!url) return null;
+  const waybackMatch = url.match(/^https?:\/\/web\.archive\.org\/web\/\d+\*?\/(https?:\/\/.+)$/);
+  if (waybackMatch) return waybackMatch[1].split('#')[0].split('?')[0];
+  // Some Wayback links use relative /web/... paths that got resolved against the base
+  if (url.includes('web.archive.org')) return null;
+  return url;
 }
 
 module.exports = execute;
