@@ -55,6 +55,32 @@ async function execute(input, options, tools) {
     }
   }
 
+  // Detect boilerplate: if 3+ pages share identical text_content, it's likely
+  // footer/nav/cookie-banner text, not real article content. Force re-scrape.
+  const textCounts = new Map();
+  for (const item of allItems) {
+    if (item.status === 'success' && item.text_content) {
+      const text = item.text_content.trim();
+      if (text.length > 0) {
+        textCounts.set(text, (textCounts.get(text) || 0) + 1);
+      }
+    }
+  }
+  const boilerplateTexts = new Set();
+  for (const [text, count] of textCounts) {
+    if (count >= 3) {
+      boilerplateTexts.add(text);
+    }
+  }
+  if (boilerplateTexts.size > 0) {
+    const boilerplateCount = allItems.filter(
+      (i) => i.status === 'success' && i.text_content && boilerplateTexts.has(i.text_content.trim())
+    ).length;
+    logger.info(
+      `Detected ${boilerplateTexts.size} duplicate text pattern(s) across ${boilerplateCount} pages — marking as boilerplate for re-scrape`
+    );
+  }
+
   // Partition: needs browser re-scrape vs pass-through
   const needsScrape = [];
   const passThrough = [];
@@ -65,6 +91,9 @@ async function execute(input, options, tools) {
 
     // Re-scrape if: HTTP was successful but content too short
     if (status === 'success' && wc < min_word_threshold) {
+      needsScrape.push(item);
+    // Re-scrape if: text is duplicated across 3+ pages (boilerplate)
+    } else if (status === 'success' && item.text_content && boilerplateTexts.has(item.text_content.trim())) {
       needsScrape.push(item);
     } else {
       passThrough.push(item);
