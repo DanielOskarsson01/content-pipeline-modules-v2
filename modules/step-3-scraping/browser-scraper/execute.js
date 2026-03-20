@@ -120,94 +120,131 @@ async function execute(input, options, tools) {
   let doneCount = 0;
   const total = needsScrape.length;
 
+  /**
+   * Try to extract content from HTML. Returns { title, metaDescription, textContent, wordCount, textPreview }.
+   */
+  function extractFromHtml(html, url, item) {
+    const title = extractTitle(html) || item.title;
+    const metaDescription = extractMetaDescription(html) || item.meta_description || null;
+    let textContent = extractTextReadability(html, url);
+
+    if (textContent.length > max_content_length) {
+      logger.info(`Truncated text for ${url} from ${textContent.length} to ${max_content_length} chars`);
+      textContent = textContent.substring(0, max_content_length);
+    }
+
+    const wordCount = textContent.split(/\s+/).filter((w) => w.length > 0).length;
+    const textPreview = textContent.length > 150
+      ? textContent.substring(0, 150) + '...'
+      : textContent;
+
+    return { title, metaDescription, textContent, wordCount, textPreview };
+  }
+
+  /**
+   * Build a result object from extracted content.
+   */
+  function buildResult(item, extracted, method, finalUrl, error) {
+    return {
+      url: item.url,
+      final_url: finalUrl || item.url,
+      title: extracted.title,
+      word_count: extracted.wordCount,
+      content_type: 'text/html',
+      status: extracted.wordCount >= min_word_threshold ? 'success' : 'error',
+      error: extracted.wordCount >= min_word_threshold ? null : (error || `Only ${extracted.wordCount} words extracted`),
+      text_preview: extracted.textPreview,
+      meta_description: extracted.metaDescription,
+      text_content: extracted.textContent,
+      entity_name: item.entity_name,
+      scrape_method: method,
+    };
+  }
+
   async function scrapeOne(item) {
+    // --- Tier 2: Browser fetch ---
+    let browserFailed = false;
+    let browserError = '';
     try {
       logger.info(`[browser] Fetching ${item.url}`);
-
       const res = await browser.fetch(item.url, {
         timeout: request_timeout,
         waitForNetworkIdle: wait_for_network_idle,
       });
 
-      // Always try to extract content regardless of HTTP status.
-      // Cloudflare challenges return 403 initially but JS solves the challenge,
-      // so page.content() may have the real page even when status is 403.
-      const html = res.body;
-      const title = extractTitle(html) || item.title;
-      const metaDescription = extractMetaDescription(html) || item.meta_description || null;
-      let textContent = extractTextReadability(html, item.url);
+      const extracted = extractFromHtml(res.body, item.url, item);
 
-      if (textContent.length > max_content_length) {
-        logger.info(`Truncated text for ${item.url} from ${textContent.length} to ${max_content_length} chars`);
-        textContent = textContent.substring(0, max_content_length);
+      // If we got enough content, return regardless of HTTP status
+      if (extracted.wordCount >= min_word_threshold) {
+        if (res.status >= 400) {
+          logger.info(`[browser] ${item.url}: HTTP ${res.status} but extracted ${extracted.wordCount} words — treating as success`);
+        } else {
+          logger.info(`[browser] ${item.url}: ${extracted.wordCount} words extracted (was ${item.word_count || 0})`);
+        }
+        return buildResult(item, extracted, 'browser', res.url || item.url, null);
       }
 
-      const wordCount = textContent.split(/\s+/).filter((w) => w.length > 0).length;
-      const textPreview = textContent.length > 150
-        ? textContent.substring(0, 150) + '...'
-        : textContent;
-
-      // If HTTP error AND no meaningful content extracted, mark as error
-      if (res.status >= 400 && wordCount < min_word_threshold) {
-        logger.warn(`[browser] ${item.url}: HTTP ${res.status} and only ${wordCount} words`);
-        return {
-          url: item.url,
-          final_url: res.url || item.url,
-          title,
-          word_count: wordCount,
-          content_type: 'text/html',
-          status: 'error',
-          error: `Browser HTTP ${res.status}`,
-          text_preview: textPreview,
-          meta_description: metaDescription,
-          text_content: textContent,
-          entity_name: item.entity_name,
-          scrape_method: 'browser',
-        };
-      }
-
-      if (res.status >= 400) {
-        logger.info(`[browser] ${item.url}: HTTP ${res.status} but extracted ${wordCount} words — treating as success`);
-      }
-
-      const improved = wordCount >= min_word_threshold;
-      if (improved) {
-        logger.info(`[browser] ${item.url}: ${wordCount} words extracted (was ${item.word_count || 0})`);
-      } else {
-        logger.warn(`[browser] ${item.url}: still only ${wordCount} words after browser render`);
-      }
-
-      return {
-        url: item.url,
-        final_url: res.url || item.url,
-        title,
-        word_count: wordCount,
-        content_type: 'text/html',
-        status: 'success',
-        error: null,
-        text_preview: textPreview,
-        meta_description: metaDescription,
-        text_content: textContent,
-        entity_name: item.entity_name,
-        scrape_method: 'browser',
-      };
+      // Browser returned but content is insufficient
+      browserFailed = true;
+      browserError = res.status >= 400
+        ? `Browser HTTP ${res.status} (${extracted.wordCount} words)`
+        : `Browser: only ${extracted.wordCount} words`;
+      logger.warn(`[browser] ${item.url}: ${browserError} — trying Wayback Machine`);
     } catch (err) {
-      logger.error(`[browser] ${item.url}: ${err.message}`);
-      return {
-        url: item.url,
-        final_url: item.url,
-        title: item.title,
-        word_count: 0,
-        content_type: null,
-        status: 'error',
-        error: `Browser fetch failed: ${err.message}`,
-        text_preview: '',
-        meta_description: item.meta_description || null,
-        text_content: '',
-        entity_name: item.entity_name,
-        scrape_method: 'browser',
-      };
+      browserFailed = true;
+      browserError = `Browser: ${err.message}`;
+      logger.warn(`[browser] ${item.url}: ${err.message} — trying Wayback Machine`);
     }
+
+    // --- Tier 3: Wayback Machine fallback ---
+    if (browserFailed && tools.http && tools.http.get) {
+      try {
+        const waybackUrl = `https://web.archive.org/web/${item.url}`;
+        logger.info(`[wayback] Fetching ${item.url}`);
+        const wbRes = await tools.http.get(waybackUrl, { timeout: request_timeout });
+
+        if (wbRes.status >= 400) {
+          throw new Error(`Wayback HTTP ${wbRes.status}`);
+        }
+
+        const wbBody = typeof wbRes.body === 'string' ? wbRes.body : String(wbRes.body);
+
+        // Check if Wayback actually has a snapshot
+        if (wbBody.includes('Wayback Machine has not archived that URL') ||
+            wbBody.includes('The Wayback Machine has not archived that URL') ||
+            wbBody.includes('This URL has been excluded from the Wayback Machine')) {
+          throw new Error('No Wayback snapshot available');
+        }
+
+        const extracted = extractFromHtml(wbBody, item.url, item);
+
+        if (extracted.wordCount >= min_word_threshold) {
+          logger.info(`[wayback] ${item.url}: ${extracted.wordCount} words from Wayback Machine`);
+          return buildResult(item, extracted, 'wayback', item.url, null);
+        }
+
+        logger.warn(`[wayback] ${item.url}: only ${extracted.wordCount} words from Wayback`);
+      } catch (wbErr) {
+        logger.warn(`[wayback] ${item.url}: ${wbErr.message}`);
+      }
+    }
+
+    // --- All tiers failed ---
+    logger.error(`[browser] ${item.url}: all methods failed`);
+    return {
+      url: item.url,
+      final_url: item.url,
+      title: item.title,
+      word_count: 0,
+      content_type: null,
+      status: 'error',
+      error: browserError,
+      text_preview: '',
+      meta_description: item.meta_description || null,
+      text_content: '',
+      entity_name: item.entity_name,
+      scrape_method: 'browser',
+    };
   }
 
   // Concurrent worker pool (same pattern as page-scraper)
