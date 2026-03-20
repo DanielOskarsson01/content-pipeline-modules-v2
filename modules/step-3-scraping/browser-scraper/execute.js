@@ -89,8 +89,11 @@ async function execute(input, options, tools) {
     const wc = item.word_count ?? 0;
     const status = item.status;
 
+    // Re-scrape if: page-scraper failed entirely (403, timeout, etc.)
+    if (status === 'error' || status === 'dead_link') {
+      needsScrape.push(item);
     // Re-scrape if: HTTP was successful but content too short
-    if (status === 'success' && wc < min_word_threshold) {
+    } else if (status === 'success' && wc < min_word_threshold) {
       needsScrape.push(item);
     // Re-scrape if: text is duplicated across 3+ pages (boilerplate)
     } else if (status === 'success' && item.text_content && boilerplateTexts.has(item.text_content.trim())) {
