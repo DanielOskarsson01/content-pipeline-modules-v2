@@ -129,25 +129,9 @@ async function execute(input, options, tools) {
         waitForNetworkIdle: wait_for_network_idle,
       });
 
-      if (res.status >= 400) {
-        logger.warn(`[browser] ${item.url}: HTTP ${res.status}`);
-        return {
-          url: item.url,
-          final_url: res.url || item.url,
-          title: item.title,
-          word_count: 0,
-          content_type: 'text/html',
-          status: 'error',
-          error: `Browser HTTP ${res.status}`,
-          text_preview: '',
-          meta_description: item.meta_description || null,
-          text_content: '',
-          entity_name: item.entity_name,
-          scrape_method: 'browser',
-        };
-      }
-
-      // Run Readability on browser-rendered HTML (same as page-scraper)
+      // Always try to extract content regardless of HTTP status.
+      // Cloudflare challenges return 403 initially but JS solves the challenge,
+      // so page.content() may have the real page even when status is 403.
       const html = res.body;
       const title = extractTitle(html) || item.title;
       const metaDescription = extractMetaDescription(html) || item.meta_description || null;
@@ -162,6 +146,29 @@ async function execute(input, options, tools) {
       const textPreview = textContent.length > 150
         ? textContent.substring(0, 150) + '...'
         : textContent;
+
+      // If HTTP error AND no meaningful content extracted, mark as error
+      if (res.status >= 400 && wordCount < min_word_threshold) {
+        logger.warn(`[browser] ${item.url}: HTTP ${res.status} and only ${wordCount} words`);
+        return {
+          url: item.url,
+          final_url: res.url || item.url,
+          title,
+          word_count: wordCount,
+          content_type: 'text/html',
+          status: 'error',
+          error: `Browser HTTP ${res.status}`,
+          text_preview: textPreview,
+          meta_description: metaDescription,
+          text_content: textContent,
+          entity_name: item.entity_name,
+          scrape_method: 'browser',
+        };
+      }
+
+      if (res.status >= 400) {
+        logger.info(`[browser] ${item.url}: HTTP ${res.status} but extracted ${wordCount} words — treating as success`);
+      }
 
       const improved = wordCount >= min_word_threshold;
       if (improved) {
