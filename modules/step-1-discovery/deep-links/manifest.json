@@ -7,9 +7,9 @@
   "category": "crawling",
   "cost": "medium",
   "data_operation_default": "transform",
-  "sort_order": 3,
+  "sort_order": 4,
 
-  "depends_on": ["sitemap-parser", "page-links"],
+  "depends_on": ["sitemap-parser", "page-links", "browser-crawler"],
   "usage_notes": "Reads from the working pool built by earlier Step 1 modules. Run after sitemap-parser and page-links. Only useful when earlier modules found pages containing deeper links (blogs, news sections).",
 
   "requires_columns": ["website"],
