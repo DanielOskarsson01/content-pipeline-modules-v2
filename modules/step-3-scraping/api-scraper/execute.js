@@ -170,11 +170,18 @@ async function execute(input, options, tools) {
 
       const apiUrl = `https://api.scrapfly.io/scrape?${params.toString()}`;
 
-      const res = await tools.http.get(apiUrl, { timeout: request_timeout });
+      let res;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        res = await tools.http.get(apiUrl, { timeout: request_timeout });
+        if (res.status !== 429) break;
+        const waitSecs = (attempt + 1) * 15; // 15s, 30s, 45s
+        logger.warn(`[scrapfly] Rate limited on ${url} — waiting ${waitSecs}s (attempt ${attempt + 1}/3)`);
+        await new Promise(resolve => setTimeout(resolve, waitSecs * 1000));
+      }
 
       if (res.status === 429) {
-        logger.error(`[scrapfly] Rate limited on ${url}`);
-        return buildErrorResult(item, 'ScrapFly rate limited (429) — reduce concurrency or wait');
+        logger.error(`[scrapfly] Rate limited on ${url} after 3 retries`);
+        return buildErrorResult(item, 'ScrapFly rate limited (429) after retries — wait and try again later');
       }
 
       if (res.status === 402) {
