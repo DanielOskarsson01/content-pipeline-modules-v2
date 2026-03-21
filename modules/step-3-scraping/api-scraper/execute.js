@@ -61,7 +61,7 @@ async function execute(input, options, tools) {
     max_content_length = 50000,
     concurrency = 2,
     request_timeout = 45000,
-    country = 'GB',
+    country = '',
   } = options;
 
   const apiKey = process.env.SCRAPFLY_KEY;
@@ -162,8 +162,8 @@ async function execute(input, options, tools) {
         url: url,
         asp: 'true',
         render_js: 'true',
-        country: country,
       });
+      if (country) params.set('country', country);
 
       const apiUrl = `https://api.scrapfly.io/scrape?${params.toString()}`;
 

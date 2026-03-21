@@ -55,8 +55,8 @@
       "name": "country",
       "type": "string",
       "label": "Geo-location country",
-      "description": "Country code for geo-located requests (e.g. 'GB', 'US', 'MT'). Some iGaming sites geo-restrict content.",
-      "default": "GB"
+      "description": "Optional country code for geo-located requests (e.g. 'GB', 'US', 'MT'). Leave empty to let ScrapFly auto-select. Only set if a site geo-restricts content.",
+      "default": ""
     }
   ],
 
@@ -65,7 +65,7 @@
     "max_content_length": 50000,
     "concurrency": 2,
     "request_timeout": 45000,
-    "country": "GB"
+    "country": ""
   },
 
   "item_key": "url",
