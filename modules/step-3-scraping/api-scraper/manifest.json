@@ -1,0 +1,104 @@
+{
+  "id": "api-scraper",
+  "name": "API Scraper (ScrapFly)",
+  "description": "Paid API fallback for pages that failed both page-scraper and browser-scraper. Uses ScrapFly's Anti-Scraping Protection to bypass Cloudflare, Turnstile, and aggressive bot detection. Only processes pages with status 'error' or word_count below threshold — never wastes credits on already-scraped pages.",
+  "version": "1.0.0",
+  "step": 3,
+  "category": "scraping",
+  "cost": "expensive",
+  "data_operation_default": "transform",
+  "sort_order": 3,
+
+  "depends_on": ["browser-scraper"],
+  "usage_notes": "Run after browser-scraper. Only re-scrapes pages that failed all previous scrapers. Requires SCRAPFLY_KEY environment variable. Each request costs ~30 ScrapFly credits (ASP + JS rendering). Monitor credit usage in ScrapFly dashboard.",
+
+  "requires_columns": ["url"],
+
+  "options": [
+    {
+      "name": "min_word_threshold",
+      "type": "number",
+      "label": "Re-scrape threshold (words)",
+      "description": "Only re-scrape pages with word_count below this value. Pages above are passed through unchanged.",
+      "default": 50,
+      "min": 10,
+      "max": 500
+    },
+    {
+      "name": "max_content_length",
+      "type": "number",
+      "label": "Max extracted text (chars)",
+      "description": "Truncate extracted text to this many characters.",
+      "default": 50000,
+      "min": 1000,
+      "max": 200000
+    },
+    {
+      "name": "concurrency",
+      "type": "number",
+      "label": "Concurrent API requests",
+      "description": "Number of simultaneous ScrapFly requests. Keep low to avoid rate limits and credit burn.",
+      "default": 2,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "name": "request_timeout",
+      "type": "number",
+      "label": "API timeout (ms)",
+      "description": "Timeout for each ScrapFly API request. Cloudflare bypass can take 10-20 seconds.",
+      "default": 45000,
+      "min": 10000,
+      "max": 120000
+    },
+    {
+      "name": "country",
+      "type": "string",
+      "label": "Geo-location country",
+      "description": "Country code for geo-located requests (e.g. 'GB', 'US', 'MT'). Some iGaming sites geo-restrict content.",
+      "default": "GB"
+    }
+  ],
+
+  "options_defaults": {
+    "min_word_threshold": 50,
+    "max_content_length": 50000,
+    "concurrency": 2,
+    "request_timeout": 45000,
+    "country": "GB"
+  },
+
+  "item_key": "url",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": true,
+    "url": "string (required)",
+    "title": "string",
+    "word_count": "number",
+    "scrape_method": "string",
+    "extraction_method": "string",
+    "status": "string",
+    "error": "string",
+    "text_preview": "string",
+    "scrapfly_credits": "number",
+    "flagged_when": { "status": ["error"] },
+    "downloadable_fields": [
+      { "field": "text_content", "extension": "txt", "label": "Scraped Text" }
+    ],
+    "detail_schema": {
+      "header_fields": [
+        { "field": "url", "display": "link" },
+        "title",
+        { "field": "status", "display": "badge" },
+        "word_count",
+        "scrape_method",
+        "extraction_method",
+        "scrapfly_credits"
+      ],
+      "sections": [
+        { "field": "text_content", "label": "Extracted Text", "display": "prose" }
+      ]
+    }
+  }
+}
