@@ -152,6 +152,9 @@ async function execute(input, options, tools) {
     const url = item.url;
     logger.info(`[scrapfly] Fetching ${url}`);
 
+    let scrapflyFailed = false;
+    let scrapflyCredits = 0;
+
     try {
       // Build ScrapFly API URL
       const params = new URLSearchParams({
@@ -204,39 +207,94 @@ async function execute(input, options, tools) {
       const html = data.result?.content;
       if (!html || html.length < 100) {
         logger.warn(`[scrapfly] Empty/tiny response for ${url} (${html?.length || 0} bytes)`);
-        return buildErrorResult(item, `ScrapFly returned empty content`, creditsUsed);
+        // Fall through to Wayback Machine
+      } else if (isCloudflareBlock(html)) {
+        logger.warn(`[scrapfly] ${url}: got Cloudflare block page despite ASP (${creditsUsed} credits) — trying Wayback Machine`);
+        // Fall through to Wayback Machine
+      } else {
+        // Extract content using same chain as browser-scraper
+        const extracted = extractFromHtml(html, url, item, max_content_length, logger);
+
+        if (extracted.wordCount >= min_word_threshold) {
+          logger.info(`[scrapfly] ${url}: ${extracted.wordCount} words via ${extracted.extractionMethod} (${creditsUsed} credits)`);
+          return {
+            url: item.url,
+            final_url: data.result?.url || item.url,
+            title: extracted.title,
+            word_count: extracted.wordCount,
+            content_type: 'text/html',
+            status: 'success',
+            error: null,
+            text_preview: extracted.textPreview,
+            meta_description: extracted.metaDescription,
+            text_content: extracted.textContent,
+            entity_name: item.entity_name,
+            scrape_method: 'scrapfly',
+            extraction_method: extracted.extractionMethod,
+            scrapfly_credits: creditsUsed,
+          };
+        }
+
+        logger.warn(`[scrapfly] ${url}: only ${extracted.wordCount} words after extraction (${creditsUsed} credits) — trying Wayback Machine`);
       }
 
-      // Extract content using same chain as browser-scraper
-      const extracted = extractFromHtml(html, url, item, max_content_length, logger);
-
-      if (extracted.wordCount >= min_word_threshold) {
-        logger.info(`[scrapfly] ${url}: ${extracted.wordCount} words via ${extracted.extractionMethod} (${creditsUsed} credits)`);
-        return {
-          url: item.url,
-          final_url: data.result?.url || item.url,
-          title: extracted.title,
-          word_count: extracted.wordCount,
-          content_type: 'text/html',
-          status: 'success',
-          error: null,
-          text_preview: extracted.textPreview,
-          meta_description: extracted.metaDescription,
-          text_content: extracted.textContent,
-          entity_name: item.entity_name,
-          scrape_method: 'scrapfly',
-          extraction_method: extracted.extractionMethod,
-          scrapfly_credits: creditsUsed,
-        };
-      }
-
-      logger.warn(`[scrapfly] ${url}: only ${extracted.wordCount} words after extraction (${creditsUsed} credits)`);
-      return buildErrorResult(item, `ScrapFly fetched but only ${extracted.wordCount} words extracted`, creditsUsed);
-
+      scrapflyCredits = creditsUsed;
+      scrapflyFailed = true;
     } catch (err) {
-      logger.error(`[scrapfly] ${url}: ${err.message}`);
-      return buildErrorResult(item, `ScrapFly: ${err.message}`);
+      logger.warn(`[scrapfly] ${url}: ${err.message} — trying Wayback Machine`);
+      scrapflyFailed = true;
     }
+
+    // --- Wayback Machine fallback ---
+    if (scrapflyFailed) {
+      try {
+        const waybackUrl = `https://web.archive.org/web/${url}`;
+        logger.info(`[wayback] Fetching ${url}`);
+        const wbRes = await tools.http.get(waybackUrl, { timeout: request_timeout });
+
+        if (wbRes.status >= 400) {
+          throw new Error(`Wayback HTTP ${wbRes.status}`);
+        }
+
+        const wbBody = typeof wbRes.body === 'string' ? wbRes.body : String(wbRes.body);
+
+        if (wbBody.includes('Wayback Machine has not archived that URL') ||
+            wbBody.includes('The Wayback Machine has not archived that URL') ||
+            wbBody.includes('This URL has been excluded from the Wayback Machine')) {
+          throw new Error('No Wayback Machine snapshot available');
+        }
+
+        const extracted = extractFromHtml(wbBody, url, item, max_content_length, logger);
+
+        if (extracted.wordCount >= min_word_threshold) {
+          logger.info(`[wayback] ${url}: ${extracted.wordCount} words via ${extracted.extractionMethod} from Wayback Machine`);
+          return {
+            url: item.url,
+            final_url: item.url,
+            title: extracted.title,
+            word_count: extracted.wordCount,
+            content_type: 'text/html',
+            status: 'success',
+            error: null,
+            text_preview: extracted.textPreview,
+            meta_description: extracted.metaDescription,
+            text_content: extracted.textContent,
+            entity_name: item.entity_name,
+            scrape_method: 'wayback_after_api',
+            extraction_method: extracted.extractionMethod,
+            scrapfly_credits: scrapflyCredits,
+          };
+        }
+
+        logger.warn(`[wayback] ${url}: only ${extracted.wordCount} words from Wayback`);
+      } catch (wbErr) {
+        logger.warn(`[wayback] ${url}: ${wbErr.message}`);
+      }
+    }
+
+    // --- All methods failed ---
+    logger.error(`[api-scraper] ${url}: all methods failed (ScrapFly + Wayback)`);
+    return buildErrorResult(item, `ScrapFly blocked + Wayback failed`, scrapflyCredits);
   }
 
   function buildErrorResult(item, error, credits = 0) {
@@ -306,6 +364,28 @@ async function execute(input, options, tools) {
       description,
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Cloudflare block detection
+// ---------------------------------------------------------------------------
+
+function isCloudflareBlock(html) {
+  const markers = [
+    'cf-challenge',
+    'ray-id',
+    'Cloudflare Ray ID',
+    'Why have I been blocked',
+    'This website is using a security service to protect itself',
+    'Attention Required! | Cloudflare',
+    'Just a moment...',
+    'cf-browser-verification',
+    'cf_chl_opt',
+    'action you just performed triggered the security solution',
+  ];
+  const lower = html.toLowerCase();
+  const matches = markers.filter(m => lower.includes(m.toLowerCase()));
+  return matches.length >= 2;
 }
 
 // ---------------------------------------------------------------------------
