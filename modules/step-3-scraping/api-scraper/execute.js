@@ -345,6 +345,38 @@ async function execute(input, options, tools) {
     workers.push(worker());
   }
   await Promise.all(workers);
+
+  // --- Duplicate text detection ---
+  // If 3+ scraped pages return identical text_content, it's a block/error page
+  // regardless of wording. Demote them from success to error.
+  const textCounts = new Map();
+  for (const r of scrapeResults) {
+    if (r && r.status === 'success' && r.text_content) {
+      const text = r.text_content.trim();
+      if (text.length > 0) {
+        textCounts.set(text, (textCounts.get(text) || 0) + 1);
+      }
+    }
+  }
+  const duplicateTexts = new Set();
+  for (const [text, count] of textCounts) {
+    if (count >= 3) duplicateTexts.add(text);
+  }
+  if (duplicateTexts.size > 0) {
+    let demoted = 0;
+    for (const r of scrapeResults) {
+      if (r && r.status === 'success' && r.text_content && duplicateTexts.has(r.text_content.trim())) {
+        r.status = 'error';
+        r.error = `Duplicate text across ${textCounts.get(r.text_content.trim())} pages — likely a block/error page`;
+        r.word_count = 0;
+        r.text_content = '';
+        r.text_preview = '';
+        demoted++;
+      }
+    }
+    logger.info(`Duplicate detection: ${demoted} pages demoted from success to error (${duplicateTexts.size} duplicate text pattern(s))`);
+  }
+
   results.push(...scrapeResults);
 
   // Sort: errors first (same as browser-scraper)
