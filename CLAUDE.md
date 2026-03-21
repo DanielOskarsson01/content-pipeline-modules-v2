@@ -12,6 +12,7 @@ This repo contains pluggable submodules for the Content Creation Tool. Each subm
 2. Every module needs a valid manifest.json before an execute.js
 3. Test manifests load correctly via the skeleton's auto-discovery before writing execution logic
 4. One module at a time. Verify it works end-to-end before starting the next.
+5. **Every new submodule MUST have a README.md** — see "New Submodule Checklist" below.
 
 ---
 
@@ -147,12 +148,111 @@ All five Step 8 submodules use `requires_columns: []` (they read from pool items
 
 ---
 
-## CURRENT PHASE: Phase 11 code complete. Flow test in progress (entity name + column alias fixes applied to skeleton).
+## CURRENT PHASE: Phase 11 code complete. Flow test in progress. 28 submodule briefs ready for parallel development.
 
 **Modules repo status (2026-03-13):**
 - Commit `7a0f815`: live testing bug fixes (data shapes, display types, url-filter auto-remove)
 - `master_categories.md` change: NOT yet committed
 - Full end-to-end flow test still pending (skeleton fixes being applied first)
+
+---
+
+## 🧩 Parallel Submodule Development (decided 2026-03-20)
+
+Submodules are pure functions with a defined contract (`input.entity` in, `{ entity_name, items, meta }` out). They can be built independently by a second Claude Code session, a freelancer, or work in claude.ai. No skeleton changes needed.
+
+**28 research briefs** at `Content-Pipeline/specs/submodule-briefs/` — each contains: input/output contract, approach, external dependencies, edge cases, cost estimate, and example output.
+
+### Planned Submodule Inventory (28 briefs)
+
+**Step 1 — Discovery (9)**
+| Brief | Description | Key dependencies |
+|-------|-------------|-----------------|
+| ai-discovery-scout | LLM generates multi-query search strategies, classifies by lead type | tools.ai, SERPApi |
+| google-pse-news | Curated iGaming news whitelist via Google Custom Search | Google CSE API |
+| google-pse-directories | Configurable directory list (AskGamblers, ThePogg, etc.) — one submodule, not per-directory | Google CSE API |
+| seed-url-builder | Auto-generate /about, /products, /press paths, HEAD-validate | tools.http |
+| linkedin-discovery | Find LinkedIn company page via Google search, extract metadata from snippet | SERPApi |
+| youtube-podcast-discovery | Find channels, videos, podcast episodes via search + YouTube Data API | YouTube Data API |
+| social-media-discovery | Find Twitter/X, Telegram, Instagram, Facebook profiles | SERPApi |
+| curated-list-import | Import known-source Google Sheets lists, search for entity mentions | Google Sheets API |
+| image-logo-search | Find logos via Clearbit API, Google Images, website scraping | Clearbit, SERPApi |
+
+**Step 2 — Validation (1)**
+| Brief | Description | Key dependencies |
+|-------|-------------|-----------------|
+| learned-validator | Rule-based URL scorer with shadow mode, evolves toward ML | tools.ai (shadow) |
+
+**Step 3 — Scraping (2)**
+| Brief | Description | Key dependencies |
+|-------|-------------|-----------------|
+| media-transcript-fetcher | YouTube CC/ASR transcripts, podcast show notes | YouTube Data API |
+| api-data-fetcher | Structured data from YouTube Data API, podcast RSS, future Crunchbase | APIs |
+
+**Step 4 — Filtering (2)**
+| Brief | Description | Key dependencies |
+|-------|-------------|-----------------|
+| boilerplate-stripper | Cross-page fingerprinting to remove shared nav/footer/cookie text | — |
+| intent-tagger | Classify pages as About/Products/Press/Careers/etc. | tools.ai |
+
+**Step 5 — Generation (5)**
+| Brief | Description | Key dependencies |
+|-------|-------------|-----------------|
+| seo-keyword-researcher | Real keyword data from Ahrefs/SERPApi/GSC/autocomplete | Ahrefs API, SERPApi |
+| tone-seo-editor | Separate B2B tone + keyword integration pass after content-writer | tools.ai |
+| image-generator | Stable Diffusion/DALL-E for branded visuals | Image gen API |
+| video-generator | Runway/Pika for short explainers (high cost, default OFF) | Video gen API |
+| audio-tts-generator | ElevenLabs/Play.ht for narrated profiles | TTS API |
+
+**Step 6 — QA (4)**
+| Brief | Description | Key dependencies |
+|-------|-------------|-----------------|
+| keyword-sufficiency-checker | Validate keyword density and placement against SEO plan | — |
+| meta-compliance-checker | Meta title ≤60 chars, description 150-160 chars | — |
+| citation-coverage-checker | Every factual claim must cite a source | — |
+| hallucination-detector | LLM comparison of claims against source material | tools.ai |
+
+**Step 8 — Bundling (1)**
+| Brief | Description | Key dependencies |
+|-------|-------------|-----------------|
+| schema-org-injector | JSON-LD structured data (Organization, Product, FAQPage) | — |
+
+**Step 9 — Distribution (3)**
+| Brief | Description | Key dependencies |
+|-------|-------------|-----------------|
+| strapi-publisher | Push profiles to Strapi CMS via REST API | Strapi API |
+| google-docs-exporter | Create editorial review documents | Google Docs API |
+| google-sheets-logger | Control panel row upserts with status, QA metrics, links | Google Sheets API |
+
+**Step 10 — Review (1)**
+| Brief | Description | Key dependencies |
+|-------|-------------|-----------------|
+| loop-router | Read QA verdicts, recommend routing (loop to discovery/generation/tone, or approve) | tools.ai |
+
+**Key corrections from original plan:**
+- PSE Directories: one submodule with configurable directory list, not one per directory
+- Curated List Import: separate from PSE — imports pre-built Google Sheets lists
+- AI Discovery Scout runs first — generates leads that downstream discovery submodules follow up
+- Image & Logo Search: added to Step 1 (was missing)
+- SEO Keyword Researcher: uses real tools (Ahrefs, SERPApi, GSC), not LLM-guessed keywords
+- Media Transcript Fetcher: moved from Step 5 to Step 3 (scraping is where it belongs)
+- Step 5 media enrichment: split into three (Image Generator, Video Generator, Audio/TTS Generator)
+
+## New Submodule Checklist
+
+When creating a new submodule, you MUST complete ALL of these steps:
+
+1. Create `manifest.json` with all required fields (including `depends_on` and `usage_notes`)
+2. Create `execute.js`
+3. Create `README.md` in the module folder — follow the exact format used by existing modules (Background, Strategy & Role, When to Use, Options Guide, Recipes, Expected Output, Limitations, What Happens Next, Technical Reference)
+4. Copy the README to **both** documentation folders with the module ID as filename:
+   - `docs/modules/{module-id}.md` (this repo)
+   - `/Users/danieloskarsson/Library/CloudStorage/Dropbox/Projects/project-command-center/specs/pipeline-guide/{module-id}.md`
+5. Verify the module loads via the skeleton's auto-discovery
+
+**Do not skip steps 3-4.** The docs/modules/ folder and pipeline-guide/ folder are where AI agents discover module capabilities. A module without documentation in those folders is invisible to the pipeline-guide agent.
+
+---
 
 ## Decision Log
 
@@ -167,3 +267,22 @@ VALUES ('content-pipeline-modules-v2', 'decision', 'What was decided', 'The choi
 ```
 
 Entry types: decision | progress | blocker | idea
+
+## Session Log
+
+### Session: 2026-03-21 21:00 - API scraper submodule creation
+**Accomplished:**
+- Created api-scraper submodule (Step 3.3) with manifest.json, execute.js, README.md
+- ScrapFly API integration with ASP (Anti-Scraping Protection) + JS rendering
+- Three-layer Cloudflare block detection: raw HTML markers, extracted text markers, duplicate text detection
+- Wayback Machine fallback when ScrapFly returns block pages
+- Block page detection on incoming items (upstream browser-scraper block pages re-scraped)
+- 6 commits: initial creation + 5 iterative bug fixes based on live testing
+
+**Decisions:**
+- Separate submodule (not integrated into browser-scraper) — costs money per API call
+- Geo-location defaults to empty (auto-select by ScrapFly)
+- Duplicate text detection: 3+ pages with identical text = block page
+- Concurrency default: 2 (conservative to avoid rate limits and credit burn)
+
+**Updated by:** session-closer agent
