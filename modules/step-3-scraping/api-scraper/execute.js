@@ -215,7 +215,11 @@ async function execute(input, options, tools) {
         // Extract content using same chain as browser-scraper
         const extracted = extractFromHtml(html, url, item, max_content_length, logger);
 
-        if (extracted.wordCount >= min_word_threshold) {
+        // Check extracted TEXT for block markers (block pages can pass word threshold)
+        if (isBlockPageText(extracted.textContent)) {
+          logger.warn(`[scrapfly] ${url}: extracted text is a Cloudflare block page (${creditsUsed} credits) — trying Wayback Machine`);
+          // Fall through to Wayback
+        } else if (extracted.wordCount >= min_word_threshold) {
           logger.info(`[scrapfly] ${url}: ${extracted.wordCount} words via ${extracted.extractionMethod} (${creditsUsed} credits)`);
           return {
             url: item.url,
@@ -233,9 +237,9 @@ async function execute(input, options, tools) {
             extraction_method: extracted.extractionMethod,
             scrapfly_credits: creditsUsed,
           };
+        } else {
+          logger.warn(`[scrapfly] ${url}: only ${extracted.wordCount} words after extraction (${creditsUsed} credits) — trying Wayback Machine`);
         }
-
-        logger.warn(`[scrapfly] ${url}: only ${extracted.wordCount} words after extraction (${creditsUsed} credits) — trying Wayback Machine`);
       }
 
       scrapflyCredits = creditsUsed;
@@ -265,6 +269,11 @@ async function execute(input, options, tools) {
         }
 
         const extracted = extractFromHtml(wbBody, url, item, max_content_length, logger);
+
+        if (isBlockPageText(extracted.textContent)) {
+          logger.warn(`[wayback] ${url}: Wayback also returned a block page`);
+          throw new Error('Wayback snapshot is also a block page');
+        }
 
         if (extracted.wordCount >= min_word_threshold) {
           logger.info(`[wayback] ${url}: ${extracted.wordCount} words via ${extracted.extractionMethod} from Wayback Machine`);
@@ -385,6 +394,25 @@ function isCloudflareBlock(html) {
   ];
   const lower = html.toLowerCase();
   const matches = markers.filter(m => lower.includes(m.toLowerCase()));
+  return matches.length >= 2;
+}
+
+/**
+ * Check extracted plain text (not HTML) for Cloudflare block page content.
+ * Block pages can have 80-100 words and pass the word_count threshold.
+ */
+function isBlockPageText(text) {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  const markers = [
+    'why have i been blocked',
+    'cloudflare ray id',
+    'this website is using a security service',
+    'action you just performed triggered the security solution',
+    'you can email the site owner to let them know you were blocked',
+    'attention required',
+  ];
+  const matches = markers.filter(m => lower.includes(m));
   return matches.length >= 2;
 }
 
