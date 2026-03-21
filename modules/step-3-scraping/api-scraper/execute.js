@@ -108,6 +108,9 @@ async function execute(input, options, tools) {
       needsScrape.push(item);
     } else if (status === 'success' && wc < min_word_threshold) {
       needsScrape.push(item);
+    } else if (status === 'success' && isBlockPageText(item.text_content || item.text_preview || '')) {
+      logger.info(`Block page detected in input for ${item.url} — will re-scrape`);
+      needsScrape.push(item);
     } else {
       passThrough.push(item);
     }
