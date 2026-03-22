@@ -244,13 +244,80 @@ When creating a new submodule, you MUST complete ALL of these steps:
 
 1. Create `manifest.json` with all required fields (including `depends_on` and `usage_notes`)
 2. Create `execute.js`
-3. Create `README.md` in the module folder — follow the exact format used by existing modules (Background, Strategy & Role, When to Use, Options Guide, Recipes, Expected Output, Limitations, What Happens Next, Technical Reference)
-4. Copy the README to **both** documentation folders with the module ID as filename:
-   - `docs/modules/{module-id}.md` (this repo)
-   - `/Users/danieloskarsson/Library/CloudStorage/Dropbox/Projects/project-command-center/specs/pipeline-guide/{module-id}.md`
-5. Verify the module loads via the skeleton's auto-discovery
+3. Create `README.md` in the module folder — follow the template below
+4. Verify the module loads via the skeleton's auto-discovery
 
-**Do not skip steps 3-4.** The docs/modules/ folder and pipeline-guide/ folder are where AI agents discover module capabilities. A module without documentation in those folders is invisible to the pipeline-guide agent.
+**Do not skip step 3.** READMEs are critical for operators tuning the pipeline, for AI agents understanding module capabilities, and for future developers maintaining the code.
+
+---
+
+## 📖 README.md Template
+
+Every submodule README MUST follow this structure. Use the `/submodule-readme` skill to generate or update READMEs automatically.
+
+### Required Sections (in order)
+
+```markdown
+# Module Name
+
+> One-line description of what this module does.
+
+**Module ID:** `id` | **Step:** N (Name) | **Category:** cat | **Cost:** cheap/medium/expensive
+**Version:** X.Y.Z | **Data Operation:** transform/add (symbol)
+
+---
+
+## Background
+### The Content Problem This Solves
+Why this module exists in the context of the pipeline.
+### How It Fits the Pipeline Architecture
+Where it sits, what comes before/after, data flow.
+
+## Strategy & Role
+**Why this module exists:** ...
+**Role in the pipeline:** ...
+**Relationship to other steps:** depends on, feeds into
+
+## When to Use
+**Always use when:** ...
+**Do not use when:** ...
+**Consider settings carefully when:** ...
+
+## Options Guide
+| Option | Default | When to Change | Impact |
+|--------|---------|----------------|--------|
+| `option_name` | default | guidance | what happens |
+
+## Recipes
+### Recipe Name
+Description:
+```config block```
+(3-5 recipes covering: Standard, Conservative, Aggressive, and domain-specific use cases)
+
+## Expected Output
+**Healthy result:** what good looks like
+**Output fields per item:** field list with descriptions
+**Red flags to watch for:** warning signs
+
+## Limitations & Edge Cases
+Bullet list of known limitations, dependencies, gotchas
+
+## What Happens Next
+Where output flows in the pipeline
+
+## Technical Reference
+Bullet list: step, category, cost, data operation, requires, depends on,
+input format, output format, selectable, detail view, error handling,
+dependencies, files
+```
+
+### Key Principles
+
+1. **Options Guide must match manifest.json exactly** — every option in the manifest gets a row in the table
+2. **Recipes show real config values** — not just descriptions, but actual option values to copy
+3. **Red flags are actionable** — tell the operator what to check, not just what's wrong
+4. **"When to Change" column is the most valuable** — operators scan this to decide if defaults need tuning
+5. **Keep it current** — when you add/change options in manifest.json or execute.js, update the README immediately
 
 ---
 
