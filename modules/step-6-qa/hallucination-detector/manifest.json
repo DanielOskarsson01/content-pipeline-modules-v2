@@ -83,7 +83,7 @@
     "verified_claims_count": "number",
     "total_claims_count": "number",
     "flagged_claims_count": "number",
-    "flagged_when": { "qa_pass": [false] },
+    "flagged_when": { "qa_pass": ["false"] },
     "detail_schema": {
       "header_fields": [
         "entity_name",

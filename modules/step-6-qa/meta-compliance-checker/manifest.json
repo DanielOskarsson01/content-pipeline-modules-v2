@@ -88,8 +88,8 @@
     "meta_title_length": "number",
     "meta_description_length": "number",
     "meta_description_text": "string",
-    "violations": "array",
-    "flagged_when": { "qa_pass": [false] },
+    "violations": "string",
+    "flagged_when": { "qa_pass": ["false"] },
     "detail_schema": {
       "header_fields": [
         "entity_name",

@@ -437,7 +437,7 @@ async function execute(input, options, tools) {
         ...item,
         page_intent,
         intent_confidence,
-        intent_signals,
+        intent_signals: intent_signals.join(', '),
         entity_name: entity.name,
       });
     }

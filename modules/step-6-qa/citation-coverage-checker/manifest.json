@@ -57,7 +57,7 @@
     "source_count": "number",
     "uncited_claims_count": "number",
     "broken_citations_count": "number",
-    "flagged_when": { "qa_pass": [false] },
+    "flagged_when": { "qa_pass": ["false"] },
     "detail_schema": {
       "header_fields": [
         "entity_name",

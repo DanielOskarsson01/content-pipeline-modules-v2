@@ -237,7 +237,7 @@ async function execute(input, options, tools) {
           meta_title_length: 0,
           meta_description_length: 0,
           meta_description_text: '',
-          violations: ['No meta_title or meta_description found in upstream data'],
+          violations: 'No meta_title or meta_description found in upstream data',
         }],
         error: 'No meta data found -- ensure content-writer or meta-output has run',
         meta: { qa_pass: false, checks_passed: 0, checks_total: 0 },
@@ -391,7 +391,7 @@ async function execute(input, options, tools) {
         meta_title_length: metaTitle.length,
         meta_description_length: metaDescription.length,
         meta_description_text: metaDescription,
-        violations,
+        violations: violations.join('\n'),
       }],
       meta: {
         qa_pass: qaPassed,

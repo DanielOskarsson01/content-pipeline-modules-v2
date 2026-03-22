@@ -70,7 +70,7 @@
     "title": "string",
     "page_intent": "string (about|products|press|careers|contact|investors|partners|resources|blog_post|news_article|case_study|other)",
     "intent_confidence": "number (0-1)",
-    "intent_signals": "string[]",
+    "intent_signals": "string",
     "detail_schema": {
       "header_fields": [
         { "field": "url", "display": "link" },
@@ -79,7 +79,7 @@
         { "field": "intent_confidence", "display": "text" }
       ],
       "sections": [
-        { "field": "intent_signals", "label": "Classification Signals", "display": "list" },
+        { "field": "intent_signals", "label": "Classification Signals", "display": "text" },
         { "field": "text_content", "label": "Content", "display": "prose" }
       ]
     }

@@ -70,7 +70,7 @@
     "negative_keywords_found": "string",
     "density_report": "string",
     "placement_report": "string",
-    "flagged_when": { "qa_pass": [false] },
+    "flagged_when": { "qa_pass": ["false"] },
     "detail_schema": {
       "header_fields": [
         "entity_name",

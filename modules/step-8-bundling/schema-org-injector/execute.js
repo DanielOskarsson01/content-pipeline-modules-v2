@@ -472,6 +472,7 @@ async function execute(input, options, tools) {
           schema_types: schemaTypes.join(', '),
           validation_errors: allValidationErrors,
           validation_error_count: allValidationErrors.length,
+          has_validation_errors: String(allValidationErrors.length > 0),
           validation_errors_text: allValidationErrors.length > 0
             ? allValidationErrors.join('\n')
             : 'No validation errors',
