@@ -353,6 +353,7 @@ async function execute(input, options, tools) {
         prompt,
         model: ai_model,
         provider: ai_provider,
+        temperature,
       });
 
       // The LLM returns revised markdown directly

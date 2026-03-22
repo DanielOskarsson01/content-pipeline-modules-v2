@@ -343,6 +343,7 @@ async function execute(input, options, tools) {
       loop_generation: loopGenerationCount,
       loop_tone: loopToneCount,
       flag_manual: flagManualCount,
+      errors: [],
       description,
     },
   };

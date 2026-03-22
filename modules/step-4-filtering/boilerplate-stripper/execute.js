@@ -313,13 +313,12 @@ async function execute(input, options, tools) {
       totalStrippedChars += strippedChars;
 
       cleanedItems.push({
-        url: item.url,
+        ...item,
         text_content: cleanedText,
         word_count: countWords(cleanedText),
         stripped_chars: strippedChars,
         boilerplate_ratio: boilerplateRatio,
         flagged,
-        entity_name: item.entity_name,
       });
     }
 

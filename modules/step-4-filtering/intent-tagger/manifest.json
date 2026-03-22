@@ -61,7 +61,7 @@
     "priority_intents": "about,products,press"
   },
 
-  "item_key": "entity_name",
+  "item_key": "url",
 
   "output_schema": {
     "display_type": "table",

@@ -124,13 +124,6 @@ function splitIntoSentences(text) {
 }
 
 /**
- * Check if a sentence contains an inline citation reference [#n].
- */
-function hasCitation(sentence) {
-  return CITATION_REF_PATTERN.test(sentence);
-}
-
-/**
  * Check if a sentence contains a factual claim pattern.
  */
 function isFactualClaim(sentence) {

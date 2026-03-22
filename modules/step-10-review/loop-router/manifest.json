@@ -16,9 +16,10 @@
   "options": [
     {
       "name": "default_no_qa",
-      "type": "string",
+      "type": "select",
       "label": "Default when no QA results",
       "description": "What to do when no QA result items are found for an entity. \"approve\" auto-approves, \"flag_manual\" flags for manual review.",
+      "values": ["flag_manual", "approve"],
       "default": "flag_manual"
     },
     {

@@ -68,6 +68,7 @@
     "missing_keywords": "string",
     "misplaced_keywords": "string",
     "negative_keywords_found": "string",
+    "density_report": "string",
     "placement_report": "string",
     "flagged_when": { "qa_pass": [false] },
     "detail_schema": {
