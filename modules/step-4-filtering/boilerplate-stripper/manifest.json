@@ -1,0 +1,83 @@
+{
+  "id": "boilerplate-stripper",
+  "name": "Boilerplate Stripper",
+  "description": "Remove navigation menus, cookie banners, footer disclaimers, and repeated boilerplate from scraped text to produce clean source material.",
+  "version": "1.0.0",
+  "step": 4,
+  "category": "filtering",
+  "cost": "cheap",
+  "data_operation_default": "transform",
+
+  "depends_on": ["page-scraper"],
+  "usage_notes": "Works best with 3+ pages per entity for cross-page fingerprinting. Single-page entities still benefit from known-pattern stripping. Increase frequency_threshold toward 1.0 for conservative stripping; decrease toward 0.3 for aggressive stripping.",
+
+  "requires_columns": [],
+
+  "options": [
+    {
+      "name": "frequency_threshold",
+      "type": "number",
+      "label": "Frequency threshold",
+      "description": "Fraction of pages a block must appear on to be considered boilerplate. 0.5 = block appears on half or more of pages.",
+      "default": 0.5,
+      "min": 0.3,
+      "max": 1.0
+    },
+    {
+      "name": "min_block_length",
+      "type": "number",
+      "label": "Minimum block length (chars)",
+      "description": "Blocks shorter than this are too small to fingerprint reliably and are ignored during cross-page analysis.",
+      "default": 20,
+      "min": 5,
+      "max": 100
+    },
+    {
+      "name": "min_content_ratio",
+      "type": "number",
+      "label": "Minimum content ratio",
+      "description": "If cleaned content is below this fraction of original length, flag the item as potentially over-stripped.",
+      "default": 0.3,
+      "min": 0.1,
+      "max": 0.9
+    },
+    {
+      "name": "strip_known_patterns",
+      "type": "boolean",
+      "label": "Strip known boilerplate patterns",
+      "description": "Also remove known boilerplate phrases (cookie banners, newsletter CTAs, social sharing) regardless of cross-page frequency.",
+      "default": true
+    }
+  ],
+
+  "options_defaults": {
+    "frequency_threshold": 0.5,
+    "min_block_length": 20,
+    "min_content_ratio": 0.3,
+    "strip_known_patterns": true
+  },
+
+  "item_key": "url",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": false,
+    "url": "string (required)",
+    "text_content": "string",
+    "word_count": "number",
+    "stripped_chars": "number",
+    "boilerplate_ratio": "number",
+    "flagged": "boolean",
+    "detail_schema": {
+      "header_fields": [
+        { "field": "url", "display": "link" },
+        { "field": "word_count", "display": "text" },
+        { "field": "boilerplate_ratio", "display": "text" },
+        { "field": "flagged", "display": "badge" }
+      ],
+      "sections": [
+        { "field": "text_content", "label": "Cleaned Content", "display": "prose" }
+      ]
+    }
+  }
+}

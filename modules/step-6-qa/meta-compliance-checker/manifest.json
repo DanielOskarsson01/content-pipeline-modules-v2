@@ -1,0 +1,106 @@
+{
+  "id": "meta-compliance-checker",
+  "name": "Meta Compliance Checker",
+  "description": "Validate meta titles and descriptions for SEO length requirements and keyword presence.",
+  "version": "1.0.0",
+  "step": 6,
+  "category": "qa",
+  "cost": "cheap",
+  "data_operation_default": "transform",
+
+  "depends_on": ["content-writer", "seo-planner"],
+  "usage_notes": "Run after content-writer and seo-planner. Checks meta title length, meta description length, keyword presence, truncation indicators, and cross-entity duplicate meta. Set pass_threshold below 1.0 to allow partial failures.",
+
+  "requires_columns": [],
+
+  "options": [
+    {
+      "name": "title_max_length",
+      "type": "number",
+      "label": "Max meta title length",
+      "description": "Maximum characters for meta title. Google typically truncates at 60.",
+      "default": 60,
+      "min": 40,
+      "max": 80
+    },
+    {
+      "name": "description_min_length",
+      "type": "number",
+      "label": "Min meta description length",
+      "description": "Minimum characters for meta description. Below this loses SEO value.",
+      "default": 150,
+      "min": 100,
+      "max": 200
+    },
+    {
+      "name": "description_max_length",
+      "type": "number",
+      "label": "Max meta description length",
+      "description": "Maximum characters for meta description. Google typically truncates at 160.",
+      "default": 160,
+      "min": 120,
+      "max": 200
+    },
+    {
+      "name": "require_keyword_in_title",
+      "type": "boolean",
+      "label": "Require keyword in title",
+      "description": "Fail if no head_term from the SEO plan appears in the meta title.",
+      "default": true
+    },
+    {
+      "name": "require_keyword_in_description",
+      "type": "boolean",
+      "label": "Require keyword in description",
+      "description": "Fail if no head_term from the SEO plan appears in the meta description.",
+      "default": true
+    },
+    {
+      "name": "pass_threshold",
+      "type": "number",
+      "label": "Pass threshold",
+      "description": "Fraction of checks that must pass for the entity to get qa_pass: true. 1.0 means all checks must pass.",
+      "default": 1.0,
+      "min": 0.5,
+      "max": 1.0
+    }
+  ],
+
+  "options_defaults": {
+    "title_max_length": 60,
+    "description_min_length": 150,
+    "description_max_length": 160,
+    "require_keyword_in_title": true,
+    "require_keyword_in_description": true,
+    "pass_threshold": 1.0
+  },
+
+  "item_key": "entity_name",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": false,
+    "entity_name": "string (required)",
+    "qa_pass": "boolean",
+    "checks_passed": "number",
+    "checks_total": "number",
+    "meta_title": "string",
+    "meta_title_length": "number",
+    "meta_description_length": "number",
+    "violations": "string",
+    "flagged_when": { "qa_pass": [false] },
+    "detail_schema": {
+      "header_fields": [
+        "entity_name",
+        { "field": "qa_pass", "display": "badge" },
+        "checks_passed",
+        "checks_total"
+      ],
+      "sections": [
+        { "field": "meta_title", "label": "Meta Title", "display": "text" },
+        { "field": "meta_description_text", "label": "Meta Description", "display": "text" },
+        { "field": "violations", "label": "Violations", "display": "prose" }
+      ]
+    }
+  }
+}
