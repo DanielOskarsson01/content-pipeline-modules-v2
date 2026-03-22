@@ -1,0 +1,80 @@
+{
+  "id": "schema-org-injector",
+  "name": "Schema.org Injector",
+  "description": "Generate Schema.org structured data (JSON-LD) for company profiles — Organization, Product, FAQPage — for SEO rich snippets.",
+  "version": "1.0.0",
+  "step": 8,
+  "category": "bundling",
+  "cost": "cheap",
+  "data_operation_default": "transform",
+
+  "depends_on": ["json-output", "content-analyzer"],
+  "usage_notes": "Enable all three schema types for maximum rich snippet coverage. Disable Product if the entity is not product-focused. FAQPage maps directly to Google's FAQ rich snippet format.",
+
+  "requires_columns": [],
+
+  "options": [
+    {
+      "name": "generate_organization",
+      "type": "boolean",
+      "label": "Generate Organization schema",
+      "description": "Generate Schema.org Organization markup from entity data (name, URL, logo, description, founding date, employees, address, social links).",
+      "default": true
+    },
+    {
+      "name": "generate_products",
+      "type": "boolean",
+      "label": "Generate Product schemas",
+      "description": "Generate Schema.org Product markup for each primary product/service category found in the entity data.",
+      "default": true
+    },
+    {
+      "name": "generate_faq",
+      "type": "boolean",
+      "label": "Generate FAQPage schema",
+      "description": "Generate Schema.org FAQPage markup from FAQ items. Maps directly to Google's FAQ rich snippet format.",
+      "default": true
+    },
+    {
+      "name": "company_url_field",
+      "type": "string",
+      "label": "Company URL field",
+      "description": "Which entity field contains the company URL. Used for the Organization url property.",
+      "default": "website"
+    }
+  ],
+
+  "options_defaults": {
+    "generate_organization": true,
+    "generate_products": true,
+    "generate_faq": true,
+    "company_url_field": "website"
+  },
+
+  "item_key": "entity_name",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": true,
+    "entity_name": "string (required)",
+    "schema_types": "string",
+    "validation_error_count": "number",
+    "jsonld_size_kb": "number",
+    "flagged_when": { "validation_error_count": [">", 0] },
+    "downloadable_fields": [
+      { "field": "schema_jsonld", "extension": "json", "label": "Download JSON-LD" }
+    ],
+    "detail_schema": {
+      "header_fields": [
+        "entity_name",
+        "schema_types",
+        "jsonld_size_kb",
+        { "field": "validation_error_count", "display": "badge" }
+      ],
+      "sections": [
+        { "field": "schema_jsonld", "label": "JSON-LD Output", "display": "prose" },
+        { "field": "validation_errors_text", "label": "Validation Errors", "display": "prose" }
+      ]
+    }
+  }
+}

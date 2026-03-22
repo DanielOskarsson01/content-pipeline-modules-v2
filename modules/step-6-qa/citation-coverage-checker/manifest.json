@@ -1,0 +1,77 @@
+{
+  "id": "citation-coverage-checker",
+  "name": "Citation Coverage Checker",
+  "description": "Verify that every factual claim in the generated content is backed by a citation to a valid source URL.",
+  "version": "1.0.0",
+  "step": 6,
+  "category": "qa",
+  "cost": "cheap",
+  "data_operation_default": "transform",
+
+  "depends_on": ["content-writer", "content-analyzer"],
+  "usage_notes": "Run after content-writer and content-analyzer. Checks that inline [#n] citations in content_markdown match source_citations in analysis_json. Flags factual claims (numbers, dates, statistics) that lack citations. Set verify_urls to true to check that source URLs are still live (adds HTTP cost).",
+
+  "requires_columns": [],
+
+  "options": [
+    {
+      "name": "pass_threshold",
+      "type": "number",
+      "label": "Pass threshold",
+      "description": "Minimum citation_score (0-1) for qa_pass to be true. 1.0 means every factual claim must have a citation.",
+      "default": 0.7,
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "name": "verify_urls",
+      "type": "boolean",
+      "label": "Verify source URLs",
+      "description": "Send HEAD requests to each source URL to check it is still live. Adds HTTP cost and latency.",
+      "default": false
+    },
+    {
+      "name": "require_factual_citations",
+      "type": "boolean",
+      "label": "Require citations on factual claims",
+      "description": "Flag sentences containing numbers, dates, statistics, or company-specific claims that lack an inline citation.",
+      "default": true
+    }
+  ],
+
+  "options_defaults": {
+    "pass_threshold": 0.7,
+    "verify_urls": false,
+    "require_factual_citations": true
+  },
+
+  "item_key": "entity_name",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": false,
+    "entity_name": "string (required)",
+    "qa_pass": "boolean",
+    "citation_score": "number (0-1)",
+    "citation_count": "number",
+    "source_count": "number",
+    "uncited_claims_count": "number",
+    "broken_citations_count": "number",
+    "flagged_when": { "qa_pass": [false] },
+    "detail_schema": {
+      "header_fields": [
+        "entity_name",
+        { "field": "qa_pass", "display": "badge" },
+        "citation_score",
+        "citation_count",
+        "source_count"
+      ],
+      "sections": [
+        { "field": "uncited_claims_text", "label": "Uncited Factual Claims", "display": "prose" },
+        { "field": "broken_citations_text", "label": "Broken Citations", "display": "prose" },
+        { "field": "dead_urls_text", "label": "Dead URLs", "display": "prose" },
+        { "field": "summary_text", "label": "Summary", "display": "prose" }
+      ]
+    }
+  }
+}

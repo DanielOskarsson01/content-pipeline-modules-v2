@@ -1,0 +1,88 @@
+{
+  "id": "keyword-sufficiency-checker",
+  "name": "Keyword Sufficiency Checker",
+  "description": "Validate that generated content includes target SEO keywords at the right density and in the right positions (headlines, first paragraphs, meta tags).",
+  "version": "1.0.0",
+  "step": 6,
+  "category": "qa",
+  "cost": "cheap",
+  "data_operation_default": "transform",
+
+  "depends_on": ["content-writer", "seo-planner"],
+  "usage_notes": "Run after content-writer and seo-planner. Checks keyword placement, density, and negative keyword absence. Works without seo-planner data (returns pass with warning). Pure text analysis -- no API calls.",
+
+  "requires_columns": [],
+
+  "options": [
+    {
+      "name": "pass_threshold",
+      "type": "number",
+      "label": "Pass threshold",
+      "description": "Minimum keyword_score (0-1) for the entity to get qa_pass: true.",
+      "default": 0.6,
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "name": "head_term_density_min",
+      "type": "number",
+      "label": "Min head term density",
+      "description": "Minimum keyword density for head terms (fraction of total words). 0.01 = 1%.",
+      "default": 0.01,
+      "min": 0.0,
+      "max": 0.1
+    },
+    {
+      "name": "head_term_density_max",
+      "type": "number",
+      "label": "Max head term density",
+      "description": "Maximum keyword density for head terms (fraction of total words). 0.03 = 3%. Above this signals keyword stuffing.",
+      "default": 0.03,
+      "min": 0.01,
+      "max": 0.1
+    },
+    {
+      "name": "check_negatives",
+      "type": "boolean",
+      "label": "Check negative keywords",
+      "description": "Fail if any negative keywords from the SEO plan appear in the content.",
+      "default": true
+    }
+  ],
+
+  "options_defaults": {
+    "pass_threshold": 0.6,
+    "head_term_density_min": 0.01,
+    "head_term_density_max": 0.03,
+    "check_negatives": true
+  },
+
+  "item_key": "entity_name",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": false,
+    "entity_name": "string (required)",
+    "qa_pass": "boolean",
+    "keyword_score": "number",
+    "missing_keywords": "string",
+    "misplaced_keywords": "string",
+    "negative_keywords_found": "string",
+    "placement_report": "string",
+    "flagged_when": { "qa_pass": [false] },
+    "detail_schema": {
+      "header_fields": [
+        "entity_name",
+        { "field": "qa_pass", "display": "badge" },
+        { "field": "keyword_score", "display": "badge" }
+      ],
+      "sections": [
+        { "field": "placement_report", "label": "Placement Report", "display": "prose" },
+        { "field": "missing_keywords", "label": "Missing Keywords", "display": "text" },
+        { "field": "misplaced_keywords", "label": "Misplaced Keywords", "display": "text" },
+        { "field": "negative_keywords_found", "label": "Negative Keywords Found", "display": "text" },
+        { "field": "density_report", "label": "Density Report", "display": "prose" }
+      ]
+    }
+  }
+}
