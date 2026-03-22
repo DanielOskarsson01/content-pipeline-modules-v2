@@ -192,11 +192,14 @@ async function execute(input, options, tools) {
     `${needsScrape.length} pages need browser re-scrape, ${passThrough.length} passed through (${allItems.length} total)`
   );
 
-  // Pass-through items keep their original data + a scrape_method marker
+  // Pass-through items keep their original data + a scrape_method marker.
+  // text_content is not available here (stripped from pool for performance) —
+  // set a note so the detail view explains where to find it.
   const results = passThrough.map((item) => ({
     ...item,
     scrape_method: 'passed_through',
     extraction_method: item.extraction_method || 'original',
+    text_content: `[Scraped by page-scraper — view full content in page-scraper results]`,
   }));
 
   // Browser-scrape items that need it
