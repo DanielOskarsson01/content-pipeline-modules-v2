@@ -79,3 +79,26 @@ VALUES ('content-pipeline-modules-v2', 'decision', 'What was decided', 'The choi
 ```
 
 Entry types: decision | progress | blocker | idea
+
+---
+
+## Session Log
+
+### Session: 2026-03-23 — Submodule batch build + rendering audit
+**Accomplished:**
+- Built 7 new submodules: citation-coverage-checker, keyword-sufficiency-checker, schema-org-injector, hallucination-detector, intent-tagger, tone-seo-editor, loop-router
+- Code reviewed all 10 new submodules, fixed 6 issues (field preservation, dead code, missing params)
+- Fixed remaining bugs across 5 submodules (dead fields, max-length guards, format consistency)
+- Deep audit of skeleton ContentRenderer compatibility — found and fixed 8 rendering bugs
+- All rendering fixes: flagged_when boolean→string (4 QA modules), arrays→joined strings, invalid display type, unsupported comparison operator
+
+**Decisions:**
+- QA submodules stay separate (not merged as options) — pipeline modularity
+- flagged_when must use string values ["false"] not boolean [false] — skeleton String() coercion
+- All arrays must be pre-formatted as strings before emitting to skeleton UI
+- schema-org-injector: added has_validation_errors boolean string for flagging
+
+**Blockers/Questions:**
+- None
+
+**Updated by:** session-closer agent
