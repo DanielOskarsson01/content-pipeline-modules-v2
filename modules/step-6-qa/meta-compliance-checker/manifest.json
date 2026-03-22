@@ -87,7 +87,8 @@
     "meta_title": "string",
     "meta_title_length": "number",
     "meta_description_length": "number",
-    "violations": "string",
+    "meta_description_text": "string",
+    "violations": "array",
     "flagged_when": { "qa_pass": [false] },
     "detail_schema": {
       "header_fields": [

@@ -35,12 +35,13 @@ Rules are evaluated in priority order. First match wins.
 | 1 | Entity looped >= `max_loops` times | `flag_manual` | Max loops exceeded -- reworked too many times |
 | 2 | 2+ QA checks failed | `flag_manual` | Multiple failures -- too complex for auto-routing |
 | 3 | Hallucination check failed | `loop_discovery` | Need better source material to support claims |
+| 3a | ...but source pages < `min_source_pages` | `flag_manual` | Can't gather better sources with so few pages |
 | 4 | Citation coverage failed | `loop_discovery` | Need more sources to cite |
-| 5 | Source pages < `min_source_pages` (when discovery loop needed) | `flag_manual` | Can't fix with loops -- too few sources |
-| 6 | Keyword sufficiency failed | `loop_tone` | Rewrite with better keyword integration |
-| 7 | Meta compliance failed | `loop_generation` | Regenerate meta title/description |
-| 8 | All checks passed | `approve` | Ready for bundling and distribution |
-| 9 | No QA results found | configurable | `default_no_qa` option (default: `flag_manual`) |
+| 4a | ...but source pages < `min_source_pages` | `flag_manual` | Can't add citations without more sources |
+| 5 | Keyword sufficiency failed | `loop_tone` | Rewrite with better keyword integration |
+| 6 | Meta compliance failed | `loop_generation` | Regenerate meta title/description |
+| 7 | All checks passed | `approve` | Ready for bundling and distribution |
+| 8 | No QA results found | configurable | `default_no_qa` option (default: `flag_manual`) |
 
 ---
 

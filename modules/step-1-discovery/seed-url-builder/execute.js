@@ -92,7 +92,7 @@ async function runWithConcurrency(tasks, limit) {
 
 async function execute(input, options, tools) {
   const { entities } = input;
-  const { max_concurrent, request_timeout, custom_paths, include_redirects } = options;
+  const { max_concurrent, request_timeout, custom_paths } = options;
   const { logger, http, progress } = tools;
 
   // Build the full path list: defaults + custom
@@ -130,7 +130,7 @@ async function execute(input, options, tools) {
       // Build tasks for concurrent execution
       const tasks = allPaths.map(({ path, type }) => {
         const candidateUrl = `${baseUrl}${path}`;
-        return () => checkUrl(candidateUrl, path, type, baseUrl, { http, logger, request_timeout, include_redirects });
+        return () => checkUrl(candidateUrl, path, type, baseUrl, { http, logger, request_timeout });
       });
 
       // Run with concurrency limit
@@ -185,12 +185,11 @@ async function execute(input, options, tools) {
  * Returns an output item if the URL is valid (2xx), or null if not.
  */
 async function checkUrl(url, path, type, baseUrl, ctx) {
-  const { http, logger, request_timeout, include_redirects } = ctx;
+  const { http, logger, request_timeout } = ctx;
   const timeout = request_timeout || 5000;
 
   let status = null;
   let method = 'HEAD';
-  let finalUrl = url;
   let headers = {};
 
   // Try HEAD first (fast, cheap)
@@ -231,25 +230,8 @@ async function checkUrl(url, path, type, baseUrl, ctx) {
     return null;
   }
 
-  // Handle redirects: if include_redirects is true and there is a Location header,
-  // capture the final URL. Node's fetch follows redirects automatically, so by the
-  // time we get status 200, it is the final destination. The original URL is what
-  // we probed; the fact that it returned 200 means the path exists (possibly via redirect).
-  //
-  // Redirect-to-homepage detection: if the server redirected our path back to the
-  // homepage (baseUrl or baseUrl/), we should skip it. We check the content-location
-  // or rely on the fact that fetch followed redirects -- if a location header is
-  // present in the final response, it means an additional redirect is suggested.
-  // Unfortunately tools.http does not expose the final URL after redirect following.
-  // We mitigate this by checking common patterns in response headers.
-  if (!include_redirects && headers['location']) {
-    // There is still a redirect we have not followed -- skip
-    return null;
-  }
-
   return {
     url,
-    final_url: finalUrl,
     path_type: type,
     status_code: status,
     found_via: method === 'HEAD' ? 'head' : 'get_fallback',

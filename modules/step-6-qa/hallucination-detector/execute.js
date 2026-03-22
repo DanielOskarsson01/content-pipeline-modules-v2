@@ -241,10 +241,8 @@ async function execute(input, options, tools) {
     prompt: promptTemplate,
   } = otherOptions;
 
-  // Use the prompt from options, or fall back to manifest default
-  const defaultPrompt = 'You are a fact-checking assistant. You will be given a list of factual claims extracted from a generated article, and the original source material the article was based on.\n\nFor each claim, determine whether it is supported by the source material.\n\nRules:\n- "supported" = the source material contains information that directly or clearly supports this claim, even if paraphrased\n- "unsupported" = the source material does NOT contain information supporting this claim, and it is NOT general common knowledge\n- "partial" = the source material partially supports the claim but key details (numbers, dates, specifics) differ or are missing\n- General knowledge claims (e.g. "Malta is a popular iGaming jurisdiction", "the iGaming industry is growing") should be marked "supported" even if not explicitly in sources\n- If the claim references data from an analysis or summary derived from the sources, mark it "supported"\n\nReturn a JSON array (no markdown fences, no extra text) with one object per claim:\n[\n  {\n    "claim": "the exact claim text",\n    "verdict": "supported" | "unsupported" | "partial",\n    "quote": "the supporting quote from sources, or null if unsupported",\n    "severity": "low" | "medium" | "high"\n  }\n]\n\nSeverity guide:\n- "low" = general phrasing, opinion, or common knowledge that is hard to verify\n- "medium" = specific factual claim (company name, product, feature) not found in sources\n- "high" = specific number, date, statistic, or financial claim not found in sources\n\nCLAIMS:\n{{CLAIMS}}\n\nSOURCE MATERIAL:\n{{SOURCES}}';
-
-  const verificationPrompt = promptTemplate || defaultPrompt;
+  // Prompt comes from manifest options (editable by operator in UI)
+  const verificationPrompt = promptTemplate;
 
   logger.info(
     `Config: pass_threshold=${pass_threshold}, model=${ai_model || 'default'}, ` +
@@ -428,9 +426,10 @@ async function execute(input, options, tools) {
     const unsupportedClaims = allVerdicts.filter(v => v.verdict === 'unsupported');
 
     // Verified = supported + partial (partial counts as 0.5)
-    const verifiedCount = supportedClaims.length + Math.floor(partialClaims.length * 0.5);
+    const verifiedValue = supportedClaims.length + partialClaims.length * 0.5;
+    const verifiedCount = Math.round(verifiedValue);
     const hallucinationScore = totalClaims > 0
-      ? (supportedClaims.length + partialClaims.length * 0.5) / totalClaims
+      ? verifiedValue / totalClaims
       : 1;
 
     const qaPassed = hallucinationScore >= pass_threshold;

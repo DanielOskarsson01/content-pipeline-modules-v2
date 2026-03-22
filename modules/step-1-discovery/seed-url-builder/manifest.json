@@ -38,21 +38,13 @@
       "label": "Custom paths",
       "description": "Additional paths to check, one per line (e.g. /regulierung or /partenaires). Added to the default list.",
       "default": ""
-    },
-    {
-      "name": "include_redirects",
-      "type": "boolean",
-      "label": "Include redirect targets",
-      "description": "Follow redirects and capture the final URL. If disabled, only direct 200 responses are kept.",
-      "default": true
     }
   ],
 
   "options_defaults": {
     "max_concurrent": 5,
     "request_timeout": 5000,
-    "custom_paths": "",
-    "include_redirects": true
+    "custom_paths": ""
   },
 
   "item_key": "url",
@@ -61,7 +53,6 @@
     "display_type": "table",
     "selectable": false,
     "url": "string (required)",
-    "final_url": "string",
     "path_type": "string",
     "status_code": "number",
     "found_via": "string"

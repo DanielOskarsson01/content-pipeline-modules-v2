@@ -114,7 +114,15 @@ function splitIntoBlocks(text) {
 // Check if a block matches any known boilerplate pattern
 // -------------------------------------------------------------------------
 
+/**
+ * Max length for known-pattern matching. Real boilerplate (cookie banners,
+ * footer links) is short. Long paragraphs discussing privacy policy or
+ * terms of service are substantive content, not boilerplate.
+ */
+const KNOWN_PATTERN_MAX_LENGTH = 300;
+
 function matchesKnownPattern(normalizedBlock) {
+  if (normalizedBlock.length > KNOWN_PATTERN_MAX_LENGTH) return false;
   for (const pattern of KNOWN_PATTERNS) {
     if (normalizedBlock.includes(pattern)) {
       return true;
@@ -257,13 +265,12 @@ async function execute(input, options, tools) {
       // Nothing to clean
       if (!originalText.trim()) {
         cleanedItems.push({
-          url: item.url,
+          ...item,
           text_content: '',
           word_count: 0,
           stripped_chars: 0,
           boilerplate_ratio: 0,
           flagged: false,
-          entity_name: item.entity_name,
         });
         continue;
       }

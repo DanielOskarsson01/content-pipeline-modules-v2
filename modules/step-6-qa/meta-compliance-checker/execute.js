@@ -147,8 +147,8 @@ async function execute(input, options, tools) {
   const results = [];
 
   // Track meta values across all entities for duplicate detection
-  const seenTitles = new Map();   // title -> entity_name
-  const seenDescriptions = new Map(); // description -> entity_name
+  const seenTitles = new Map();   // title -> [entity_names]
+  const seenDescriptions = new Map(); // description -> [entity_names]
 
   // First pass: collect meta for each entity
   const entityMetas = [];
@@ -237,7 +237,7 @@ async function execute(input, options, tools) {
           meta_title_length: 0,
           meta_description_length: 0,
           meta_description_text: '',
-          violations: JSON.stringify(['No meta_title or meta_description found in upstream data']),
+          violations: ['No meta_title or meta_description found in upstream data'],
         }],
         error: 'No meta data found -- ensure content-writer or meta-output has run',
         meta: { qa_pass: false, checks_passed: 0, checks_total: 0 },
@@ -261,9 +261,6 @@ async function execute(input, options, tools) {
   for (const em of entityMetas) {
     if (em.metaTitle) {
       const titleLower = em.metaTitle.toLowerCase();
-      if (seenTitles.has(titleLower)) {
-        // Mark as duplicate -- will be picked up in checks
-      }
       seenTitles.set(titleLower, (seenTitles.get(titleLower) || []).concat(em.entity.name));
     }
     if (em.metaDescription) {
@@ -394,7 +391,7 @@ async function execute(input, options, tools) {
         meta_title_length: metaTitle.length,
         meta_description_length: metaDescription.length,
         meta_description_text: metaDescription,
-        violations: JSON.stringify(violations),
+        violations,
       }],
       meta: {
         qa_pass: qaPassed,
