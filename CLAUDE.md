@@ -247,7 +247,7 @@ When creating a new submodule, you MUST complete ALL of these steps:
 3. Create `README.md` in the module folder — follow the template below
 4. Verify the module loads via the skeleton's auto-discovery
 
-**Do not skip step 3.** Use the `/submodule-readme` skill to generate READMEs — it has the full template and quality rules. See existing READMEs (browser-scraper, page-scraper, api-scraper) for the standard format.
+**Do not skip step 3.** Use the `/submodule-readme` skill to generate READMEs — it has the full template and quality rules. Also use this skill when the user asks to **describe**, **explain**, or **compare** submodules, or asks "what does X do" or "how should I configure X for Y". The skill handles both file generation and conversational descriptions.
 
 ---
 
