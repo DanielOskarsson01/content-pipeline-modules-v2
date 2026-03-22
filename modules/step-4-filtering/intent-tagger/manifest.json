@@ -1,0 +1,87 @@
+{
+  "id": "intent-tagger",
+  "name": "Intent Tagger",
+  "description": "Classify each scraped page by its intent (About, Products, Press, Partners, Careers, Contact, etc.) so downstream steps can prioritize and route content.",
+  "version": "1.0.0",
+  "step": 4,
+  "category": "filtering",
+  "cost": "cheap",
+  "data_operation_default": "transform",
+
+  "depends_on": ["page-scraper"],
+  "usage_notes": "Runs heuristic classification by default (no API calls). Enable use_llm for pages where heuristics are ambiguous. Set priority_intents to control which page types appear first in the output.",
+
+  "requires_columns": [],
+
+  "options": [
+    {
+      "name": "use_llm",
+      "type": "boolean",
+      "label": "Enable LLM fallback",
+      "description": "When heuristic confidence is below the threshold, use an LLM to classify the page intent. Costs tokens but catches ambiguous pages.",
+      "default": false
+    },
+    {
+      "name": "llm_threshold",
+      "type": "number",
+      "label": "LLM confidence threshold",
+      "description": "Pages with heuristic confidence below this value will be sent to the LLM for classification (if LLM fallback is enabled).",
+      "default": 0.5,
+      "min": 0.1,
+      "max": 1.0
+    },
+    {
+      "name": "ai_model",
+      "type": "string",
+      "label": "AI model",
+      "description": "Which model to use for LLM classification fallback.",
+      "default": "claude-haiku-4-5-20251001"
+    },
+    {
+      "name": "ai_provider",
+      "type": "string",
+      "label": "AI provider",
+      "description": "Which provider to use for LLM classification fallback.",
+      "default": "anthropic"
+    },
+    {
+      "name": "priority_intents",
+      "type": "string",
+      "label": "Priority intents (comma-separated)",
+      "description": "Intents to sort first in the output. Pages matching these intents appear at the top of results for each entity.",
+      "default": "about,products,press"
+    }
+  ],
+
+  "options_defaults": {
+    "use_llm": false,
+    "llm_threshold": 0.5,
+    "ai_model": "claude-haiku-4-5-20251001",
+    "ai_provider": "anthropic",
+    "priority_intents": "about,products,press"
+  },
+
+  "item_key": "entity_name",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": false,
+    "url": "string (required)",
+    "title": "string",
+    "page_intent": "string (about|products|press|careers|contact|investors|partners|resources|blog_post|news_article|case_study|other)",
+    "intent_confidence": "number (0-1)",
+    "intent_signals": "string[]",
+    "detail_schema": {
+      "header_fields": [
+        { "field": "url", "display": "link" },
+        "title",
+        { "field": "page_intent", "display": "badge" },
+        { "field": "intent_confidence", "display": "text" }
+      ],
+      "sections": [
+        { "field": "intent_signals", "label": "Classification Signals", "display": "list" },
+        { "field": "text_content", "label": "Content", "display": "prose" }
+      ]
+    }
+  }
+}

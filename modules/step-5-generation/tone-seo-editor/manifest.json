@@ -1,0 +1,135 @@
+{
+  "id": "tone-seo-editor",
+  "name": "Tone & SEO Editor",
+  "description": "Post-writing editing pass that refines content for B2B tone and SEO keyword integration. Takes content-writer markdown and seo-planner keyword targets, applies conservative edits: keyword placement in headings and body, sentence clarity, authoritative tone, subheadings and bullets. Runs AFTER content-writer as a separate refinement step.",
+  "version": "1.0.0",
+  "step": 5,
+  "category": "generation",
+  "cost": "medium",
+  "data_operation_default": "transform",
+
+  "depends_on": ["content-writer", "seo-planner"],
+  "usage_notes": "Requires content-writer and seo-planner to have completed. Uses a lower temperature than content-writer for conservative editing. Haiku is sufficient for editing passes; sonnet for higher-quality refinements.",
+
+  "requires_columns": [],
+  "options": [
+    {
+      "name": "ai_model",
+      "type": "select",
+      "label": "AI Model",
+      "description": "Which model to use for editing. Editing is less creative than writing — haiku produces good results.",
+      "default": "haiku",
+      "values": [
+        "haiku",
+        "sonnet",
+        "opus",
+        "gpt-4o-mini",
+        "gpt-4o"
+      ]
+    },
+    {
+      "name": "ai_provider",
+      "type": "select",
+      "label": "AI Provider",
+      "description": "Which LLM provider to use.",
+      "default": "anthropic",
+      "values": [
+        "anthropic",
+        "openai"
+      ]
+    },
+    {
+      "name": "temperature",
+      "type": "number",
+      "label": "Temperature",
+      "description": "LLM temperature for editing. Lower = more conservative edits (0.3), higher = more creative rewrites (0.5). Default 0.4 balances fidelity with improvement.",
+      "default": 0.4,
+      "min": 0.1,
+      "max": 0.7
+    },
+    {
+      "name": "tone_style",
+      "type": "select",
+      "label": "Tone Style",
+      "description": "Target tone for the editing pass. b2b_authoritative: professional, benefit-first, confident. casual_informative: friendly but knowledgeable. technical_precise: exact terminology, minimal flair.",
+      "default": "b2b_authoritative",
+      "values": [
+        "b2b_authoritative",
+        "casual_informative",
+        "technical_precise"
+      ]
+    },
+    {
+      "name": "max_content_chars",
+      "type": "number",
+      "label": "Max content characters",
+      "description": "Truncate input content to this many characters to control token usage. Most company profiles are under 20,000 characters.",
+      "default": 50000,
+      "min": 5000,
+      "max": 100000
+    },
+    {
+      "name": "prompt",
+      "type": "textarea",
+      "label": "Editing prompt",
+      "description": "The prompt sent to the AI. Use {content_markdown} for the original content, {keyword_targets} for the SEO keyword data, {tone_instructions} for the tone style rules.",
+      "default": "You are a professional B2B content editor for the iGaming industry. Your job is to EDIT existing content — not rewrite it from scratch. Make targeted, conservative improvements.\n\n### ORIGINAL CONTENT\n\n{content_markdown}\n\n### SEO KEYWORD TARGETS\n\n{keyword_targets}\n\n### TONE INSTRUCTIONS\n\n{tone_instructions}\n\n### EDITING RULES\n\n**SEO keyword placement:**\n- Place primary keywords in H1/H2 headings and first paragraphs of sections where natural\n- Integrate secondary keywords in subheadings and body paragraphs\n- Work long-tail keywords into FAQ answers and detailed paragraphs\n- Remove any negative or off-brand terms from the keyword pack\n- Do NOT stuff keywords — each placement must read naturally\n\n**Tone and clarity:**\n- Apply the specified tone style consistently\n- Shorten sentences over 30 words — split or trim\n- Replace passive voice with active where possible\n- Lead paragraphs with benefits or key facts, not filler\n- Use specific numbers and details over vague qualifiers\n- Replace jargon with clear language unless the term is industry-standard\n\n**Structure improvements:**\n- Add subheadings (H3) to break up sections longer than 300 words\n- Convert lists of 3+ items to bullet points if not already bulleted\n- Ensure each section has a clear topic sentence\n\n**What NOT to do:**\n- Do NOT add new factual claims, statistics, or company details not in the original\n- Do NOT remove existing citations ([#n] references)\n- Do NOT change the heading structure or type markers (e.g., [Overview], [Primary Category: ...])\n- Do NOT remove sections or significantly shorten content\n- Do NOT wrap output in code fences or JSON — return only the revised markdown\n- Do NOT add a preamble or explanation — start directly with the revised content\n\n### OUTPUT\n\nReturn ONLY the revised markdown content. No explanation, no code fences, no preamble.",
+      "maxLength": 10000
+    }
+  ],
+  "options_defaults": {
+    "ai_model": "haiku",
+    "ai_provider": "anthropic",
+    "temperature": 0.4,
+    "tone_style": "b2b_authoritative",
+    "max_content_chars": 50000,
+    "prompt": "You are a professional B2B content editor for the iGaming industry. Your job is to EDIT existing content — not rewrite it from scratch. Make targeted, conservative improvements.\n\n### ORIGINAL CONTENT\n\n{content_markdown}\n\n### SEO KEYWORD TARGETS\n\n{keyword_targets}\n\n### TONE INSTRUCTIONS\n\n{tone_instructions}\n\n### EDITING RULES\n\n**SEO keyword placement:**\n- Place primary keywords in H1/H2 headings and first paragraphs of sections where natural\n- Integrate secondary keywords in subheadings and body paragraphs\n- Work long-tail keywords into FAQ answers and detailed paragraphs\n- Remove any negative or off-brand terms from the keyword pack\n- Do NOT stuff keywords — each placement must read naturally\n\n**Tone and clarity:**\n- Apply the specified tone style consistently\n- Shorten sentences over 30 words — split or trim\n- Replace passive voice with active where possible\n- Lead paragraphs with benefits or key facts, not filler\n- Use specific numbers and details over vague qualifiers\n- Replace jargon with clear language unless the term is industry-standard\n\n**Structure improvements:**\n- Add subheadings (H3) to break up sections longer than 300 words\n- Convert lists of 3+ items to bullet points if not already bulleted\n- Ensure each section has a clear topic sentence\n\n**What NOT to do:**\n- Do NOT add new factual claims, statistics, or company details not in the original\n- Do NOT remove existing citations ([#n] references)\n- Do NOT change the heading structure or type markers (e.g., [Overview], [Primary Category: ...])\n- Do NOT remove sections or significantly shorten content\n- Do NOT wrap output in code fences or JSON — return only the revised markdown\n- Do NOT add a preamble or explanation — start directly with the revised content\n\n### OUTPUT\n\nReturn ONLY the revised markdown content. No explanation, no code fences, no preamble."
+  },
+  "item_key": "entity_name",
+  "output_schema": {
+    "display_type": "cards",
+    "selectable": true,
+    "entity_name": "string",
+    "status": "string",
+    "word_count": "number",
+    "tone_changes_count": "number",
+    "keywords_placed": "number",
+    "revision_summary": "string",
+    "content_preview": "string",
+    "downloadable_fields": [],
+    "detail_schema": {
+      "header_fields": [
+        "entity_name",
+        {
+          "field": "status",
+          "display": "badge"
+        },
+        "word_count",
+        "tone_changes_count",
+        "keywords_placed"
+      ],
+      "sections": [
+        {
+          "field": "content_markdown",
+          "label": "Revised Content",
+          "display": "prose"
+        },
+        {
+          "field": "revision_summary",
+          "label": "Revision Summary",
+          "display": "text"
+        },
+        {
+          "field": "keyword_placements_text",
+          "label": "Keyword Placements",
+          "display": "prose"
+        },
+        {
+          "field": "error",
+          "label": "Error",
+          "display": "text"
+        }
+      ]
+    }
+  }
+}

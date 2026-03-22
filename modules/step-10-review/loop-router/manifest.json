@@ -1,0 +1,77 @@
+{
+  "id": "loop-router",
+  "name": "Loop Router",
+  "description": "Read QA verdicts from Step 6 and route failed entities back to the appropriate earlier step for rework. Pure decision logic -- no API calls.",
+  "version": "1.0.0",
+  "step": 10,
+  "category": "review",
+  "cost": "cheap",
+  "data_operation_default": "transform",
+
+  "depends_on": ["keyword-sufficiency-checker", "meta-compliance-checker", "citation-coverage-checker", "hallucination-detector"],
+  "usage_notes": "Run after all Step 6 QA submodules have produced verdicts. Aggregates qa_pass, keyword_score, citation_score, hallucination_score, and meta_title_ok fields from QA items, then applies routing rules to decide whether each entity is approved, looped back, or flagged for manual review. Does NOT execute loops -- produces routing recommendations for the operator.",
+
+  "requires_columns": [],
+
+  "options": [
+    {
+      "name": "default_no_qa",
+      "type": "string",
+      "label": "Default when no QA results",
+      "description": "What to do when no QA result items are found for an entity. \"approve\" auto-approves, \"flag_manual\" flags for manual review.",
+      "default": "flag_manual"
+    },
+    {
+      "name": "max_loops",
+      "type": "number",
+      "label": "Max loop iterations",
+      "description": "Maximum number of times an entity can be looped before being flagged for manual review regardless of QA results.",
+      "default": 3,
+      "min": 1,
+      "max": 10
+    },
+    {
+      "name": "min_source_pages",
+      "type": "number",
+      "label": "Min source pages",
+      "description": "Minimum number of source pages (text_content items) required. Below this threshold, discovery loops are replaced with flag_manual since there aren't enough sources to rework from.",
+      "default": 8,
+      "min": 1,
+      "max": 50
+    }
+  ],
+
+  "options_defaults": {
+    "default_no_qa": "flag_manual",
+    "max_loops": 3,
+    "min_source_pages": 8
+  },
+
+  "item_key": "entity_name",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": false,
+    "entity_name": "string (required)",
+    "decision": "string (approve|loop_discovery|loop_generation|loop_tone|flag_manual)",
+    "route_reason": "string",
+    "qa_summary": "string",
+    "failed_checks": "string",
+    "loop_count": "number",
+    "source_page_count": "number",
+    "flagged_when": { "decision": ["loop_discovery", "loop_generation", "loop_tone", "flag_manual"] },
+    "detail_schema": {
+      "header_fields": [
+        "entity_name",
+        { "field": "decision", "display": "badge" },
+        "loop_count",
+        "source_page_count"
+      ],
+      "sections": [
+        { "field": "route_reason", "label": "Routing Reason", "display": "text" },
+        { "field": "qa_summary", "label": "QA Summary", "display": "prose" },
+        { "field": "failed_checks", "label": "Failed Checks", "display": "prose" }
+      ]
+    }
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "id": "hallucination-detector",
+  "name": "Hallucination Detector",
+  "description": "Compare generated content claims against original source material to flag statements that aren't supported by any source.",
+  "version": "1.0.0",
+  "step": 6,
+  "category": "qa",
+  "cost": "medium",
+  "data_operation_default": "transform",
+
+  "depends_on": ["content-writer", "page-scraper"],
+  "usage_notes": "Run after content-writer has produced content_markdown and page-scraper/browser-scraper has produced text_content. Uses LLM to verify each factual claim against source material. If no source text_content is available, the entity passes with a warning (cannot verify without sources).",
+
+  "requires_columns": [],
+
+  "options": [
+    {
+      "name": "pass_threshold",
+      "type": "number",
+      "label": "Pass threshold",
+      "description": "Minimum hallucination_score (0-1) for qa_pass to be true. 1.0 means every claim must be verified.",
+      "default": 0.9,
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "name": "ai_model",
+      "type": "string",
+      "label": "AI model",
+      "description": "LLM model ID for claim verification.",
+      "default": "claude-haiku-4-5-20251001"
+    },
+    {
+      "name": "ai_provider",
+      "type": "string",
+      "label": "AI provider",
+      "description": "LLM provider for claim verification.",
+      "default": "anthropic"
+    },
+    {
+      "name": "max_source_chars",
+      "type": "number",
+      "label": "Max source characters",
+      "description": "Maximum total characters of source text to include in LLM context. Truncates oldest sources first if exceeded.",
+      "default": 100000,
+      "min": 10000,
+      "max": 500000
+    },
+    {
+      "name": "claims_per_batch",
+      "type": "number",
+      "label": "Claims per batch",
+      "description": "Number of claims to verify in each LLM call. Higher values use fewer API calls but risk hitting context limits.",
+      "default": 10,
+      "min": 1,
+      "max": 25
+    },
+    {
+      "name": "prompt",
+      "type": "textarea",
+      "label": "Verification prompt",
+      "description": "System prompt for the LLM claim verification. Use {{CLAIMS}} and {{SOURCES}} as placeholders.",
+      "default": "You are a fact-checking assistant. You will be given a list of factual claims extracted from a generated article, and the original source material the article was based on.\n\nFor each claim, determine whether it is supported by the source material.\n\nRules:\n- \"supported\" = the source material contains information that directly or clearly supports this claim, even if paraphrased\n- \"unsupported\" = the source material does NOT contain information supporting this claim, and it is NOT general common knowledge\n- \"partial\" = the source material partially supports the claim but key details (numbers, dates, specifics) differ or are missing\n- General knowledge claims (e.g. \"Malta is a popular iGaming jurisdiction\", \"the iGaming industry is growing\") should be marked \"supported\" even if not explicitly in sources\n- If the claim references data from an analysis or summary derived from the sources, mark it \"supported\"\n\nReturn a JSON array (no markdown fences, no extra text) with one object per claim:\n[\n  {\n    \"claim\": \"the exact claim text\",\n    \"verdict\": \"supported\" | \"unsupported\" | \"partial\",\n    \"quote\": \"the supporting quote from sources, or null if unsupported\",\n    \"severity\": \"low\" | \"medium\" | \"high\"\n  }\n]\n\nSeverity guide:\n- \"low\" = general phrasing, opinion, or common knowledge that is hard to verify\n- \"medium\" = specific factual claim (company name, product, feature) not found in sources\n- \"high\" = specific number, date, statistic, or financial claim not found in sources\n\nCLAIMS:\n{{CLAIMS}}\n\nSOURCE MATERIAL:\n{{SOURCES}}"
+    }
+  ],
+
+  "options_defaults": {
+    "pass_threshold": 0.9,
+    "ai_model": "claude-haiku-4-5-20251001",
+    "ai_provider": "anthropic",
+    "max_source_chars": 100000,
+    "claims_per_batch": 10
+  },
+
+  "item_key": "entity_name",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": false,
+    "entity_name": "string (required)",
+    "qa_pass": "boolean",
+    "hallucination_score": "number (0-1)",
+    "verified_claims_count": "number",
+    "total_claims_count": "number",
+    "flagged_claims_count": "number",
+    "flagged_when": { "qa_pass": [false] },
+    "detail_schema": {
+      "header_fields": [
+        "entity_name",
+        { "field": "qa_pass", "display": "badge" },
+        "hallucination_score",
+        "verified_claims_count",
+        "total_claims_count"
+      ],
+      "sections": [
+        { "field": "flagged_claims_text", "label": "Flagged Claims", "display": "prose" },
+        { "field": "partial_claims_text", "label": "Partially Supported Claims", "display": "prose" },
+        { "field": "summary_text", "label": "Summary", "display": "prose" }
+      ]
+    }
+  }
+}
