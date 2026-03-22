@@ -174,7 +174,7 @@ async function execute(input, options, tools) {
       for (let attempt = 0; attempt < 3; attempt++) {
         res = await tools.http.get(apiUrl, { timeout: request_timeout });
         if (res.status !== 429) break;
-        const waitSecs = (attempt + 1) * 15; // 15s, 30s, 45s
+        const waitSecs = (attempt + 1) * 10; // 10s, 20s, 30s
         logger.warn(`[scrapfly] Rate limited on ${url} — waiting ${waitSecs}s (attempt ${attempt + 1}/3)`);
         await new Promise(resolve => setTimeout(resolve, waitSecs * 1000));
       }
@@ -335,15 +335,38 @@ async function execute(input, options, tools) {
     };
   }
 
-  // Concurrent worker pool
+  // Concurrent worker pool with circuit breaker for sustained rate limiting
   const scrapeResults = new Array(needsScrape.length);
   let nextIndex = 0;
+  let consecutive429s = 0;
+  let rateLimitAborted = false;
 
   async function worker() {
     while (true) {
+      if (rateLimitAborted) break;
       const idx = nextIndex++;
       if (idx >= needsScrape.length) break;
-      scrapeResults[idx] = await scrapeOne(needsScrape[idx]);
+      const result = await scrapeOne(needsScrape[idx]);
+      scrapeResults[idx] = result;
+
+      // Circuit breaker: if 3+ consecutive URLs hit 429, stop all workers
+      if (result.error && result.error.includes('429')) {
+        consecutive429s++;
+        if (consecutive429s >= 3) {
+          rateLimitAborted = true;
+          logger.error(`[scrapfly] 3 consecutive rate limits — aborting remaining ${needsScrape.length - doneCount - 1} URLs`);
+          // Mark remaining as rate-limited without waiting
+          for (let i = idx + 1; i < needsScrape.length; i++) {
+            if (!scrapeResults[i]) {
+              scrapeResults[i] = buildErrorResult(needsScrape[i], 'Skipped — ScrapFly rate limit circuit breaker');
+            }
+          }
+          break;
+        }
+      } else {
+        consecutive429s = 0;
+      }
+
       doneCount++;
       progress.update(doneCount, total, `API-scraped ${doneCount} of ${total} (${totalCredits} credits)`);
     }
