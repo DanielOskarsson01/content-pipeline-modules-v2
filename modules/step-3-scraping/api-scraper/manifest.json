@@ -57,6 +57,15 @@
       "label": "Geo-location country",
       "description": "Optional country code for geo-located requests (e.g. 'GB', 'US', 'MT'). Leave empty to let ScrapFly auto-select. Only set if a site geo-restricts content.",
       "default": ""
+    },
+    {
+      "name": "requests_per_minute",
+      "type": "number",
+      "label": "Max requests per minute",
+      "description": "Global rate limit across all concurrent workers. ScrapFly free/starter plans allow ~10 req/min. Set to 0 for no limit.",
+      "default": 10,
+      "min": 0,
+      "max": 60
     }
   ],
 
@@ -65,7 +74,8 @@
     "max_content_length": 50000,
     "concurrency": 2,
     "request_timeout": 45000,
-    "country": ""
+    "country": "",
+    "requests_per_minute": 10
   },
 
   "item_key": "url",

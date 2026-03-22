@@ -62,6 +62,7 @@ async function execute(input, options, tools) {
     concurrency = 2,
     request_timeout = 45000,
     country = '',
+    requests_per_minute = 10,
   } = options;
 
   const apiKey = process.env.SCRAPFLY_KEY;
@@ -151,6 +152,9 @@ async function execute(input, options, tools) {
   let totalCredits = 0;
   const total = needsScrape.length;
 
+  // Global rate limiter — shared across all workers
+  const rateLimiter = createRateLimiter(requests_per_minute);
+
   async function scrapeOne(item) {
     const url = item.url;
     logger.info(`[scrapfly] Fetching ${url}`);
@@ -172,6 +176,7 @@ async function execute(input, options, tools) {
 
       let res;
       for (let attempt = 0; attempt < 3; attempt++) {
+        await rateLimiter();
         res = await tools.http.get(apiUrl, { timeout: request_timeout });
         if (res.status !== 429) break;
         const waitSecs = (attempt + 1) * 10; // 10s, 20s, 30s
@@ -670,6 +675,32 @@ function groupByEntity(results) {
   }
 
   return entityResults;
+}
+
+/**
+ * Simple token-bucket rate limiter shared across all workers.
+ * Ensures no more than `rpm` requests per minute to ScrapFly.
+ * Returns a function that resolves when it's safe to make the next request.
+ */
+function createRateLimiter(rpm) {
+  if (!rpm || rpm <= 0) return () => Promise.resolve(); // no limit
+
+  const minIntervalMs = Math.ceil(60000 / rpm);
+  let lastRequestTime = 0;
+  let waitQueue = Promise.resolve();
+
+  return () => {
+    waitQueue = waitQueue.then(() => {
+      const now = Date.now();
+      const elapsed = now - lastRequestTime;
+      const waitMs = Math.max(0, minIntervalMs - elapsed);
+      lastRequestTime = now + waitMs;
+      if (waitMs > 0) {
+        return new Promise(resolve => setTimeout(resolve, waitMs));
+      }
+    });
+    return waitQueue;
+  };
 }
 
 module.exports = execute;
