@@ -13,6 +13,7 @@ This repo contains pluggable submodules for the Content Creation Tool. Each subm
 5. **manifest.json is required.** No manifest = module doesn't exist.
 6. **README.md is required.** Every submodule must have one.
 7. **When modifying a submodule, update its README.md.** The README is the contract operators rely on. Stale docs are worse than no docs.
+8. **After completing code changes, always ask to commit and push.** Local changes are NOT live — this repo deploys via CI/CD on push. Never say changes are "in place" or "ready to test" until they are committed and pushed. Be explicit: "Changes saved locally. Commit and push to deploy?"
 
 ---
 
