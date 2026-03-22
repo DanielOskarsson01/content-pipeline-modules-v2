@@ -1,9 +1,12 @@
 /**
  * Browser Scraper — Step 3 Scraping submodule
  *
- * Re-scrapes pages that failed text extraction using Playwright Chromium.
- * Targets pages where HTTP fetch returned success (200 OK) but Readability
- * extracted < min_word_threshold words — typically JS-rendered SPAs.
+ * Re-scrapes pages that failed text extraction using Playwright Chromium
+ * with CMS-aware fallback (Elementor, WordPress, Divi, WPBakery).
+ * Targets pages where page-scraper extracted < min_word_threshold words —
+ * JS-rendered SPAs, page-builder sites, Cloudflare-protected pages.
+ *
+ * Extraction chain: Readability → DOM CMS selectors → regex fallback → body text
  *
  * Run page-scraper first, then browser-scraper on the same working pool.
  * Pages that already have sufficient content are passed through unchanged.
@@ -13,6 +16,81 @@
 
 const { Readability } = require('@mozilla/readability');
 const { parseHTML } = require('linkedom');
+
+// CMS content selectors — tried in priority order via querySelectorAll.
+// Collects ALL matching elements (not just the first) to handle page builders
+// that spread content across many widget containers.
+const CMS_SELECTORS = [
+  // WordPress
+  '.entry-content',
+  '.post-content',
+  '.page-content',
+  '.wp-block-post-content',
+  // Elementor
+  '.elementor-widget-text-editor .elementor-widget-container',
+  '.elementor-widget-theme-post-content .elementor-widget-container',
+  '[data-widget_type^="text-editor"] .elementor-widget-container',
+  // Divi
+  '.et_pb_text_inner',
+  '.et_pb_post_content',
+  '#et-main-area .et_pb_module',
+  // WPBakery / Visual Composer
+  '.wpb_text_column .wpb_wrapper',
+  // Semantic HTML
+  'main',
+  'article',
+  '[role="main"]',
+  // Generic CMS containers
+  '#content',
+  '.content-area',
+  '.site-content',
+];
+
+// Elements to strip from DOM before text extraction
+const NOISE_SELECTORS = [
+  'script', 'style', 'nav', 'footer', 'header', 'aside', 'noscript',
+  'iframe', 'svg', 'form',
+  '[role="navigation"]', '[role="banner"]', '[role="contentinfo"]',
+  '.cookie-banner', '.cookie-notice', '#cookie-consent', '.cc-window',
+  '.gdpr-banner', '.gdpr-notice',
+  '.newsletter-signup', '.newsletter-form',
+  '.social-share', '.share-buttons',
+  '.sidebar', '#sidebar',
+  '.comments', '#comments',
+  '.breadcrumb', '.breadcrumbs',
+];
+
+/**
+ * Check extracted plain text for Cloudflare / bot-blocker page content.
+ * Block pages can have 80-100 words and pass the word_count threshold.
+ * Requires 2+ markers to avoid false positives.
+ */
+function isBlockPageText(text) {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  const markers = [
+    'why have i been blocked',
+    'cloudflare ray id',
+    'this website is using a security service',
+    'action you just performed triggered the security solution',
+    'you can email the site owner to let them know you were blocked',
+    'attention required',
+  ];
+  const matches = markers.filter(m => lower.includes(m));
+  return matches.length >= 2;
+}
+
+function countWords(text) {
+  return text.split(/\s+/).filter((w) => w.length > 0).length;
+}
+
+function cleanText(text) {
+  return text
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/\n\s*\n\s*\n/g, '\n\n')
+    .replace(/^\s+|\s+$/gm, '')
+    .trim();
+}
 
 async function execute(input, options, tools) {
   const { entities } = input;
@@ -101,6 +179,10 @@ async function execute(input, options, tools) {
     // Re-scrape if: text is duplicated across 3+ pages (boilerplate)
     } else if (status === 'success' && item.text_content && boilerplateTexts.has(item.text_content.trim())) {
       needsScrape.push(item);
+    // Re-scrape if: extracted text is a Cloudflare/bot-blocker page
+    } else if (status === 'success' && isBlockPageText(item.text_content || item.text_preview || '')) {
+      logger.info(`Block page detected in input for ${item.url} — will re-scrape with browser`);
+      needsScrape.push(item);
     } else {
       passThrough.push(item);
     }
@@ -114,6 +196,7 @@ async function execute(input, options, tools) {
   const results = passThrough.map((item) => ({
     ...item,
     scrape_method: 'passed_through',
+    extraction_method: item.extraction_method || 'original',
   }));
 
   // Browser-scrape items that need it
@@ -121,24 +204,78 @@ async function execute(input, options, tools) {
   const total = needsScrape.length;
 
   /**
-   * Try to extract content from HTML. Returns { title, metaDescription, textContent, wordCount, textPreview }.
+   * Extract content from rendered HTML using a 3-tier chain:
+   * 1. Readability (best quality — Firefox Reader Mode algorithm)
+   * 2. DOM CMS selectors (collects ALL matching containers via querySelectorAll)
+   * 3. Regex fallback (last resort for malformed HTML that breaks DOM parsing)
+   *
+   * Tiers 1 and 2 share a single parseHTML() call to avoid double-parsing
+   * large Playwright-rendered pages.
    */
   function extractFromHtml(html, url, item) {
     const title = extractTitle(html) || item.title;
     const metaDescription = extractMetaDescription(html) || item.meta_description || null;
-    let textContent = extractTextReadability(html, url);
+
+    // Parse DOM once — shared by Readability (tier 1) and CMS extraction (tier 2)
+    let doc = null;
+    try {
+      const parsed = parseHTML(html);
+      doc = parsed.document;
+      if (url) {
+        try { doc.baseURI = url; } catch (_) { /* linkedom may not support this */ }
+      }
+    } catch (_) {
+      // DOM parsing failed entirely — skip to regex fallback
+    }
+
+    // Tier 1: Readability
+    let textContent = '';
+    let extractionMethod = 'none';
+
+    if (doc) {
+      try {
+        textContent = extractTextReadability(doc);
+        if (countWords(textContent) >= 30) {
+          extractionMethod = 'readability';
+        }
+      } catch (_) {
+        // Readability crashed — continue to next tier
+      }
+    }
+
+    // Tier 2: DOM-based CMS-aware extraction (reuses same parsed document)
+    if (countWords(textContent) < 30 && doc) {
+      try {
+        const cmsText = extractTextCmsAware(doc, logger);
+        if (countWords(cmsText) > countWords(textContent)) {
+          textContent = cmsText;
+          extractionMethod = 'cms_dom';
+        }
+      } catch (_) {
+        // CMS extraction failed — continue to regex fallback
+      }
+    }
+
+    // Tier 3: Regex fallback (handles malformed HTML that breaks linkedom)
+    if (countWords(textContent) < 30) {
+      const regexText = extractTextRegexFallback(html);
+      if (countWords(regexText) > countWords(textContent)) {
+        textContent = regexText;
+        extractionMethod = 'regex_fallback';
+      }
+    }
 
     if (textContent.length > max_content_length) {
       logger.info(`Truncated text for ${url} from ${textContent.length} to ${max_content_length} chars`);
       textContent = textContent.substring(0, max_content_length);
     }
 
-    const wordCount = textContent.split(/\s+/).filter((w) => w.length > 0).length;
+    const wordCount = countWords(textContent);
     const textPreview = textContent.length > 150
       ? textContent.substring(0, 150) + '...'
       : textContent;
 
-    return { title, metaDescription, textContent, wordCount, textPreview };
+    return { title, metaDescription, textContent, wordCount, textPreview, extractionMethod };
   }
 
   /**
@@ -158,6 +295,7 @@ async function execute(input, options, tools) {
       text_content: extracted.textContent,
       entity_name: item.entity_name,
       scrape_method: method,
+      extraction_method: extracted.extractionMethod,
     };
   }
 
@@ -174,12 +312,16 @@ async function execute(input, options, tools) {
 
       const extracted = extractFromHtml(res.body, item.url, item);
 
-      // If we got enough content, return regardless of HTTP status
-      if (extracted.wordCount >= min_word_threshold) {
+      // Check for Cloudflare block page before treating as success
+      if (extracted.wordCount >= min_word_threshold && isBlockPageText(extracted.textContent)) {
+        logger.warn(`[browser] ${item.url}: extracted text is a Cloudflare block page (${extracted.wordCount} words) — trying Wayback Machine`);
+        browserFailed = true;
+        browserError = `Browser: Cloudflare block page detected`;
+      } else if (extracted.wordCount >= min_word_threshold) {
         if (res.status >= 400) {
-          logger.info(`[browser] ${item.url}: HTTP ${res.status} but extracted ${extracted.wordCount} words — treating as success`);
+          logger.info(`[browser] ${item.url}: HTTP ${res.status} but extracted ${extracted.wordCount} words via ${extracted.extractionMethod} — treating as success`);
         } else {
-          logger.info(`[browser] ${item.url}: ${extracted.wordCount} words extracted (was ${item.word_count || 0})`);
+          logger.info(`[browser] ${item.url}: ${extracted.wordCount} words via ${extracted.extractionMethod} (was ${item.word_count || 0})`);
         }
         return buildResult(item, extracted, 'browser', res.url || item.url, null);
       }
@@ -188,7 +330,7 @@ async function execute(input, options, tools) {
       browserFailed = true;
       browserError = res.status >= 400
         ? `Browser HTTP ${res.status} (${extracted.wordCount} words)`
-        : `Browser: only ${extracted.wordCount} words`;
+        : `Browser: only ${extracted.wordCount} words (tried ${extracted.extractionMethod})`;
       logger.warn(`[browser] ${item.url}: ${browserError} — trying Wayback Machine`);
     } catch (err) {
       browserFailed = true;
@@ -219,7 +361,7 @@ async function execute(input, options, tools) {
         const extracted = extractFromHtml(wbBody, item.url, item);
 
         if (extracted.wordCount >= min_word_threshold) {
-          logger.info(`[wayback] ${item.url}: ${extracted.wordCount} words from Wayback Machine`);
+          logger.info(`[wayback] ${item.url}: ${extracted.wordCount} words via ${extracted.extractionMethod} from Wayback Machine`);
           return buildResult(item, extracted, 'wayback', item.url, null);
         }
 
@@ -244,6 +386,7 @@ async function execute(input, options, tools) {
       text_content: '',
       entity_name: item.entity_name,
       scrape_method: 'browser',
+      extraction_method: 'none',
     };
   }
 
@@ -268,6 +411,38 @@ async function execute(input, options, tools) {
       workers.push(worker());
     }
     await Promise.all(workers);
+
+    // --- Duplicate text detection (post-scrape) ---
+    // If 3+ browser-scraped pages return identical text_content, it's a block/error
+    // page regardless of wording (catches Akamai, Imperva, DataDome, etc.)
+    const scrapeTextCounts = new Map();
+    for (const r of scrapeResults) {
+      if (r && r.status === 'success' && r.text_content) {
+        const text = r.text_content.trim();
+        if (text.length > 0) {
+          scrapeTextCounts.set(text, (scrapeTextCounts.get(text) || 0) + 1);
+        }
+      }
+    }
+    const scrapeDuplicates = new Set();
+    for (const [text, count] of scrapeTextCounts) {
+      if (count >= 3) scrapeDuplicates.add(text);
+    }
+    if (scrapeDuplicates.size > 0) {
+      let demoted = 0;
+      for (const r of scrapeResults) {
+        if (r && r.status === 'success' && r.text_content && scrapeDuplicates.has(r.text_content.trim())) {
+          r.status = 'error';
+          r.error = `Duplicate text across ${scrapeTextCounts.get(r.text_content.trim())} pages — likely a block/error page`;
+          r.word_count = 0;
+          r.text_content = '';
+          r.text_preview = '';
+          demoted++;
+        }
+      }
+      logger.info(`Post-scrape duplicate detection: ${demoted} pages demoted from success to error (${scrapeDuplicates.size} duplicate pattern(s))`);
+    }
+
     results.push(...scrapeResults);
   }
 
@@ -293,6 +468,13 @@ async function execute(input, options, tools) {
     const errors = items.filter((i) => i.status === 'error').length;
     const totalWords = items.reduce((sum, i) => sum + (i.word_count || 0), 0);
 
+    // Count extraction methods for diagnostics
+    const methodCounts = {};
+    for (const i of items) {
+      const m = i.extraction_method || 'unknown';
+      methodCounts[m] = (methodCounts[m] || 0) + 1;
+    }
+
     entityResults.push({
       entity_name: entityName,
       items,
@@ -303,6 +485,7 @@ async function execute(input, options, tools) {
         passed_through: items.length - browserScraped,
         errors,
         total_words: totalWords,
+        extraction_methods: methodCounts,
       },
     });
   }
@@ -311,8 +494,19 @@ async function execute(input, options, tools) {
   const browserSuccess = scrapeResults ? scrapeResults.filter((r) => r && r.status === 'success').length : 0;
   const browserErrors = browserTotal - browserSuccess;
 
+  // Aggregate extraction method stats
+  const allMethodCounts = {};
+  for (const r of results) {
+    const m = r.extraction_method || 'unknown';
+    allMethodCounts[m] = (allMethodCounts[m] || 0) + 1;
+  }
+  const methodSummary = Object.entries(allMethodCounts)
+    .filter(([m]) => m !== 'original' && m !== 'unknown')
+    .map(([m, c]) => `${c} ${m}`)
+    .join(', ');
+
   const description = browserTotal > 0
-    ? `${browserSuccess} of ${browserTotal} pages recovered by browser, ${passThrough.length} passed through${browserErrors > 0 ? `, ${browserErrors} still failed` : ''}`
+    ? `${browserSuccess} of ${browserTotal} pages recovered by browser, ${passThrough.length} passed through${browserErrors > 0 ? `, ${browserErrors} still failed` : ''}${methodSummary ? ` [${methodSummary}]` : ''}`
     : `All ${passThrough.length} pages already had sufficient content — nothing to re-scrape`;
 
   return {
@@ -325,42 +519,105 @@ async function execute(input, options, tools) {
       errors: browserErrors,
       browser_errors: browserErrors,
       passed_through: passThrough.length,
+      extraction_methods: allMethodCounts,
       description,
     },
   };
 }
 
-// --- Readability extraction helpers (same as page-scraper) ---
-
-function extractTextReadability(html, url) {
-  try {
-    const { document } = parseHTML(html);
-    if (url) {
-      try { document.baseURI = url; } catch (_) { /* linkedom may not support this */ }
-    }
-    const reader = new Readability(document);
-    const article = reader.parse();
-
-    if (article && article.textContent && article.textContent.trim().length > 50) {
-      return article.textContent
-        .replace(/[^\S\n]+/g, ' ')
-        .replace(/\n\s*\n/g, '\n\n')
-        .replace(/^\s+|\s+$/gm, '')
-        .trim();
-    }
-  } catch (_) {
-    // Readability failed — fall through to regex
-  }
-  return extractTextFallback(html);
-}
+// --- Extraction Tier 1: Readability ---
 
 /**
- * Fallback text extraction with CMS/page-builder awareness.
- * Extraction priority: <main> → <article> → CMS content selectors → <body>
- * Handles Elementor, WordPress, Divi, WPBakery, and other page builders
- * that don't use semantic HTML (<article>/<main> tags).
+ * Extract text via Mozilla Readability (Firefox Reader Mode algorithm).
+ * Accepts a pre-parsed linkedom document to avoid double-parsing.
+ * Returns raw text only — does NOT fall through to other tiers.
+ *
+ * Note: Readability mutates the document (removes elements it considers
+ * non-content). If it succeeds, the DOM is modified. If it fails and we
+ * fall through to CMS extraction, the DOM may be partially stripped.
+ * This is acceptable because CMS selectors target specific containers
+ * that Readability typically leaves intact.
  */
-function extractTextFallback(html) {
+function extractTextReadability(document) {
+  const reader = new Readability(document);
+  const article = reader.parse();
+
+  if (article && article.textContent && article.textContent.trim().length > 50) {
+    return cleanText(article.textContent);
+  }
+  return '';
+}
+
+// --- Extraction Tier 2: DOM-based CMS-aware extraction ---
+
+/**
+ * Use querySelectorAll on a pre-parsed linkedom document to find
+ * CMS content containers. Collects ALL matching elements for each selector
+ * (handles Elementor/Divi pages that spread content across many widgets).
+ *
+ * Strips noise elements (nav, footer, cookie banners, etc.) from DOM
+ * before extraction — much more reliable than regex for nested HTML.
+ *
+ * Accepts a pre-parsed document to avoid double-parsing large pages.
+ * Note: this mutates the document (removes noise elements).
+ */
+function extractTextCmsAware(document, logger) {
+  // Strip noise elements from DOM before extraction
+  for (const sel of NOISE_SELECTORS) {
+    try {
+      document.querySelectorAll(sel).forEach((el) => el.remove());
+    } catch (_) {
+      // Invalid selector in this DOM — skip
+    }
+  }
+
+  // Try CMS selectors in priority order
+  for (const selector of CMS_SELECTORS) {
+    try {
+      const elements = document.querySelectorAll(selector);
+      if (elements.length === 0) continue;
+
+      const texts = [];
+      for (const el of elements) {
+        const text = el.textContent.trim();
+        if (text.length > 20) {
+          texts.push(text);
+        }
+      }
+
+      if (texts.length === 0) continue;
+
+      const combined = cleanText(texts.join('\n\n'));
+      const wc = countWords(combined);
+
+      if (wc >= 30) {
+        if (logger) {
+          logger.info(`[cms_dom] Matched selector "${selector}" — ${elements.length} element(s), ${wc} words`);
+        }
+        return combined;
+      }
+    } catch (_) {
+      // Selector not supported by linkedom — skip
+    }
+  }
+
+  // No CMS selector matched — return body text as last resort
+  const body = document.querySelector('body');
+  if (body) {
+    return cleanText(body.textContent);
+  }
+
+  return '';
+}
+
+// --- Extraction Tier 3: Regex fallback ---
+
+/**
+ * Regex-based text extraction. Last resort for HTML too malformed
+ * for linkedom's DOM parser. Kept from the original implementation
+ * but only used when both Readability and DOM extraction fail.
+ */
+function extractTextRegexFallback(html) {
   let content = html;
 
   const mainMatch = html.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
@@ -371,19 +628,14 @@ function extractTextFallback(html) {
   } else if (articleMatch) {
     content = articleMatch[1];
   } else {
-    // CMS / page-builder content selectors — tried before falling back to <body>
     const cmsPatterns = [
-      // WordPress standard
       /<div[^>]+class="[^"]*\bentry-content\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
       /<div[^>]+class="[^"]*\bpost-content\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
       /<div[^>]+class="[^"]*\bpage-content\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
-      // Elementor
       /<div[^>]+class="[^"]*\belementor-widget-text-editor\b[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/i,
-      /<div[^>]+class="[^"]*\belementor-widget-theme-post-content\b[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/i,
-      /<div[^>]+data-widget_type="text-editor[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/i,
-      // ARIA role
+      /<div[^>]+class="[^"]*\bet_pb_text_inner\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+      /<div[^>]+class="[^"]*\bwpb_wrapper\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
       /<[^>]+role=["']main["'][^>]*>([\s\S]*?)<\/[a-z]+>/i,
-      // Other common CMS patterns
       /<div[^>]+class="[^"]*\bcontent-area\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
       /<div[^>]+class="[^"]*\bsite-content\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
       /<div[^>]+id=["']content["'][^>]*>([\s\S]*?)<\/div>/i,
@@ -423,14 +675,10 @@ function extractTextFallback(html) {
   content = stripTags(content);
   content = decodeEntities(content);
 
-  content = content
-    .replace(/[^\S\n]+/g, ' ')
-    .replace(/\n\s*\n/g, '\n\n')
-    .replace(/^\s+|\s+$/gm, '')
-    .trim();
-
-  return content;
+  return cleanText(content);
 }
+
+// --- Shared helpers ---
 
 function extractTitle(html) {
   const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);

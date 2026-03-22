@@ -11,23 +11,42 @@
 
 ### The Content Problem This Solves
 
-The page-scraper module (Step 3's primary scraper) uses HTTP fetch + Mozilla Readability to extract text content. This works for the majority of websites, but fails on JavaScript-heavy pages: single-page applications (SPAs), React/Vue/Angular sites, and pages with dynamic content loading. These pages return valid HTTP 200 responses but contain minimal or no readable text because the actual content is rendered client-side by JavaScript.
+The page-scraper module (Step 3's primary scraper) uses HTTP fetch + Mozilla Readability to extract text content. This works for the majority of websites, but fails in two scenarios:
+
+1. **JavaScript-heavy pages:** SPAs, React/Vue/Angular sites, and pages with dynamic content loading. These return valid HTTP 200 responses but contain minimal or no readable text because the actual content is rendered client-side.
+2. **Cloudflare-protected sites:** Sites behind Cloudflare return HTTP 403 with a "Just a moment..." challenge page. Simple HTTP fetch cannot solve the JS challenge, resulting in zero extracted content.
 
 The first live flow test revealed this as a critical problem: 151 of 270 pages (56%) were excluded as "too short" (word_count < 50). These are not junk pages -- they are the valuable, hard-to-get pages that make the tool worth using.
 
-The original Content Creation Master planned for this split: *"Step 5c (Cheerio/static) -- default; static DOM render is enough"* and *"Step 5d (Playwright/JS) -- consent walls, JS-rendered content, stubborn DOM."* This module implements Step 5d -- the Playwright-based scraper that handles the pages the static scraper cannot.
+Beyond JavaScript rendering, some sites use Cloudflare protection or aggressive bot detection that returns HTTP 403 even to headless browsers. For these sites, the module includes a **Wayback Machine fallback** — fetching the most recent archived snapshot from web.archive.org via plain HTTP, which bypasses all anti-bot measures entirely.
+
+The original Content Creation Master planned for this split: *"Step 5c (Cheerio/static) -- default; static DOM render is enough"* and *"Step 5d (Playwright/JS) -- consent walls, JS-rendered content, stubborn DOM."* This module implements Step 5d -- the Playwright-based scraper that handles the pages the static scraper cannot, plus the Wayback Machine fallback for sites that block even headless browsers.
 
 ### How It Fits the Pipeline Architecture
 
-This module runs **after** page-scraper in Step 3. It reads the working pool, identifies pages where page-scraper returned `status: "success"` but extracted fewer than `min_word_threshold` words, and re-scrapes only those pages using a real browser. Pages that already have sufficient content are passed through unchanged.
+This module runs **after** page-scraper in Step 3. It reads the working pool and identifies pages that need re-scraping:
+- Items with **no status** (from Step 1/2 submodules that only discovered URLs)
+- Items with `status: "error"` or `status: "dead_link"` (HTTP failures from page-scraper)
+- Items with `status: "success"` but fewer than `min_word_threshold` words (JS-rendered pages)
+- Items with `status: "success"` but boilerplate-only content (3+ pages with identical text)
+- Items with `status: "success"` but detected as Cloudflare/bot-blocker pages (text marker detection)
 
-This is the transform (=) data operation -- the same items go in and come out, but the previously-empty ones are now enriched with browser-rendered content. The module adds a `scrape_method` field to every item so operators can see which pages were browser-scraped versus passed through.
+Pages that already have sufficient real content are passed through unchanged.
+
+Scraping uses a **3-tier fallback** approach:
+1. **Browser fetch** (Playwright) — renders JavaScript, handles SPAs. Extracted text is checked for block page markers before being accepted as success
+2. **Wayback Machine** — if browser fails or returns a block page, fetches archived snapshot from web.archive.org via plain HTTP
+3. **Error** — if both tiers fail, marks the item with the browser error
+
+After all pages are scraped, a **post-scrape duplicate detection** pass runs: if 3+ browser-scraped pages return identical text content, they are demoted from success to error (catches any bot blocker regardless of wording — Akamai, Imperva, DataDome, etc.).
+
+This is the transform (=) data operation -- the same items go in and come out, but the previously-empty ones are now enriched with scraped content. The module adds a `scrape_method` field to every item: `browser`, `wayback`, or `passed_through`.
 
 ## Strategy & Role
 
-**Why this module exists:** Recover content from JavaScript-rendered pages that the static HTTP scraper could not extract. Without this module, the pipeline loses the pages that matter most -- the ones behind modern JavaScript frameworks.
+**Why this module exists:** Recover content from pages that the static HTTP scraper could not extract — whether due to JavaScript rendering, Cloudflare protection, or HTTP errors. Without this module, the pipeline loses the pages that matter most.
 
-**Role in the pipeline:** Second-pass scraper in Step 3. Complements page-scraper by handling its failures. Only processes items that need browser rendering; passes everything else through untouched.
+**Role in the pipeline:** Second-pass scraper in Step 3. Complements page-scraper by handling its failures. Re-scrapes items that have errors, no status, low word count, or boilerplate content. Passes everything else through untouched. Falls back to Wayback Machine when even the browser cannot reach a page.
 
 **Relationship to other steps:**
 - **Depends on:** page-scraper (must run first to identify failures)
@@ -38,8 +57,8 @@ This is the transform (=) data operation -- the same items go in and come out, b
 
 **Always use when:**
 - page-scraper has already run and produced results
-- The pool contains pages with `status: "success"` but very low word counts (< 50 words)
-- Target sites include SPAs, React/Angular/Vue sites, or JavaScript-heavy platforms
+- The pool contains pages with errors, no status, low word counts, or boilerplate content
+- Target sites include SPAs, React/Angular/Vue sites, Cloudflare-protected sites, or JavaScript-heavy platforms
 
 **Do not use when:**
 - page-scraper has not run yet -- browser-scraper reads the working pool from page-scraper
@@ -121,14 +140,16 @@ concurrency: 4
 - `meta_description` -- from `<meta name="description">` tag
 - `text_content` -- full extracted text (visible in detail view)
 - `entity_name` -- which entity this URL belongs to
-- `scrape_method` -- `browser` (re-scraped by this module) or `passed_through` (kept from page-scraper)
+- `scrape_method` -- `browser` (re-scraped by Playwright), `wayback` (fetched from Wayback Machine archive), or `passed_through` (kept from page-scraper)
 
 **Results are grouped by entity** with per-entity meta: `total`, `browser_scraped`, `browser_success`, `passed_through`, `errors`, `total_words`.
 
 **Red flags to watch for:**
 - Recovery rate below 30% -- sites may need longer timeouts or have non-standard rendering
-- High error count among browser-scraped pages -- check if sites are blocking headless browsers
-- Pages still showing 0 words after browser scrape -- content may be behind authentication or loaded via WebSocket
+- High error count among browser-scraped pages -- check if sites are blocking headless browsers (Wayback Machine fallback should catch most of these)
+- Many `scrape_method: "wayback"` results -- site is heavily protected; content is recovered but may be outdated
+- Pages still showing 0 words after all tiers -- content may be behind authentication or loaded via WebSocket
+- "Duplicate text across N pages" errors -- post-scrape duplicate detection caught a bot blocker page. These items flow to the api-scraper for retry with ScrapFly ASP
 
 ## Limitations & Edge Cases
 
@@ -138,13 +159,15 @@ concurrency: 4
 - **Does not handle login walls** -- pages requiring authentication are out of scope
 - **Same extraction algorithm as page-scraper** -- uses Readability with regex fallback. If the content is genuinely minimal (e.g., a redirect page, a 404), browser rendering will not help
 - **Sort order:** results are sorted with errors first, then skipped, success, and passed-through last
-- **Only re-scrapes `status: "success"` items** -- pages that returned HTTP errors from page-scraper are not retried (they would likely fail again)
+- **Block page detection (two layers)** -- (1) Extracted text is checked against known Cloudflare markers before returning success; if detected, falls through to Wayback Machine. (2) After all scrapes finish, if 3+ pages returned identical text, they are demoted to error regardless of wording (catches any bot blocker). Both layers prevent block pages from passing through as false successes to the api-scraper
+- **Re-scrapes all failed items** -- items with no status, `error`, `dead_link`, low word count, boilerplate content, or detected block page text are all attempted. The Wayback Machine fallback means even HTTP 403 pages have a chance of content recovery
+- **Wayback Machine content may be stale** -- archived snapshots can be months or years old. Content from Wayback is still valuable for analysis but may not reflect the current state of the page
 
 ## What Happens Next
 
-After browser-scraper runs, the working pool contains the best available text content for every URL -- either from page-scraper (passed through) or from browser re-scraping. This enriched pool flows into **Step 4 (Filtering & Assembly)** where content is cleaned, deduplicated, language-detected, and assembled into source packages for generation.
+After browser-scraper runs, the working pool contains the best available text content for every URL -- from page-scraper (passed through), Playwright browser rendering, or Wayback Machine archive. This enriched pool flows into **Step 4 (Filtering & Assembly)** where content is cleaned, deduplicated, language-detected, and assembled into source packages for generation.
 
-The `scrape_method` field allows operators to see exactly which approach worked for each page, providing transparency into the extraction pipeline and helping identify patterns (e.g., "all pages from domain X needed browser scraping").
+The `scrape_method` field allows operators to see exactly which approach worked for each page, providing transparency into the extraction pipeline and helping identify patterns (e.g., "all pages from domain X needed browser scraping" or "Cloudflare-protected site recovered via Wayback Machine").
 
 ## Technical Reference
 
@@ -158,6 +181,6 @@ The `scrape_method` field allows operators to see exactly which approach worked 
 - **Output:** `{ results[], summary }` where results are grouped by entity_name, each with `items[]` containing all output fields plus `scrape_method`
 - **Selectable:** true -- operators can deselect failed/empty pages
 - **Detail view:** `detail_schema` with header fields (url as link, title, status badge, word_count, scrape_method) and expandable section (text_content as prose)
-- **Error handling:** per-URL error handling (partial success pattern). HTTP errors and timeouts are caught per page; other pages continue processing
-- **Dependencies:** `@mozilla/readability` (content extraction), `linkedom` (DOM parsing), `tools.browser` (Playwright), `tools.logger`, `tools.progress`
+- **Error handling:** per-URL 3-tier fallback (browser → Wayback Machine → error). Each tier is independent; failure in one tier triggers the next. All errors are caught per page; other pages continue processing
+- **Dependencies:** `@mozilla/readability` (content extraction), `linkedom` (DOM parsing), `tools.browser` (Playwright), `tools.http` (Wayback Machine fallback), `tools.logger`, `tools.progress`
 - **Files:** `manifest.json`, `execute.js`

@@ -108,6 +108,23 @@ async function execute(input, options, tools) {
         ? textContent.substring(0, 150) + '...'
         : textContent;
 
+      // Check for Cloudflare / bot-blocker pages that masquerade as real content
+      if (isBlockPageText(textContent)) {
+        return {
+          url: item.url,
+          final_url: finalUrl,
+          title,
+          word_count: wordCount,
+          content_type: contentType.split(';')[0].trim(),
+          status: 'error',
+          error: 'Cloudflare block page detected',
+          text_preview: textPreview,
+          meta_description: metaDescription,
+          text_content: '',
+          entity_name: item.entity_name,
+        };
+      }
+
       return {
         url: item.url,
         final_url: finalUrl,
@@ -221,6 +238,28 @@ async function execute(input, options, tools) {
       description,
     },
   };
+}
+
+// --- Block page detection ---
+
+/**
+ * Check extracted plain text for Cloudflare / bot-blocker page content.
+ * Block pages can have 80-100 words and pass the word_count threshold.
+ * Requires 2+ markers to avoid false positives.
+ */
+function isBlockPageText(text) {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  const markers = [
+    'why have i been blocked',
+    'cloudflare ray id',
+    'this website is using a security service',
+    'action you just performed triggered the security solution',
+    'you can email the site owner to let them know you were blocked',
+    'attention required',
+  ];
+  const matches = markers.filter(m => lower.includes(m));
+  return matches.length >= 2;
 }
 
 // --- Helper functions ---

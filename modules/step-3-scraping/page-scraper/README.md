@@ -150,9 +150,11 @@ extract_meta: true
 - High error rate (> 30%) → site may be blocking requests, requiring authentication, or serving JavaScript-only content
 - Many "skipped" items → URLs pointing to non-HTML resources (PDFs, images). Check if Step 2 filtering should have caught these
 - All titles null → site doesn't use `<title>` tags or uses JavaScript to set them (SPA)
+- "Cloudflare block page detected" errors → site is behind Cloudflare bot protection. These pages are correctly marked as errors so the browser-scraper can retry them with Playwright
 
 ## Limitations & Edge Cases
 
+- **Cloudflare/bot-blocker detection** — Extracted text is checked against known Cloudflare block page markers (e.g., "Why have I been blocked", "Cloudflare Ray ID"). Pages matching 2+ markers are marked as `status: 'error'` with `error: 'Cloudflare block page detected'` so the browser-scraper can retry them. This prevents block pages from passing through as false successes
 - **No JavaScript rendering** — This is the Cheerio/Readability equivalent from the original vision. JavaScript-rendered pages return empty or minimal content. The original Content Creation Master planned a Playwright fallback: *"consent walls, JS-rendered content, stubborn DOM"* — a future module for this
 - **No authentication** — Cannot scrape pages behind login walls. The Raw Appendix identified this as a separate concern: *"Consent/JS detection: If typical consent elements or missing DOM content after a light fetch → set `needs_playwright=true`"*
 - **Redirect tracking limited** — `tools.http.get` follows redirects automatically but doesn't expose the final URL. Content is correct but `final_url` always shows the original URL
