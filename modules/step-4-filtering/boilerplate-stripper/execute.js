@@ -306,25 +306,29 @@ async function execute(input, options, tools) {
         ? Math.round((strippedChars / originalLength) * 100) / 100
         : 0;
 
-      // Flag if too much was stripped
+      // Flag if too much was stripped — keep original text to avoid data loss
       const contentRatio = originalLength > 0 ? cleanedLength / originalLength : 1;
       const flagged = contentRatio < min_content_ratio && strippedChars > 0;
 
       if (flagged) {
         logger.warn(
-          `${entity_name}: ${item.url} -- content ratio ${(contentRatio * 100).toFixed(1)}% below threshold ${(min_content_ratio * 100).toFixed(1)}%`
+          `${entity_name}: ${item.url} -- content ratio ${(contentRatio * 100).toFixed(1)}% below threshold ${(min_content_ratio * 100).toFixed(1)}% -- keeping original text`
         );
         totalFlagged++;
       }
 
-      totalStrippedChars += strippedChars;
+      // If flagged, restore original text so downstream steps have content to work with
+      const finalText = flagged ? originalText : cleanedText;
+      const finalStripped = flagged ? 0 : strippedChars;
+
+      totalStrippedChars += finalStripped;
 
       cleanedItems.push({
         ...item,
-        text_content: cleanedText,
-        word_count: countWords(cleanedText),
-        stripped_chars: strippedChars,
-        boilerplate_ratio: boilerplateRatio,
+        text_content: finalText,
+        word_count: countWords(finalText),
+        stripped_chars: finalStripped,
+        boilerplate_ratio: flagged ? 0 : boilerplateRatio,
         flagged,
       });
     }
