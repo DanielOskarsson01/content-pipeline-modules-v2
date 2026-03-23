@@ -107,6 +107,8 @@ async function execute(input, options, tools) {
       needsScrape.push(item);
     } else if (status === 'error' || status === 'dead_link') {
       needsScrape.push(item);
+    } else if (status === 'low_content') {
+      needsScrape.push(item);
     } else if (status === 'success' && wc < min_word_threshold) {
       needsScrape.push(item);
     } else if (status === 'success' && isBlockPageText(item.text_content || item.text_preview || '')) {
@@ -235,7 +237,12 @@ async function execute(input, options, tools) {
           logger.warn(`[scrapfly] ${url}: extracted text is a Cloudflare block page (${creditsUsed} credits) — trying Wayback Machine`);
           // Fall through to Wayback
         } else if (extracted.wordCount >= min_word_threshold) {
-          logger.info(`[scrapfly] ${url}: ${extracted.wordCount} words via ${extracted.extractionMethod} (${creditsUsed} credits)`);
+          const truncated = isLikelyTruncated(extracted.textContent, extracted.ogDescription);
+          if (truncated) {
+            logger.warn(`[scrapfly] ${url}: content shorter than og:description (${extracted.textContent.length} chars vs ${extracted.ogDescription.length} chars) — possibly truncated but returning as best available (${creditsUsed} credits)`);
+          } else {
+            logger.info(`[scrapfly] ${url}: ${extracted.wordCount} words via ${extracted.extractionMethod} (${creditsUsed} credits)`);
+          }
           return {
             url: item.url,
             final_url: data.result?.url || item.url,
@@ -243,14 +250,16 @@ async function execute(input, options, tools) {
             word_count: extracted.wordCount,
             content_type: 'text/html',
             status: 'success',
-            error: null,
+            error: truncated ? 'Content shorter than og:description — possibly truncated' : null,
             text_preview: extracted.textPreview,
             meta_description: extracted.metaDescription,
+            og_description: extracted.ogDescription,
             text_content: extracted.textContent,
             entity_name: item.entity_name,
             scrape_method: 'scrapfly',
             extraction_method: extracted.extractionMethod,
             scrapfly_credits: creditsUsed,
+            possibly_truncated: truncated,
           };
         } else {
           logger.warn(`[scrapfly] ${url}: only ${extracted.wordCount} words after extraction (${creditsUsed} credits) — trying Wayback Machine`);
@@ -291,7 +300,12 @@ async function execute(input, options, tools) {
         }
 
         if (extracted.wordCount >= min_word_threshold) {
-          logger.info(`[wayback] ${url}: ${extracted.wordCount} words via ${extracted.extractionMethod} from Wayback Machine`);
+          const truncated = isLikelyTruncated(extracted.textContent, extracted.ogDescription);
+          if (truncated) {
+            logger.warn(`[wayback] ${url}: content shorter than og:description — possibly truncated (Wayback is best available)`);
+          } else {
+            logger.info(`[wayback] ${url}: ${extracted.wordCount} words via ${extracted.extractionMethod} from Wayback Machine`);
+          }
           return {
             url: item.url,
             final_url: item.url,
@@ -299,14 +313,16 @@ async function execute(input, options, tools) {
             word_count: extracted.wordCount,
             content_type: 'text/html',
             status: 'success',
-            error: null,
+            error: truncated ? 'Content shorter than og:description — possibly truncated' : null,
             text_preview: extracted.textPreview,
             meta_description: extracted.metaDescription,
+            og_description: extracted.ogDescription,
             text_content: extracted.textContent,
             entity_name: item.entity_name,
             scrape_method: 'wayback_after_api',
             extraction_method: extracted.extractionMethod,
             scrapfly_credits: scrapflyCredits,
+            possibly_truncated: truncated,
           };
         }
 
@@ -332,6 +348,7 @@ async function execute(input, options, tools) {
       error,
       text_preview: '',
       meta_description: item.meta_description || null,
+      og_description: item.og_description || null,
       text_content: '',
       entity_name: item.entity_name,
       scrape_method: 'scrapfly',
@@ -493,6 +510,7 @@ function isBlockPageText(text) {
 function extractFromHtml(html, url, item, maxContentLength, logger) {
   const title = extractTitle(html) || item.title;
   const metaDescription = extractMetaDescription(html) || item.meta_description || null;
+  const ogDescription = extractOgDescription(html) || item.og_description || null;
 
   let doc = null;
   try {
@@ -579,7 +597,7 @@ function extractFromHtml(html, url, item, maxContentLength, logger) {
   const wordCount = countWords(textContent);
   const textPreview = textContent.length > 150 ? textContent.substring(0, 150) + '...' : textContent;
 
-  return { title, metaDescription, textContent, wordCount, textPreview, extractionMethod };
+  return { title, metaDescription, ogDescription, textContent, wordCount, textPreview, extractionMethod };
 }
 
 function extractTextRegex(html) {
@@ -636,6 +654,30 @@ function extractMetaDescription(html) {
   const match = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)
     || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i);
   return match ? match[1].trim() : null;
+}
+
+/**
+ * Extract og:description meta tag from HTML.
+ */
+function extractOgDescription(html) {
+  const match = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)
+    || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i);
+  if (!match) return null;
+  return match[1].trim()
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, num) => String.fromCharCode(Number(num)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&nbsp;/g, ' ');
+}
+
+/**
+ * Check if extracted text is likely truncated by comparing against og:description.
+ */
+function isLikelyTruncated(textContent, ogDescription) {
+  if (!ogDescription || ogDescription.length < 100) return false;
+  if (!textContent) return true;
+  return textContent.length <= ogDescription.length;
 }
 
 // ---------------------------------------------------------------------------

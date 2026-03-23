@@ -224,6 +224,7 @@ async function execute(input, options, tools) {
   function extractFromHtml(html, url, item) {
     const title = extractTitle(html) || item.title;
     const metaDescription = extractMetaDescription(html) || item.meta_description || null;
+    const ogDescription = extractOgDescription(html) || item.og_description || null;
 
     // Parse DOM once — shared by Readability (tier 1) and CMS extraction (tier 2)
     let doc = null;
@@ -284,7 +285,7 @@ async function execute(input, options, tools) {
       ? textContent.substring(0, 150) + '...'
       : textContent;
 
-    return { title, metaDescription, textContent, wordCount, textPreview, extractionMethod };
+    return { title, metaDescription, ogDescription, textContent, wordCount, textPreview, extractionMethod };
   }
 
   /**
@@ -301,6 +302,7 @@ async function execute(input, options, tools) {
       error: extracted.wordCount >= min_word_threshold ? null : (error || `Only ${extracted.wordCount} words extracted`),
       text_preview: extracted.textPreview,
       meta_description: extracted.metaDescription,
+      og_description: extracted.ogDescription,
       text_content: extracted.textContent,
       entity_name: item.entity_name,
       scrape_method: method,
@@ -317,6 +319,7 @@ async function execute(input, options, tools) {
       const res = await browser.fetch(item.url, {
         timeout: request_timeout,
         waitForNetworkIdle: wait_for_network_idle,
+        waitForSelector: 'article, main, [role="main"], .entry-content, .post-content',
       });
 
       const extracted = extractFromHtml(res.body, item.url, item);
@@ -327,12 +330,20 @@ async function execute(input, options, tools) {
         browserFailed = true;
         browserError = `Browser: Cloudflare block page detected`;
       } else if (extracted.wordCount >= min_word_threshold) {
-        if (res.status >= 400) {
-          logger.info(`[browser] ${item.url}: HTTP ${res.status} but extracted ${extracted.wordCount} words via ${extracted.extractionMethod} — treating as success`);
+        // Truncation detection: even if word count passes threshold,
+        // check if body text is shorter than the og:description summary
+        if (isLikelyTruncated(extracted.textContent, extracted.ogDescription)) {
+          logger.warn(`[browser] ${item.url}: content shorter than og:description (${extracted.textContent.length} chars vs ${extracted.ogDescription.length} chars) — likely truncated, trying Wayback Machine`);
+          browserFailed = true;
+          browserError = `Browser: content shorter than og:description — likely truncated (JS-rendered page)`;
         } else {
-          logger.info(`[browser] ${item.url}: ${extracted.wordCount} words via ${extracted.extractionMethod} (was ${item.word_count || 0})`);
+          if (res.status >= 400) {
+            logger.info(`[browser] ${item.url}: HTTP ${res.status} but extracted ${extracted.wordCount} words via ${extracted.extractionMethod} — treating as success`);
+          } else {
+            logger.info(`[browser] ${item.url}: ${extracted.wordCount} words via ${extracted.extractionMethod} (was ${item.word_count || 0})`);
+          }
+          return buildResult(item, extracted, 'browser', res.url || item.url, null);
         }
-        return buildResult(item, extracted, 'browser', res.url || item.url, null);
       }
 
       // Browser returned but content is insufficient
@@ -392,6 +403,7 @@ async function execute(input, options, tools) {
       error: browserError,
       text_preview: '',
       meta_description: item.meta_description || null,
+      og_description: item.og_description || null,
       text_content: '',
       entity_name: item.entity_name,
       scrape_method: 'browser',
@@ -709,6 +721,25 @@ function extractMetaDescription(html) {
   const match = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)
     || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i);
   return match ? decodeEntities(match[1].trim()) : null;
+}
+
+/**
+ * Extract og:description meta tag from HTML.
+ * Always present in static HTML even on JS-rendered pages.
+ */
+function extractOgDescription(html) {
+  const match = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)
+    || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i);
+  return match ? decodeEntities(match[1].trim()) : null;
+}
+
+/**
+ * Check if extracted text is likely truncated by comparing against og:description.
+ */
+function isLikelyTruncated(textContent, ogDescription) {
+  if (!ogDescription || ogDescription.length < 100) return false;
+  if (!textContent) return true;
+  return textContent.length <= ogDescription.length;
 }
 
 function stripTags(html) {

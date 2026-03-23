@@ -94,6 +94,7 @@ async function execute(input, options, tools) {
       const html = res.body;
       const title = extractTitle(html);
       const metaDescription = extract_meta ? extractMetaDescription(html) : null;
+      const ogDescription = extractOgDescription(html);
       let textContent = extractTextReadability(html, item.url);
 
       // Truncate extracted text to max_content_length
@@ -125,6 +126,26 @@ async function execute(input, options, tools) {
         };
       }
 
+      // Truncation detection: if body text is shorter than the og:description
+      // summary, the page is JS-rendered and we only got partial SSR content.
+      // Mark as low_content so browser-scraper picks it up.
+      if (wordCount >= 50 && isLikelyTruncated(textContent, ogDescription)) {
+        return {
+          url: item.url,
+          final_url: finalUrl,
+          title,
+          word_count: wordCount,
+          content_type: contentType.split(';')[0].trim(),
+          status: 'low_content',
+          error: `Content shorter than og:description — likely truncated (JS-rendered page)`,
+          text_preview: textPreview,
+          meta_description: metaDescription,
+          og_description: ogDescription,
+          text_content: textContent,
+          entity_name: item.entity_name,
+        };
+      }
+
       return {
         url: item.url,
         final_url: finalUrl,
@@ -135,6 +156,7 @@ async function execute(input, options, tools) {
         error: wordCount < 50 ? `Only ${wordCount} words extracted` : null,
         text_preview: textPreview,
         meta_description: metaDescription,
+        og_description: ogDescription,
         text_content: textContent,
         entity_name: item.entity_name,
       };
@@ -379,6 +401,29 @@ function extractMetaDescription(html) {
   const match = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)
     || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i);
   return match ? decodeEntities(match[1].trim()) : null;
+}
+
+/**
+ * Extract og:description meta tag from HTML.
+ * Always present in static HTML even on JS-rendered pages.
+ * Used as a truncation signal: if body text is shorter than this
+ * summary, the scrape likely only got the SSR'd partial content.
+ */
+function extractOgDescription(html) {
+  const match = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)
+    || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i);
+  return match ? decodeEntities(match[1].trim()) : null;
+}
+
+/**
+ * Check if extracted text is likely truncated by comparing against
+ * the og:description meta tag. If the full body text is shorter than
+ * a 100+ char summary, the scraper only got partial SSR content.
+ */
+function isLikelyTruncated(textContent, ogDescription) {
+  if (!ogDescription || ogDescription.length < 100) return false;
+  if (!textContent) return true;
+  return textContent.length <= ogDescription.length;
 }
 
 /**
