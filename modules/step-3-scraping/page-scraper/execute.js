@@ -173,20 +173,59 @@ async function execute(input, options, tools) {
   }
   await Promise.all(workers);
 
+  // Boilerplate detection: if 3+ pages from the same domain share identical
+  // text_content, the scraper likely extracted footer/nav/legal text instead of
+  // the real article. Mark those as low_content so the browser-scraper picks them up.
+  const domainTexts = new Map(); // domain -> Map<text, count>
+  for (const item of results) {
+    if (item.status !== 'success' || !item.text_content) continue;
+    try {
+      const domain = new URL(item.url).hostname;
+      if (!domainTexts.has(domain)) domainTexts.set(domain, new Map());
+      const textMap = domainTexts.get(domain);
+      const text = item.text_content.trim();
+      if (text.length > 0) textMap.set(text, (textMap.get(text) || 0) + 1);
+    } catch { /* skip invalid URLs */ }
+  }
+
+  const boilerplateTexts = new Set();
+  for (const [domain, textMap] of domainTexts) {
+    for (const [text, count] of textMap) {
+      if (count >= 3) {
+        boilerplateTexts.add(text);
+        logger.info(`Boilerplate detected on ${domain}: ${count} pages share identical ${text.split(/\s+/).length}-word text`);
+      }
+    }
+  }
+
+  if (boilerplateTexts.size > 0) {
+    let demotedCount = 0;
+    for (const item of results) {
+      if (item.status === 'success' && item.text_content && boilerplateTexts.has(item.text_content.trim())) {
+        item.status = 'low_content';
+        item.error = 'Boilerplate: identical content across multiple pages';
+        demotedCount++;
+      }
+    }
+    logger.info(`Demoted ${demotedCount} boilerplate pages from success to low_content`);
+  }
+
   // Count outcomes
   let successCount = 0;
+  let lowContentCount = 0;
   let errorCount = 0;
   let skippedCount = 0;
   for (const r of results) {
     if (r.status === 'success') successCount++;
+    else if (r.status === 'low_content') lowContentCount++;
     else if (r.status === 'error') errorCount++;
     else if (r.status === 'skipped') skippedCount++;
   }
 
-  // Sort: errors and skipped first so they appear at top of results
+  // Sort: errors and skipped first, then low_content, then success
   results.sort((a, b) => {
-    const order = { error: 0, skipped: 1, success: 2 };
-    return (order[a.status] ?? 2) - (order[b.status] ?? 2);
+    const order = { error: 0, skipped: 1, low_content: 2, success: 3 };
+    return (order[a.status] ?? 3) - (order[b.status] ?? 3);
   });
 
   // Group results by entity for the expected output format
@@ -201,6 +240,7 @@ async function execute(input, options, tools) {
   const entityResults = [];
   for (const [entityName, items] of byEntity) {
     const success = items.filter((i) => i.status === 'success').length;
+    const lowContent = items.filter((i) => i.status === 'low_content').length;
     const errors = items.filter((i) => i.status === 'error').length;
     const skipped = items.filter((i) => i.status === 'skipped').length;
     const totalWords = items.reduce((sum, i) => sum + i.word_count, 0);
@@ -210,6 +250,7 @@ async function execute(input, options, tools) {
       meta: {
         total: items.length,
         success,
+        low_content: lowContent,
         errors,
         skipped,
         total_words: totalWords,
@@ -217,10 +258,11 @@ async function execute(input, options, tools) {
     });
   }
 
-  const problemCount = errorCount + skippedCount;
+  const problemCount = errorCount + skippedCount + lowContentCount;
   const parts = [];
   if (errorCount > 0) parts.push(`${errorCount} errors`);
   if (skippedCount > 0) parts.push(`${skippedCount} skipped`);
+  if (lowContentCount > 0) parts.push(`${lowContentCount} low content`);
 
   const description =
     problemCount > 0
@@ -233,6 +275,7 @@ async function execute(input, options, tools) {
       total_entities: entities.length,
       total_items: allItems.length,
       success: successCount,
+      low_content: lowContentCount,
       errors: errorCount,
       skipped: skippedCount,
       description,
