@@ -102,3 +102,22 @@ Entry types: decision | progress | blocker | idea
 - None
 
 **Updated by:** session-closer agent
+
+### Session: 2026-03-23 16:00 - Page scraper boilerplate detection + low_content fixes
+**Accomplished:**
+- Added boilerplate detection to page-scraper: 3+ pages from the same domain with identical text_content are demoted from `success` to `low_content` with error "Boilerplate: identical content across multiple pages"
+- Fixed page-scraper summary counting: `low_content` items were invisible in the description (said "all scraped successfully" even with 198 boilerplate pages). Now counted as issues.
+- Added `low_content` to sort order (errors → skipped → low_content → success)
+- Added `low_content` count to per-entity meta and top-level summary
+- Page scraper `< 50 words` items changed from `success` to `low_content` status (previous session)
+- Browser scraper: added `low_content` to re-scrape filter, `timed_out` to flagged_when, `_partialItems` push for timeout resilience
+
+**Decisions:**
+- Boilerplate detection mirrors browser-scraper logic (3+ identical text_content per domain)
+- `low_content` items are flagged in UI via `flagged_when`, browser-scraper picks them up for re-scrape
+- og:description truncation detection added (user modification) — catches JS-rendered pages where body text < og:description
+
+**Blockers/Questions:**
+- Flow test needed to validate boilerplate detection with real data
+
+**Updated by:** session-closer agent
