@@ -81,12 +81,12 @@
   "output_schema": {
     "display_type": "table",
     "selectable": true,
-    "flagged_when": { "status": ["dead_link", "error", "skipped"] },
+    "flagged_when": { "status": ["dead_link", "error", "skipped", "low_content"] },
     "url": "string (required)",
     "title": "string",
     "word_count": "number",
     "content_type": "string",
-    "status": "string (success | error | skipped)",
+    "status": "string (success | low_content | error | skipped)",
     "error": "string | null",
     "text_preview": "string",
     "downloadable_fields": [

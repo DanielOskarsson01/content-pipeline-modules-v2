@@ -173,7 +173,10 @@ async function execute(input, options, tools) {
     // Re-scrape if: page-scraper failed entirely (403, timeout, etc.)
     } else if (status === 'error' || status === 'dead_link') {
       needsScrape.push(item);
-    // Re-scrape if: HTTP was successful but content too short
+    // Re-scrape if: page-scraper marked as low_content (< 50 words)
+    } else if (status === 'low_content') {
+      needsScrape.push(item);
+    // Re-scrape if: HTTP was successful but content too short (legacy compat)
     } else if (status === 'success' && wc < min_word_threshold) {
       needsScrape.push(item);
     // Re-scrape if: text is duplicated across 3+ pages (boilerplate)
@@ -201,6 +204,9 @@ async function execute(input, options, tools) {
     extraction_method: item.extraction_method || 'original',
     text_content: `[Scraped by page-scraper — view full content in page-scraper results]`,
   }));
+
+  // Save pass-through items as partial results immediately (survives timeout)
+  if (tools._partialItems) tools._partialItems.push(...results);
 
   // Browser-scrape items that need it
   let doneCount = 0;
@@ -403,6 +409,8 @@ async function execute(input, options, tools) {
       if (idx >= needsScrape.length) break;
       scrapeResults[idx] = await scrapeOne(needsScrape[idx]);
       doneCount++;
+      // Save partial result so the worker can recover on timeout
+      if (tools._partialItems) tools._partialItems.push(scrapeResults[idx]);
       progress.update(doneCount, total, `Browser-scraped ${doneCount} of ${total}`);
     }
   }

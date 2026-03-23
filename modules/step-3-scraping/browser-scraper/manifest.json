@@ -81,7 +81,7 @@
     "status": "string",
     "error": "string",
     "text_preview": "string",
-    "flagged_when": { "status": ["error"] },
+    "flagged_when": { "status": ["error", "timed_out"] },
     "downloadable_fields": [
       { "field": "text_content", "extension": "txt", "label": "Scraped Text" }
     ],
