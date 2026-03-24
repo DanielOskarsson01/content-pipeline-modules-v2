@@ -23,6 +23,10 @@ V2 uses LLM classification for all pages. Intent categories are fully user-confi
 
 Pages are processed in batches of 10 to minimize API calls. Uses Haiku-class models by default for fast, cheap classification.
 
+### Upstream Relevance Awareness
+
+The intent tagger respects the `relevance` field set by Step 2's url-relevance module. Only pages marked KEEP (or with no relevance field) are sent to the LLM for classification. Pages marked MAYBE are passed through as `page_intent: 'unclassified'` — their content is preserved for downstream use but no LLM call is spent on them. This significantly reduces API costs for large entities where many URLs were borderline relevant.
+
 ## Default Intent Categories
 
 These defaults are a starting point for iGaming content creation. Edit them freely in the options:
@@ -106,17 +110,18 @@ priority_intents: company_info, product_info, press_release
 - `url` — the page URL (carried from input)
 - `title` — page title (carried from input)
 - `text_content` — full page text (carried through for downstream steps)
-- `page_intent` — classified intent (one of the user-defined categories)
-- `intent_confidence` — confidence score 0-1 (higher = more certain)
+- `page_intent` — classified intent (one of the user-defined categories, or `unclassified` for MAYBE pages)
+- `intent_confidence` — confidence score 0-1 (higher = more certain; 0 for unclassified)
 - `intent_reasoning` — brief LLM explanation of why this classification was chosen
 - `entity_name` — which entity this page belongs to
 
-**Sort order:** Pages are sorted per entity with priority intents first (in the order specified), then remaining pages by confidence descending.
+**Sort order:** Pages are sorted per entity with priority intents first (in the order specified), then remaining pages by confidence descending, then unclassified pages last.
 
 **Summary line:** Shows classification breakdown, e.g.: "42 pages classified across 5 entities: 8 news, 12 product_info, 6 review, 4 guide, 3 faq, 2 opinion, 7 other | 5 LLM calls"
 
 **Red flags to watch for:**
 - Very high "other" rate (>50%) — your intent categories may not match the content being scraped. Edit the intents to better fit your sources.
+- High "unclassified" count — these are MAYBE pages from Step 2. If too many important pages are unclassified, tighten your url-relevance thresholds in Step 2 so more pages get KEEP status.
 - LLM failure rate above 10% — check API key configuration or model availability
 
 ## Limitations & Edge Cases
