@@ -180,6 +180,21 @@ async function execute(input, options, tools) {
               itemIntents[globalIdx] = classification;
             }
           }
+
+          // Push partial results so they survive timeouts
+          if (tools._partialItems) {
+            const batchEnd = Math.min(batchStart + BATCH_SIZE, scrapedItems.length);
+            for (let k = batchStart; k < batchEnd; k++) {
+              const cls = itemIntents[k];
+              tools._partialItems.push({
+                ...scrapedItems[k],
+                page_intent: cls ? cls.intent : 'other',
+                intent_confidence: cls ? cls.confidence : 0,
+                intent_reasoning: cls ? cls.reasoning : 'Classification failed',
+                entity_name: entity.name,
+              });
+            }
+          }
         } else {
           logger.warn(`${entity.name}: failed to parse LLM response for batch starting at ${batchStart}`);
           llmFails++;
