@@ -1,7 +1,7 @@
 {
   "id": "content-filter",
-  "name": "Content Filter",
-  "description": "Filter out low-quality, too-short, non-English, or irrelevant scraped pages",
+  "name": "Content Filter (optional)",
+  "description": "Safety-net filter for low-quality pages. Most checks overlap with Step 2 validation and Step 3 scraping — skip unless you need an extra pass.",
   "version": "1.0.0",
   "step": 4,
   "category": "filtering",
