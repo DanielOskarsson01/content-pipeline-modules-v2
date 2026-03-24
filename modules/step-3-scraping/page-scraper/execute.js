@@ -188,6 +188,10 @@ async function execute(input, options, tools) {
 
       results[idx] = await scrapeOne(allItems[idx]);
       doneCount++;
+
+      // Push to _partialItems so the skeleton can save progress on timeout/abort
+      if (tools._partialItems) tools._partialItems.push(results[idx]);
+
       progress.update(doneCount, allItems.length, `Scraped ${doneCount} of ${allItems.length}`);
     }
   }

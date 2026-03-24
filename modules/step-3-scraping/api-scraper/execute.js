@@ -393,6 +393,10 @@ async function execute(input, options, tools) {
       }
 
       doneCount++;
+
+      // Push to _partialItems so the skeleton can save progress on timeout/abort
+      if (tools._partialItems) tools._partialItems.push(scrapeResults[idx]);
+
       progress.update(doneCount, total, `API-scraped ${doneCount} of ${total} (${totalCredits} credits)`);
     }
   }
