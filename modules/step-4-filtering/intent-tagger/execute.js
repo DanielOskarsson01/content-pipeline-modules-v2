@@ -141,19 +141,28 @@ async function execute(input, options, tools) {
     const entity = entities[i];
     progress.update(i + 1, entities.length, `Classifying ${entity.name}`);
 
-    const scrapedItems = (entity.items || []).filter((item) => item.text_content || item.url);
+    const allItems = (entity.items || []).filter((item) => item.text_content || item.url);
 
-    if (scrapedItems.length === 0) {
+    if (allItems.length === 0) {
       logger.warn(`${entity.name}: no items with text_content or url — skipping`);
       results.push({
         entity_name: entity.name,
         items: [],
-        meta: { total: 0, intent_breakdown: {}, llm_calls: 0 },
+        meta: { total: 0, intent_breakdown: {}, llm_calls: 0, skipped_maybe: 0 },
       });
       continue;
     }
 
-    logger.info(`${entity.name}: classifying ${scrapedItems.length} pages in batches of ${BATCH_SIZE}`);
+    // Split by upstream relevance: LLM-tag KEEPs, pass MAYBEs through as unclassified
+    // Items without a relevance field (e.g. url-relevance wasn't run) are treated as KEEP
+    const scrapedItems = allItems.filter((item) => !item.relevance || item.relevance === 'KEEP');
+    const maybeItems = allItems.filter((item) => item.relevance === 'MAYBE');
+
+    if (maybeItems.length > 0) {
+      logger.info(`${entity.name}: ${scrapedItems.length} KEEP pages for LLM tagging, ${maybeItems.length} MAYBE pages passed through as unclassified`);
+    } else {
+      logger.info(`${entity.name}: classifying ${scrapedItems.length} pages in batches of ${BATCH_SIZE}`);
+    }
 
     // Initialize intent results for all items
     const itemIntents = new Array(scrapedItems.length).fill(null);
@@ -206,7 +215,7 @@ async function execute(input, options, tools) {
       }
     }
 
-    // Build tagged items
+    // Build tagged items from LLM-classified KEEPs
     const taggedItems = scrapedItems.map((item, idx) => {
       totalItems++;
 
@@ -228,8 +237,27 @@ async function execute(input, options, tools) {
       };
     });
 
-    // Sort: priority intents first, then by confidence descending
-    taggedItems.sort((a, b) => {
+    // Append MAYBE items as unclassified — content preserved for downstream use
+    const unclassifiedItems = maybeItems.map((item) => {
+      totalItems++;
+      intentCounts['unclassified'] = (intentCounts['unclassified'] || 0) + 1;
+
+      return {
+        ...item,
+        page_intent: 'unclassified',
+        intent_confidence: 0,
+        intent_reasoning: 'Skipped — upstream relevance was MAYBE',
+        entity_name: entity.name,
+      };
+    });
+
+    const allTaggedItems = [...taggedItems, ...unclassifiedItems];
+
+    // Sort: priority intents first, then by confidence descending, unclassified last
+    allTaggedItems.sort((a, b) => {
+      if (a.page_intent === 'unclassified' && b.page_intent !== 'unclassified') return 1;
+      if (b.page_intent === 'unclassified' && a.page_intent !== 'unclassified') return -1;
+
       const aPriority = priorityList.indexOf(a.page_intent);
       const bPriority = priorityList.indexOf(b.page_intent);
 
@@ -241,17 +269,18 @@ async function execute(input, options, tools) {
 
     // Per-entity intent breakdown
     const intentBreakdown = {};
-    for (const item of taggedItems) {
+    for (const item of allTaggedItems) {
       intentBreakdown[item.page_intent] = (intentBreakdown[item.page_intent] || 0) + 1;
     }
 
     results.push({
       entity_name: entity.name,
-      items: taggedItems,
+      items: allTaggedItems,
       meta: {
-        total: taggedItems.length,
+        total: allTaggedItems.length,
         intent_breakdown: intentBreakdown,
         llm_calls: llmCalls,
+        skipped_maybe: maybeItems.length,
       },
     });
   }
