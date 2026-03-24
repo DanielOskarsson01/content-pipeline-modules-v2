@@ -1,64 +1,54 @@
 {
   "id": "intent-tagger",
   "name": "Intent Tagger",
-  "description": "Classify each scraped page by its intent (About, Products, Press, Partners, Careers, Contact, etc.) so downstream steps can prioritize and route content.",
-  "version": "1.0.0",
+  "description": "Classify each scraped page by content type using LLM classification against user-defined intents. Helps downstream steps prioritize and route content for creation.",
+  "version": "2.0.0",
   "step": 4,
   "category": "filtering",
   "cost": "cheap",
   "data_operation_default": "transform",
 
   "depends_on": ["page-scraper"],
-  "usage_notes": "Runs heuristic classification by default (no API calls). Enable use_llm for pages where heuristics are ambiguous. Set priority_intents to control which page types appear first in the output.",
+  "usage_notes": "Uses LLM to classify pages against your defined intent categories. Edit the intents list to match your content creation goals. Each page gets a single intent label + confidence score. Priority intents are sorted to the top.",
 
   "requires_columns": [],
 
   "options": [
     {
-      "name": "use_llm",
-      "type": "boolean",
-      "label": "Enable LLM fallback",
-      "description": "When heuristic confidence is below the threshold, use an LLM to classify the page intent. Costs tokens but catches ambiguous pages.",
-      "default": false
-    },
-    {
-      "name": "llm_threshold",
-      "type": "number",
-      "label": "LLM confidence threshold",
-      "description": "Pages with heuristic confidence below this value will be sent to the LLM for classification (if LLM fallback is enabled).",
-      "default": 0.5,
-      "min": 0.1,
-      "max": 1.0
-    },
-    {
-      "name": "ai_model",
-      "type": "string",
-      "label": "AI model",
-      "description": "Which model to use for LLM classification fallback.",
-      "default": "claude-haiku-4-5-20251001"
-    },
-    {
-      "name": "ai_provider",
-      "type": "string",
-      "label": "AI provider",
-      "description": "Which provider to use for LLM classification fallback.",
-      "default": "anthropic"
+      "name": "intents",
+      "type": "textarea",
+      "label": "Intent categories (one per line: name | description)",
+      "description": "Define the intent categories for classification. Format: name | description. The description helps the LLM understand what qualifies. 'other' is always added automatically as a catch-all.",
+      "default": "news | Breaking news, announcements, industry updates, regulatory changes\nproduct_info | Product pages, feature descriptions, specifications, platform details\npress_release | Official company press releases and media statements\nreview | Reviews, comparisons, ratings, player feedback, operator assessments\nfaq | Frequently asked questions, help pages, knowledge base articles\nguide | How-to guides, tutorials, educational content, strategy articles\nopinion | Opinion pieces, editorials, analysis, commentary, thought leadership\nmedia | Image galleries, videos, infographics, podcasts, visual content\nstatistics | Data, research, reports, market analysis, rankings, surveys\nevent | Conference coverage, trade show news, event recaps, webinar summaries\nregulation | Legal updates, licensing, compliance, responsible gambling policies\ninterview | Interviews, Q&A sessions, executive profiles, panel discussions"
     },
     {
       "name": "priority_intents",
       "type": "string",
       "label": "Priority intents (comma-separated)",
       "description": "Intents to sort first in the output. Pages matching these intents appear at the top of results for each entity.",
-      "default": "about,products,press"
+      "default": "news, product_info, review"
+    },
+    {
+      "name": "ai_model",
+      "type": "string",
+      "label": "AI model",
+      "description": "Which model to use for classification.",
+      "default": "claude-haiku-4-5-20251001"
+    },
+    {
+      "name": "ai_provider",
+      "type": "string",
+      "label": "AI provider",
+      "description": "Which provider to use for classification.",
+      "default": "anthropic"
     }
   ],
 
   "options_defaults": {
-    "use_llm": false,
-    "llm_threshold": 0.5,
+    "intents": "news | Breaking news, announcements, industry updates, regulatory changes\nproduct_info | Product pages, feature descriptions, specifications, platform details\npress_release | Official company press releases and media statements\nreview | Reviews, comparisons, ratings, player feedback, operator assessments\nfaq | Frequently asked questions, help pages, knowledge base articles\nguide | How-to guides, tutorials, educational content, strategy articles\nopinion | Opinion pieces, editorials, analysis, commentary, thought leadership\nmedia | Image galleries, videos, infographics, podcasts, visual content\nstatistics | Data, research, reports, market analysis, rankings, surveys\nevent | Conference coverage, trade show news, event recaps, webinar summaries\nregulation | Legal updates, licensing, compliance, responsible gambling policies\ninterview | Interviews, Q&A sessions, executive profiles, panel discussions",
+    "priority_intents": "news, product_info, review",
     "ai_model": "claude-haiku-4-5-20251001",
-    "ai_provider": "anthropic",
-    "priority_intents": "about,products,press"
+    "ai_provider": "anthropic"
   },
 
   "item_key": "url",
@@ -68,9 +58,9 @@
     "selectable": false,
     "url": "string (required)",
     "title": "string",
-    "page_intent": "string (about|products|press|careers|contact|investors|partners|resources|blog_post|news_article|case_study|other)",
+    "page_intent": "string",
     "intent_confidence": "number (0-1)",
-    "intent_signals": "string",
+    "intent_reasoning": "string",
     "detail_schema": {
       "header_fields": [
         { "field": "url", "display": "link" },
@@ -79,7 +69,7 @@
         { "field": "intent_confidence", "display": "text" }
       ],
       "sections": [
-        { "field": "intent_signals", "label": "Classification Signals", "display": "text" },
+        { "field": "intent_reasoning", "label": "Classification Reasoning", "display": "text" },
         { "field": "text_content", "label": "Content", "display": "prose" }
       ]
     }
