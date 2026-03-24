@@ -293,6 +293,7 @@ async function execute(input, options, tools) {
    */
   function buildResult(item, extracted, method, finalUrl, error) {
     return {
+      ...item,
       url: item.url,
       final_url: finalUrl || item.url,
       title: extracted.title,
@@ -394,6 +395,7 @@ async function execute(input, options, tools) {
     // --- All tiers failed ---
     logger.error(`[browser] ${item.url}: all methods failed`);
     return {
+      ...item,
       url: item.url,
       final_url: item.url,
       title: item.title,

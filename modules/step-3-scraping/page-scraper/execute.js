@@ -74,6 +74,7 @@ async function execute(input, options, tools) {
       if (!isHtml) {
         if (skip_non_html) {
           return {
+            ...item,
             url: item.url,
             final_url: item.url,
             title: null,
@@ -112,6 +113,7 @@ async function execute(input, options, tools) {
       // Check for Cloudflare / bot-blocker pages that masquerade as real content
       if (isBlockPageText(textContent)) {
         return {
+          ...item,
           url: item.url,
           final_url: finalUrl,
           title,
@@ -131,6 +133,7 @@ async function execute(input, options, tools) {
       // Mark as low_content so browser-scraper picks it up.
       if (wordCount >= 50 && isLikelyTruncated(textContent, ogDescription)) {
         return {
+          ...item,
           url: item.url,
           final_url: finalUrl,
           title,
@@ -147,6 +150,7 @@ async function execute(input, options, tools) {
       }
 
       return {
+        ...item,
         url: item.url,
         final_url: finalUrl,
         title,
@@ -331,6 +335,7 @@ function isBlockPageText(text) {
 
 function buildErrorItem(item, errorMessage) {
   return {
+    ...item,
     url: item.url,
     final_url: item.url,
     title: null,

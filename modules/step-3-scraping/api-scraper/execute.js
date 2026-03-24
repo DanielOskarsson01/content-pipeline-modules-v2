@@ -244,6 +244,7 @@ async function execute(input, options, tools) {
             logger.info(`[scrapfly] ${url}: ${extracted.wordCount} words via ${extracted.extractionMethod} (${creditsUsed} credits)`);
           }
           return {
+            ...item,
             url: item.url,
             final_url: data.result?.url || item.url,
             title: extracted.title,
@@ -307,6 +308,7 @@ async function execute(input, options, tools) {
             logger.info(`[wayback] ${url}: ${extracted.wordCount} words via ${extracted.extractionMethod} from Wayback Machine`);
           }
           return {
+            ...item,
             url: item.url,
             final_url: item.url,
             title: extracted.title,
@@ -339,6 +341,7 @@ async function execute(input, options, tools) {
 
   function buildErrorResult(item, error, credits = 0) {
     return {
+      ...item,
       url: item.url,
       final_url: item.url,
       title: item.title,
