@@ -121,3 +121,22 @@ Entry types: decision | progress | blocker | idea
 - Flow test needed to validate boilerplate detection with real data
 
 **Updated by:** session-closer agent
+
+### Session: 2026-03-24 — og:description truncation detection across all Step 3 scrapers
+**Accomplished:**
+- Root-caused Play'n GO PokerStars article scraping failure: Wix JS-rendered page with only 2 paragraphs SSR'd into static HTML; rest loads via JavaScript. Body text (~60 words) passes 50-word threshold, so page-scraper marks "success" with truncated content.
+- Added `extractOgDescription()` and `isLikelyTruncated()` helpers to all 3 scrapers:
+  - page-scraper: body text <= og:description length (100+ chars) → marks `low_content` → cascades to browser-scraper
+  - browser-scraper: `waitForSelector` for content containers + truncation check → cascades to api-scraper
+  - api-scraper: handles `low_content` in partition logic, flags `possibly_truncated: true` on final output
+- Code review found missing `decodeEntities()` in api-scraper's `extractOgDescription` — fixed before commit
+
+**Decisions:**
+- og:description meta tag as truncation signal — conservative: body text shorter than the summary itself should never happen for a complete article
+- Truncation triggers cascade (not hard failure) — flows to next scraper in chain
+- Used consistent helper pattern across all 3 scrapers for maintainability
+
+**Blockers/Questions:**
+- None — committed (9832f4e) and pushed
+
+**Updated by:** session-closer agent
