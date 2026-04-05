@@ -159,7 +159,9 @@ async function execute(input, options, tools) {
     );
   }
 
-  // Partition: needs browser re-scrape vs pass-through
+  // Partition: needs browser re-scrape vs pass-through.
+  // Whitelist approach: only pass through items with known-good status.
+  // Any unknown status (e.g. 'unique' from url-dedup) defaults to re-scrape.
   const needsScrape = [];
   const passThrough = [];
 
@@ -167,27 +169,20 @@ async function execute(input, options, tools) {
     const wc = item.word_count ?? 0;
     const status = item.status;
 
-    // Re-scrape if: never scraped (no status — came straight from Step 1/2)
-    if (!status) {
-      needsScrape.push(item);
-    // Re-scrape if: page-scraper failed entirely (403, timeout, etc.)
-    } else if (status === 'error' || status === 'dead_link') {
-      needsScrape.push(item);
-    // Re-scrape if: page-scraper marked as low_content (< 50 words)
-    } else if (status === 'low_content') {
-      needsScrape.push(item);
-    // Re-scrape if: HTTP was successful but content too short (legacy compat)
-    } else if (status === 'success' && wc < min_word_threshold) {
-      needsScrape.push(item);
-    // Re-scrape if: text is duplicated across 3+ pages (boilerplate)
-    } else if (status === 'success' && item.text_content && boilerplateTexts.has(item.text_content.trim())) {
-      needsScrape.push(item);
-    // Re-scrape if: extracted text is a Cloudflare/bot-blocker page
-    } else if (status === 'success' && isBlockPageText(item.text_content || item.text_preview || '')) {
-      logger.info(`Block page detected in input for ${item.url} — will re-scrape with browser`);
-      needsScrape.push(item);
-    } else {
+    // Pass through: successfully scraped with sufficient content
+    if (status === 'success' && wc >= min_word_threshold
+        && !(item.text_content && boilerplateTexts.has(item.text_content.trim()))
+        && !isBlockPageText(item.text_content || item.text_preview || '')) {
       passThrough.push(item);
+    // Pass through: non-HTML content (PDFs, images) — browser can't help
+    } else if (status === 'skipped') {
+      passThrough.push(item);
+    // Re-scrape everything else: error, low_content, no status, unknown status
+    } else {
+      if (status === 'success' && isBlockPageText(item.text_content || item.text_preview || '')) {
+        logger.info(`Block page detected in input for ${item.url} — will re-scrape with browser`);
+      }
+      needsScrape.push(item);
     }
   }
 
