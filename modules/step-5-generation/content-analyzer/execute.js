@@ -7,7 +7,7 @@
  *
  * v1.3.0: Pure extraction — no summaries, opinions, or marketing prose.
  *
- * Data operation: TRANSFORM (=) — one output per entity.
+ * Data operation: ADD (+) — appends analysis alongside existing pool items.
  */
 
 /**

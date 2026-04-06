@@ -234,7 +234,7 @@ async function execute(input, options, tools) {
 
     // Find content-analyzer item via source_submodule
     const items = entity.items || [];
-    const analyzerItem = items.find(item => item.source_submodule === 'content-analyzer');
+    const analyzerItem = items.findLast(item => item.source_submodule === 'content-analyzer');
 
     if (!analyzerItem) {
       const errMsg = `No content-analyzer output found. Run content-analyzer first.`;

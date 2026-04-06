@@ -6,7 +6,7 @@
  * applies conservative edits: keyword placement, sentence clarity, authoritative
  * tone, structural improvements.
  *
- * Data operation: TRANSFORM — replaces content_markdown with revised version.
+ * Data operation: ADD (+) — appends revised content alongside existing pool items.
  * Requires BOTH content-writer and seo-planner to have run first.
  */
 
@@ -324,8 +324,8 @@ async function execute(input, options, tools) {
       continue;
     }
 
-    // Use the first content item (content-writer produces one per entity)
-    const contentItem = contentItems[0];
+    // Use the latest content item (last in pool = most recent on re-runs)
+    const contentItem = contentItems.at(-1);
     const originalMarkdown = contentItem.content_markdown || '';
 
     // Truncate if necessary
@@ -333,8 +333,8 @@ async function execute(input, options, tools) {
       ? originalMarkdown.substring(0, maxChars) + '\n\n[Content truncated at ' + maxChars + ' characters]'
       : originalMarkdown;
 
-    // Extract keywords from SEO plan if available
-    const seoItem = seoItems.length > 0 ? seoItems[0] : null;
+    // Extract keywords from SEO plan if available (use latest)
+    const seoItem = seoItems.length > 0 ? seoItems.at(-1) : null;
     const keywords = seoItem ? extractKeywords(seoItem) : { primary: [], secondary: [], long_tail: [], all: [] };
     const keywordTargets = seoItem
       ? formatKeywordTargets(keywords, seoItem)

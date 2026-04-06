@@ -6,7 +6,7 @@
   "step": 5,
   "category": "generation",
   "cost": "medium",
-  "data_operation_default": "transform",
+  "data_operation_default": "add",
 
   "depends_on": ["content-writer", "seo-planner"],
   "usage_notes": "Requires content-writer and seo-planner to have completed. Uses a lower temperature than content-writer for conservative editing. Haiku is sufficient for editing passes; sonnet for higher-quality refinements.",

@@ -123,8 +123,8 @@ async function execute(input, options, tools) {
 
     // Find upstream items via source_submodule
     const items = entity.items || [];
-    const analyzerItem = items.find(item => item.source_submodule === 'content-analyzer');
-    const plannerItem = items.find(item => item.source_submodule === 'seo-planner');
+    const analyzerItem = items.findLast(item => item.source_submodule === 'content-analyzer');
+    const plannerItem = items.findLast(item => item.source_submodule === 'seo-planner');
 
     // Find scraped source items: items NOT from Step 5 submodules AND with text_content
     // These are the original page-scraper items that flow through the pool
