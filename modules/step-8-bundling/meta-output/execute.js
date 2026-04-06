@@ -97,8 +97,8 @@ async function execute(input, options, tools) {
     }
 
     try {
-      const seoPlan = seoItems[0].seo_plan_json;
-      const analysis = analysisItems.length > 0 ? analysisItems[0].analysis_json : null;
+      const seoPlan = seoItems.at(-1).seo_plan_json;
+      const analysis = analysisItems.length > 0 ? analysisItems.at(-1).analysis_json : null;
 
       // Extract meta title and description
       const metaTitle = (seoPlan.meta && seoPlan.meta.title) || entity.name;

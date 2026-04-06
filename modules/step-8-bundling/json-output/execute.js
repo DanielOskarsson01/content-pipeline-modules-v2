@@ -123,12 +123,9 @@ async function execute(input, options, tools) {
     const entity = entities[i];
     progress.update(i + 1, entities.length, `Processing ${entity.name}`);
 
-    // Data-shape routing
-    // For content_markdown: prefer AI-written items (have section_count from
-    // content-writer) over raw scraped items (from page-scraper).
-    const allMarkdownItems = (entity.items || []).filter(item => item.content_markdown);
-    const writtenItems = allMarkdownItems.filter(item => item.section_count !== undefined);
-    const markdownItems = writtenItems.length > 0 ? writtenItems : allMarkdownItems;
+    // Data-shape routing: use latest item for each shape (supports re-runs
+    // and tone-seo-editor refinement chain via add data operation)
+    const markdownItems = (entity.items || []).filter(item => item.content_markdown);
     const analysisItems = (entity.items || []).filter(item => item.analysis_json);
     const seoItems = (entity.items || []).filter(item => item.seo_plan_json);
 
@@ -145,11 +142,11 @@ async function execute(input, options, tools) {
     }
 
     try {
-      // Collect first matching item for each shape (merge multiples by taking first)
+      // Use latest item for each shape (last in pool = most recent)
       const data = {
-        markdown: markdownItems.length > 0 ? markdownItems.map(item => item.content_markdown).join('\n\n') : null,
-        analysis: analysisItems.length > 0 ? analysisItems[0].analysis_json : null,
-        seo: seoItems.length > 0 ? seoItems[0].seo_plan_json : null,
+        markdown: markdownItems.length > 0 ? markdownItems.at(-1).content_markdown : null,
+        analysis: analysisItems.length > 0 ? analysisItems.at(-1).analysis_json : null,
+        seo: seoItems.length > 0 ? seoItems.at(-1).seo_plan_json : null,
       };
 
       let jsonObj;

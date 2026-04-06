@@ -160,6 +160,7 @@ async function execute(input, options, tools) {
     const entity = entities[i];
     progress.update(i + 1, entities.length, `Processing ${entity.name}`);
 
+    // Use latest content_markdown item (supports tone-seo-editor refinement chain)
     const markdownItems = (entity.items || []).filter(item => item.content_markdown);
     const analysisItems = (entity.items || []).filter(item => item.analysis_json);
 
@@ -175,7 +176,7 @@ async function execute(input, options, tools) {
     }
 
     try {
-      let content = markdownItems.map(item => item.content_markdown).join('\n\n');
+      let content = markdownItems.at(-1).content_markdown;
 
       // Always strip markers for HTML output
       content = stripMarkers(content);

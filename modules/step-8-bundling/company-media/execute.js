@@ -257,7 +257,7 @@ async function execute(input, options, tools) {
     progress.update(i + 1, entities.length, `Processing ${entity.name}`);
 
     const analysisItems = (entity.items || []).filter(item => item.analysis_json);
-    const analysis = analysisItems.length > 0 ? analysisItems[0].analysis_json : null;
+    const analysis = analysisItems.length > 0 ? analysisItems.at(-1).analysis_json : null;
 
     try {
       const homepageUrl = deriveHomepageUrl(analysis, entity);

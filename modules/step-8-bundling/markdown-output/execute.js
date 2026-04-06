@@ -97,7 +97,7 @@ function buildFrontmatter(entityName, analysisItems) {
   const fm = { title: entityName };
 
   if (analysisItems.length > 0) {
-    const analysis = analysisItems[0].analysis_json;
+    const analysis = analysisItems.at(-1).analysis_json;
     if (analysis) {
       // Categories: { primary: [{slug, why, source}], secondary: [{slug, ...}] }
       if (analysis.categories) {
@@ -153,15 +153,12 @@ async function execute(input, options, tools) {
     const entity = entities[i];
     progress.update(i + 1, entities.length, `Processing ${entity.name}`);
 
-    // Data-shape routing: find by field presence
-    // For content_markdown: prefer AI-written items (have section_count from
-    // content-writer) over raw scraped items (from page-scraper).
+    // Data-shape routing: find by field presence, use latest item (supports
+    // re-runs and tone-seo-editor refinement chain via add data operation)
     const allMarkdownItems = (entity.items || []).filter(item => item.content_markdown);
-    const writtenItems = allMarkdownItems.filter(item => item.section_count !== undefined);
-    const markdownItems = writtenItems.length > 0 ? writtenItems : allMarkdownItems;
     const analysisItems = (entity.items || []).filter(item => item.analysis_json);
 
-    if (!markdownItems.length) {
+    if (!allMarkdownItems.length) {
       logger.warn(`${entity.name}: no items with content_markdown`);
       results.push({
         entity_name: entity.name,
@@ -173,13 +170,13 @@ async function execute(input, options, tools) {
     }
 
     try {
-      // Merge all content_markdown items (typically one per entity, but handle multiples)
-      let content = markdownItems.map(item => item.content_markdown).join('\n\n');
+      // Use the latest content_markdown item (tone-seo-editor refines content-writer)
+      let content = allMarkdownItems.at(-1).content_markdown;
 
       // Extract source citations for footnote conversion
       let sourceCitations = null;
-      if (analysisItems.length > 0 && analysisItems[0].analysis_json) {
-        sourceCitations = analysisItems[0].analysis_json.source_citations;
+      if (analysisItems.length > 0 && analysisItems.at(-1).analysis_json) {
+        sourceCitations = analysisItems.at(-1).analysis_json.source_citations;
       }
 
       // 1. Remove Meta section if not wanted

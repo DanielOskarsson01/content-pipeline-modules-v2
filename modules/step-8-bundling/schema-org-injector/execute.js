@@ -373,9 +373,9 @@ async function execute(input, options, tools) {
     try {
       // Collect data from available shapes
       const data = {
-        jsonOutput: jsonOutputItems.length > 0 ? parseJsonOutputItem(jsonOutputItems[0]) : null,
-        analysis: analysisItems.length > 0 ? analysisItems[0].analysis_json : null,
-        seo: seoItems.length > 0 ? seoItems[0].seo_plan_json : null,
+        jsonOutput: jsonOutputItems.length > 0 ? parseJsonOutputItem(jsonOutputItems.at(-1)) : null,
+        analysis: analysisItems.length > 0 ? analysisItems.at(-1).analysis_json : null,
+        seo: seoItems.length > 0 ? seoItems.at(-1).seo_plan_json : null,
       };
 
       // Resolve company URL from entity fields
