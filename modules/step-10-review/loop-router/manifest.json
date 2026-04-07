@@ -6,7 +6,7 @@
   "step": 10,
   "category": "review",
   "cost": "cheap",
-  "data_operation_default": "transform",
+  "data_operation_default": "add",
 
   "depends_on": ["keyword-sufficiency-checker", "meta-compliance-checker", "citation-coverage-checker", "hallucination-detector"],
   "usage_notes": "Run after all Step 6 QA submodules have produced verdicts. Aggregates qa_pass, keyword_score, citation_score, hallucination_score, and meta_title_ok fields from QA items, then applies routing rules to decide whether each entity is approved, looped back, or flagged for manual review. Does NOT execute loops -- produces routing recommendations for the operator.",

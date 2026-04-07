@@ -6,7 +6,7 @@
   "step": 6,
   "category": "qa",
   "cost": "cheap",
-  "data_operation_default": "transform",
+  "data_operation_default": "add",
 
   "depends_on": ["content-writer", "content-analyzer"],
   "usage_notes": "Run after content-writer and content-analyzer. Checks that inline [#n] citations in content_markdown match source_citations in analysis_json. Flags factual claims (numbers, dates, statistics) that lack citations. Set verify_urls to true to check that source URLs are still live (adds HTTP cost).",

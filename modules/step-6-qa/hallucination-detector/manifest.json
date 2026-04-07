@@ -6,7 +6,7 @@
   "step": 6,
   "category": "qa",
   "cost": "medium",
-  "data_operation_default": "transform",
+  "data_operation_default": "add",
 
   "depends_on": ["content-writer", "page-scraper"],
   "usage_notes": "Run after content-writer has produced content_markdown and page-scraper/browser-scraper has produced text_content. Uses LLM to verify each factual claim against source material. If no source text_content is available, the entity passes with a warning (cannot verify without sources).",

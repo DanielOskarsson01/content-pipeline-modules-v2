@@ -49,7 +49,7 @@ const markdownItems = (entity.items || []).filter(item => item.content_markdown)
 const items = entity.items.filter(item => item.source_submodule === 'content-writer');
 ```
 
-All five Step 8 submodules use `requires_columns: []`, `item_key: "entity_name"`, `data_operation_default: "transform"`.
+All six Step 8 submodules use `requires_columns: []`, `item_key: "entity_name"`, `data_operation_default: "add"`.
 
 | Submodule | Input shapes | Output |
 |-----------|--------------|--------|

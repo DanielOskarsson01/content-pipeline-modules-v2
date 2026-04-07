@@ -6,7 +6,7 @@
   "step": 6,
   "category": "qa",
   "cost": "cheap",
-  "data_operation_default": "transform",
+  "data_operation_default": "add",
 
   "depends_on": ["content-writer", "seo-planner"],
   "usage_notes": "Run after content-writer and seo-planner. Checks meta title length, meta description length, keyword presence, truncation indicators, and cross-entity duplicate meta. Set pass_threshold below 1.0 to allow partial failures.",

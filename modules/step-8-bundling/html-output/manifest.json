@@ -6,7 +6,7 @@
   "step": 8,
   "category": "formatting",
   "cost": "cheap",
-  "data_operation_default": "transform",
+  "data_operation_default": "add",
 
   "depends_on": ["content-writer"],
   "usage_notes": "Enable schema_org for SEO. Use css_template 'article' for standalone preview pages. Set wrap_in_document for complete HTML files (email, standalone hosting).",

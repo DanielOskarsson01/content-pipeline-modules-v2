@@ -6,7 +6,7 @@
   "step": 8,
   "category": "bundling",
   "cost": "cheap",
-  "data_operation_default": "transform",
+  "data_operation_default": "add",
 
   "depends_on": ["json-output", "content-analyzer"],
   "usage_notes": "Enable all three schema types for maximum rich snippet coverage. Disable Product if the entity is not product-focused. FAQPage maps directly to Google's FAQ rich snippet format.",

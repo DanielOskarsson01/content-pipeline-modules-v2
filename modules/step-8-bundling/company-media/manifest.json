@@ -6,7 +6,7 @@
   "step": 8,
   "category": "media",
   "cost": "medium",
-  "data_operation_default": "transform",
+  "data_operation_default": "add",
 
   "depends_on": [],
   "usage_notes": "Fetches images from entity websites independently. Increase max_pages_per_entity for large sites with media spread across many sections. Limited to company's own site — does not search external sources.",
