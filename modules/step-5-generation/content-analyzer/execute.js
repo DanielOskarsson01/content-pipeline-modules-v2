@@ -112,8 +112,13 @@ function flattenAnalysis(analysis) {
   const facts = analysis.key_facts || {};
 
   // v1.3.0/v1.2.0: primary is array of {slug, why}; v1.0.0: primary is a string
-  const primaryCats = Array.isArray(categories.primary) ? categories.primary : (categories.primary ? [categories.primary] : []);
-  const secondaryCats = Array.isArray(categories.secondary) ? categories.secondary : [];
+  let primaryCats = Array.isArray(categories.primary) ? categories.primary : (categories.primary ? [categories.primary] : []);
+  let secondaryCats = Array.isArray(categories.secondary) ? categories.secondary : [];
+  // Promote secondary to primary if LLM returned empty primary
+  if (primaryCats.length === 0 && secondaryCats.length > 0) {
+    primaryCats = secondaryCats;
+    secondaryCats = [];
+  }
   const primaryCategory = primaryCats.map(catSlug).join(', ') || 'Unknown';
 
   // Tags: v1.2.0+ uses suggested_new; v1.0.0 uses suggested
