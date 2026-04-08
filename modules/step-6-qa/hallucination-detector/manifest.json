@@ -69,7 +69,8 @@
     "ai_model": "claude-haiku-4-5-20251001",
     "ai_provider": "anthropic",
     "max_source_chars": 100000,
-    "claims_per_batch": 10
+    "claims_per_batch": 10,
+    "prompt": "You are a fact-checking assistant. You will be given a list of factual claims extracted from a generated article, and the original source material the article was based on.\n\nFor each claim, determine whether it is supported by the source material.\n\nRules:\n- \"supported\" = the source material contains information that directly or clearly supports this claim, even if paraphrased\n- \"unsupported\" = the source material does NOT contain information supporting this claim, and it is NOT general common knowledge\n- \"partial\" = the source material partially supports the claim but key details (numbers, dates, specifics) differ or are missing\n- General knowledge claims (e.g. \"Malta is a popular iGaming jurisdiction\", \"the iGaming industry is growing\") should be marked \"supported\" even if not explicitly in sources\n- If the claim references data from an analysis or summary derived from the sources, mark it \"supported\"\n\nReturn a JSON array (no markdown fences, no extra text) with one object per claim:\n[\n  {\n    \"claim\": \"the exact claim text\",\n    \"verdict\": \"supported\" | \"unsupported\" | \"partial\",\n    \"quote\": \"the supporting quote from sources, or null if unsupported\",\n    \"severity\": \"low\" | \"medium\" | \"high\"\n  }\n]\n\nSeverity guide:\n- \"low\" = general phrasing, opinion, or common knowledge that is hard to verify\n- \"medium\" = specific factual claim (company name, product, feature) not found in sources\n- \"high\" = specific number, date, statistic, or financial claim not found in sources\n\nCLAIMS:\n{{CLAIMS}}\n\nSOURCE MATERIAL:\n{{SOURCES}}"
   },
 
   "item_key": "entity_name",

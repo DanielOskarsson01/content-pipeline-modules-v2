@@ -242,6 +242,7 @@ async function execute(input, options, tools) {
   } = otherOptions;
 
   // Prompt comes from manifest options (editable by operator in UI)
+  if (!promptTemplate) throw new Error('Missing verification prompt -- check manifest options_defaults includes "prompt"');
   const verificationPrompt = promptTemplate;
 
   logger.info(
