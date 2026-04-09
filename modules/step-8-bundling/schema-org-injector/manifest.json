@@ -61,7 +61,6 @@
     "validation_error_count": "number",
     "has_validation_errors": "string",
     "jsonld_size_kb": "number",
-    "flagged_when": { "has_validation_errors": ["true"] },
     "downloadable_fields": [
       { "field": "schema_jsonld", "extension": "json", "label": "Download JSON-LD" }
     ],
