@@ -97,6 +97,12 @@ async function execute(input, options, tools) {
             });
             pageLinks++;
           }
+
+          // Progressive save: push discovered links so far, so timeout preserves partial results
+          if (tools._partialItems) {
+            tools._partialItems.length = 0;
+            tools._partialItems.push(...discoveredLinks);
+          }
         } catch (err) {
           logger.warn(`${entity.name}: failed to crawl ${page.url} — ${err.message}`);
         }
