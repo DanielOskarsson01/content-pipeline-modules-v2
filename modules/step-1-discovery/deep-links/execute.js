@@ -66,7 +66,7 @@ async function execute(input, options, tools) {
 
       // Select pages to crawl: filter by crawl_patterns
       const pagesToCrawl = selectPages(existingItems, patterns, max_pages_per_entity);
-      logger.info(`${entity.name}: ${existingItems.length} pool items, ${pagesToCrawl.length} match crawl patterns`);
+      logger.info(`${entity.name}: ${existingItems.length} pool items, crawling ${pagesToCrawl.length} pages`);
 
       const discoveredLinks = [];
       let pagesCrawled = 0;
@@ -199,6 +199,7 @@ function extractLinks(html, pageUrl) {
 
     const resolved = resolveUrl(rawHref, pageUrl);
     if (!resolved) continue;
+    if (isJunkUrl(resolved)) continue;
 
     links.push({
       url: resolved,
@@ -237,6 +238,36 @@ function extractDomain(url) {
     return parsed.hostname.replace(/^www\./, '').toLowerCase();
   } catch {
     return '';
+  }
+}
+
+/**
+ * Filter out URLs that are clearly not content pages.
+ */
+const JUNK_EXTENSIONS = /\.(png|jpg|jpeg|gif|svg|webp|ico|pdf|zip|mp4|mp3|woff2?|ttf|eot|css|js)$/i;
+const JUNK_PATHS = [
+  '/cdn-cgi/',
+  '/wp-content/uploads/',
+  '/wp-includes/',
+  '/wp-json/',
+  '/feed/',
+  '/xmlrpc.php',
+  '/wp-login',
+  '/cart',
+  '/checkout',
+  '/my-account',
+  '/wp-admin'
+];
+
+function isJunkUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname.toLowerCase();
+    if (JUNK_EXTENSIONS.test(path)) return true;
+    if (JUNK_PATHS.some((junk) => path.includes(junk))) return true;
+    return false;
+  } catch {
+    return true;
   }
 }
 

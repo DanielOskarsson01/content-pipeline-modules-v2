@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "step": 1,
   "category": "crawling",
-  "cost": "medium",
+  "cost": "expensive",
   "data_operation_default": "transform",
   "sort_order": 4,
 
@@ -20,9 +20,9 @@
       "type": "number",
       "label": "Maximum pages to crawl per company",
       "description": "How many pages from the working pool to fetch and extract links from.",
-      "default": 10,
+      "default": 30,
       "min": 1,
-      "max": 50
+      "max": 200
     },
     {
       "name": "max_urls_per_page",
@@ -37,31 +37,31 @@
       "name": "crawl_patterns",
       "type": "textarea",
       "label": "URL path patterns to crawl",
-      "description": "One pattern per line. Pages whose URL path contains any of these strings will be crawled. Example: /about, /company, /partners, /products, /press",
-      "default": "/about\n/company\n/partners\n/products\n/solutions\n/press\n/news\n/blog"
+      "description": "One pattern per line. Only crawl pages whose URL path contains one of these strings. Leave empty to crawl all pool URLs (recommended — let Step 2 handle filtering).",
+      "default": ""
     },
     {
       "name": "same_domain_only",
       "type": "boolean",
       "label": "Same domain only",
       "description": "Only include discovered links pointing to the same domain as the company homepage.",
-      "default": true
+      "default": false
     },
     {
       "name": "exclude_already_discovered",
       "type": "boolean",
       "label": "Exclude already discovered URLs",
-      "description": "Skip URLs that already exist in the working pool. Reduces noise but url-dedup in Step 2 handles this too.",
-      "default": true
+      "description": "Skip URLs that already exist in the working pool. Disabled by default — url-dedup in Step 2 handles deduplication better.",
+      "default": false
     }
   ],
 
   "options_defaults": {
-    "max_pages_per_entity": 10,
+    "max_pages_per_entity": 30,
     "max_urls_per_page": 50,
-    "crawl_patterns": "/about\n/company\n/partners\n/products\n/solutions\n/press\n/news\n/blog",
-    "same_domain_only": true,
-    "exclude_already_discovered": true
+    "crawl_patterns": "",
+    "same_domain_only": false,
+    "exclude_already_discovered": false
   },
 
   "item_key": "url",
