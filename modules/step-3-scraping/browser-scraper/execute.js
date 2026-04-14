@@ -191,13 +191,12 @@ async function execute(input, options, tools) {
   );
 
   // Pass-through items keep their original data + a scrape_method marker.
-  // text_content is not available here (stripped from pool for performance) —
-  // set a note so the detail view explains where to find it.
+  // text_content is preserved from page-scraper so downstream modules
+  // (boilerplate-stripper, content-filter, intent-tagger) can work with it.
   const results = passThrough.map((item) => ({
     ...item,
     scrape_method: 'passed_through',
     extraction_method: item.extraction_method || 'original',
-    text_content: `[Scraped by page-scraper — view full content in page-scraper results]`,
   }));
 
   // Save pass-through items as partial results immediately (survives timeout)
