@@ -31,7 +31,7 @@ jobs:
             -e "ssh -i ~/.ssh/deploy_key" \
             ./ root@188.245.110.34:/opt/content-pipeline-modules-v2/
 
-      - name: Install deps and restart
+      - name: Install deps and restart workers
         run: |
           ssh -i ~/.ssh/deploy_key root@188.245.110.34 \
-            "cd /opt/content-pipeline-modules-v2 && npm install --omit=dev && pm2 restart content-pipeline-v2 && pm2 save"
+            "cd /opt/content-pipeline-modules-v2 && npm install --omit=dev && pm2 restart stage-worker pipeline-api && pm2 save"
