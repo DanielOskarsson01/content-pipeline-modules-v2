@@ -1,0 +1,98 @@
+{
+  "id": "linkedin-profile-scraper",
+  "name": "LinkedIn Profile Scraper",
+  "description": "Scrape full LinkedIn personal profiles (experience, education, skills, languages) via Playwright + Voyager API XHR interception. ScrapeLinkedIn API as fallback.",
+  "version": "1.0.0",
+  "step": 3,
+  "category": "linkedin",
+  "cost": "expensive",
+  "data_operation_default": "add",
+  "sort_order": 4,
+
+  "usage_notes": "Requires LINKEDIN_LI_AT environment variable (session cookie from browser DevTools). Optional: SCRAPELINKEDIN_API_KEY for fallback. Rate-limited to ~20 profiles/hour by default.",
+
+  "requires_columns": ["linkedin"],
+
+  "options": [
+    {
+      "name": "requests_per_hour",
+      "type": "number",
+      "label": "Profiles per hour",
+      "description": "Rate limit for LinkedIn page loads. LinkedIn may flag above 50/hour. 20 is safe (~3 min between profiles).",
+      "default": 20,
+      "min": 1,
+      "max": 60
+    },
+    {
+      "name": "mode",
+      "type": "select",
+      "label": "Scraping mode",
+      "description": "bio = entity is a person, scrape their profile directly. company_people = entity is a company, scrape employee profiles from employee links.",
+      "default": "bio",
+      "values": ["bio", "company_people"]
+    },
+    {
+      "name": "max_profiles_per_entity",
+      "type": "number",
+      "label": "Max profiles per entity",
+      "description": "Maximum personal profiles to scrape per entity (only used in company_people mode).",
+      "default": 5,
+      "min": 1,
+      "max": 20
+    },
+    {
+      "name": "fallback_to_scrapelinkedin",
+      "type": "boolean",
+      "label": "ScrapeLinkedIn fallback",
+      "description": "When Playwright/Voyager fails (cookie expired, CAPTCHA), try ScrapeLinkedIn API ($0.01/profile) as fallback. Requires SCRAPELINKEDIN_API_KEY env var.",
+      "default": true
+    }
+  ],
+
+  "options_defaults": {
+    "requests_per_hour": 20,
+    "mode": "bio",
+    "max_profiles_per_entity": 5,
+    "fallback_to_scrapelinkedin": true
+  },
+
+  "item_key": "linkedin_url",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": false,
+    "linkedin_url": "string (required)",
+    "full_name": "string",
+    "headline": "string",
+    "location": "string",
+    "experience_count": "number",
+    "education_count": "number",
+    "skills_count": "number",
+    "completeness_score": "number",
+    "scrape_method": "string",
+    "status": "string",
+    "error": "string",
+    "flagged_when": { "status": ["error", "incomplete"] },
+    "downloadable_fields": [
+      { "field": "experience_text", "extension": "txt", "label": "Experience" },
+      { "field": "education_text", "extension": "txt", "label": "Education" }
+    ],
+    "detail_schema": {
+      "header_fields": [
+        { "field": "linkedin_url", "display": "link" },
+        "full_name",
+        "headline",
+        "location",
+        { "field": "status", "display": "badge" },
+        "completeness_score",
+        "scrape_method"
+      ],
+      "sections": [
+        { "field": "summary", "label": "About", "display": "prose" },
+        { "field": "experience_text", "label": "Experience", "display": "prose" },
+        { "field": "education_text", "label": "Education", "display": "prose" },
+        { "field": "skills_text", "label": "Skills", "display": "prose" }
+      ]
+    }
+  }
+}
