@@ -34,6 +34,7 @@
       "name": "keep_criteria",
       "type": "textarea",
       "label": "Keep criteria",
+      "presets_enabled": true,
       "description": "Comma-separated list of page types to classify as KEEP.",
       "default": "about pages, team, leadership, partnerships, integrations, products overview, services overview, awards, milestones, company news, investors, careers, pricing, contact, press releases, compliance, regulatory, case studies, interviews, expansion, acquisitions, funding, annual reports"
     },
@@ -41,6 +42,7 @@
       "name": "drop_criteria",
       "type": "textarea",
       "label": "Drop criteria",
+      "presets_enabled": true,
       "description": "Comma-separated list of page types to classify as DROP.",
       "default": "individual product pages, seasonal campaigns, single game pages, marketing landing pages, demo pages, how-to-play guides, promotional offers, individual blog posts about single products, holiday-themed content, affiliate landing pages, pagination, author archives, tag pages"
     },

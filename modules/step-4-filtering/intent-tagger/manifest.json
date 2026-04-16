@@ -18,6 +18,7 @@
       "name": "intents",
       "type": "textarea",
       "label": "Intent categories (one per line: name | description)",
+      "presets_enabled": true,
       "description": "Define the intent categories for classification. Format: name | description. The description helps the LLM understand what qualifies. 'other' is always added automatically as a catch-all.",
       "default": "news | Breaking news, announcements, industry updates, regulatory changes\nproduct_info | Product pages, feature descriptions, specifications, platform details\npress_release | Official company press releases and media statements\nreview | Reviews, comparisons, ratings, player feedback, operator assessments\nfaq | Frequently asked questions, help pages, knowledge base articles\nguide | How-to guides, tutorials, educational content, strategy articles\nopinion | Opinion pieces, editorials, analysis, commentary, thought leadership\nmedia | Image galleries, videos, infographics, podcasts, visual content\nstatistics | Data, research, reports, market analysis, rankings, surveys\nevent | Conference coverage, trade show news, event recaps, webinar summaries\nregulation | Legal updates, licensing, compliance, responsible gambling policies\ninterview | Interviews, Q&A sessions, executive profiles, panel discussions"
     },
@@ -30,24 +31,26 @@
     },
     {
       "name": "ai_model",
-      "type": "string",
-      "label": "AI model",
+      "type": "select",
+      "label": "AI Model",
       "description": "Which model to use for classification.",
-      "default": "claude-haiku-4-5-20251001"
+      "default": "haiku",
+      "values": ["haiku", "sonnet", "opus", "gpt-4o-mini", "gpt-4o"]
     },
     {
       "name": "ai_provider",
-      "type": "string",
-      "label": "AI provider",
-      "description": "Which provider to use for classification.",
-      "default": "anthropic"
+      "type": "select",
+      "label": "AI Provider",
+      "description": "Which LLM provider to use.",
+      "default": "anthropic",
+      "values": ["anthropic", "openai"]
     }
   ],
 
   "options_defaults": {
     "intents": "news | Breaking news, announcements, industry updates, regulatory changes\nproduct_info | Product pages, feature descriptions, specifications, platform details\npress_release | Official company press releases and media statements\nreview | Reviews, comparisons, ratings, player feedback, operator assessments\nfaq | Frequently asked questions, help pages, knowledge base articles\nguide | How-to guides, tutorials, educational content, strategy articles\nopinion | Opinion pieces, editorials, analysis, commentary, thought leadership\nmedia | Image galleries, videos, infographics, podcasts, visual content\nstatistics | Data, research, reports, market analysis, rankings, surveys\nevent | Conference coverage, trade show news, event recaps, webinar summaries\nregulation | Legal updates, licensing, compliance, responsible gambling policies\ninterview | Interviews, Q&A sessions, executive profiles, panel discussions",
     "priority_intents": "news, product_info, review",
-    "ai_model": "claude-haiku-4-5-20251001",
+    "ai_model": "haiku",
     "ai_provider": "anthropic"
   },
 

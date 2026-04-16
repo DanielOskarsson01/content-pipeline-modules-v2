@@ -25,17 +25,19 @@
     },
     {
       "name": "ai_model",
-      "type": "string",
-      "label": "AI model",
-      "description": "LLM model ID for claim verification.",
-      "default": "claude-haiku-4-5-20251001"
+      "type": "select",
+      "label": "AI Model",
+      "description": "Which model to use for claim verification.",
+      "default": "haiku",
+      "values": ["haiku", "sonnet", "opus", "gpt-4o-mini", "gpt-4o"]
     },
     {
       "name": "ai_provider",
-      "type": "string",
-      "label": "AI provider",
-      "description": "LLM provider for claim verification.",
-      "default": "anthropic"
+      "type": "select",
+      "label": "AI Provider",
+      "description": "Which LLM provider to use.",
+      "default": "anthropic",
+      "values": ["anthropic", "openai"]
     },
     {
       "name": "max_source_chars",
@@ -59,6 +61,7 @@
       "name": "prompt",
       "type": "textarea",
       "label": "Verification prompt",
+      "presets_enabled": true,
       "description": "System prompt for the LLM claim verification. Use {{CLAIMS}} and {{SOURCES}} as placeholders.",
       "default": "You are a fact-checking assistant. You will be given a list of factual claims extracted from a generated article, and the original source material the article was based on.\n\nFor each claim, determine whether it is supported by the source material.\n\nRules:\n- \"supported\" = the source material contains information that directly or clearly supports this claim, even if paraphrased\n- \"unsupported\" = the source material does NOT contain information supporting this claim, and it is NOT general common knowledge\n- \"partial\" = the source material partially supports the claim but key details (numbers, dates, specifics) differ or are missing\n- General knowledge claims (e.g. \"Malta is a popular iGaming jurisdiction\", \"the iGaming industry is growing\") should be marked \"supported\" even if not explicitly in sources\n- If the claim references data from an analysis or summary derived from the sources, mark it \"supported\"\n\nReturn a JSON array (no markdown fences, no extra text) with one object per claim:\n[\n  {\n    \"claim\": \"the exact claim text\",\n    \"verdict\": \"supported\" | \"unsupported\" | \"partial\",\n    \"quote\": \"the supporting quote from sources, or null if unsupported\",\n    \"severity\": \"low\" | \"medium\" | \"high\"\n  }\n]\n\nSeverity guide:\n- \"low\" = general phrasing, opinion, or common knowledge that is hard to verify\n- \"medium\" = specific factual claim (company name, product, feature) not found in sources\n- \"high\" = specific number, date, statistic, or financial claim not found in sources\n\nCLAIMS:\n{{CLAIMS}}\n\nSOURCE MATERIAL:\n{{SOURCES}}"
     }
@@ -66,7 +69,7 @@
 
   "options_defaults": {
     "pass_threshold": 0.9,
-    "ai_model": "claude-haiku-4-5-20251001",
+    "ai_model": "haiku",
     "ai_provider": "anthropic",
     "max_source_chars": 100000,
     "claims_per_batch": 10,
