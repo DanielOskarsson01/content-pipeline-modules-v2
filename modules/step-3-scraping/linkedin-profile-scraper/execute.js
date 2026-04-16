@@ -57,10 +57,26 @@ async function execute(input, options, tools) {
 
   logger.info(`${profilesToScrape.length} profiles to scrape (mode: ${mode}, rate: ${requests_per_hour}/hr)`);
 
-  // Launch browser and create context with LinkedIn cookie
+  // Launch browser with residential proxy if available (LinkedIn blocks datacenter IPs)
+  const proxyUrl = process.env.PROXY_URL;
+  const proxyUser = process.env.PROXY_USERNAME;
+  const proxyPass = process.env.PROXY_PASSWORD;
+
+  const launchOptions = { headless: true };
+  if (proxyUrl) {
+    launchOptions.proxy = {
+      server: proxyUrl,
+      username: proxyUser || undefined,
+      password: proxyPass || undefined,
+    };
+    logger.info(`Using proxy: ${proxyUrl}`);
+  } else {
+    logger.warn('No PROXY_URL set — LinkedIn may block datacenter IPs');
+  }
+
   let browser;
   try {
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch(launchOptions);
   } catch (err) {
     throw new Error(`Failed to launch browser: ${err.message}. Run: npx playwright install chromium --with-deps`);
   }
