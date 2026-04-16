@@ -1,21 +1,22 @@
 /**
  * LinkedIn Profile Scraper — Step 3 Scraping submodule
  *
- * Scrapes full LinkedIn personal profiles via Playwright + Voyager API
- * XHR interception. LinkedIn's frontend calls an internal REST API (Voyager)
- * to render profile pages. We navigate with a real browser and intercept
- * the structured JSON response — no selectors to maintain.
+ * Scrapes full LinkedIn personal profiles via CDP connection to a running
+ * Chrome instance. A GUI Chrome must be running on the server with
+ * --remote-debugging-port=9222, authenticated with LinkedIn (manual login).
+ * The module connects via CDP, opens pages in the existing authenticated
+ * context, and calls the Voyager REST API from within the browser to get
+ * structured profile JSON.
  *
  * Fallback: ScrapeLinkedIn API ($0.01/profile) when Voyager fails.
  *
  * Data operation: ADD (➕) — produces profile items from entity linkedin_url.
  *
- * Requires: LINKEDIN_LI_AT environment variable (session cookie).
+ * Requires: Chrome running with --remote-debugging-port=9222 on the server.
  * Optional: SCRAPELINKEDIN_API_KEY for fallback.
  */
 
-// Direct Playwright import (not tools.browser) because we need XHR interception
-// and cookie injection, which tools.browser.fetch doesn't support.
+// Direct Playwright import for CDP connection to running Chrome instance.
 const { chromium } = require('playwright');
 
 // ---------------------------------------------------------------------------
@@ -32,13 +33,7 @@ async function execute(input, options, tools) {
     fallback_to_scrapelinkedin = true,
   } = options;
 
-  const liAt = process.env.LINKEDIN_LI_AT;
-  if (!liAt) {
-    throw new Error(
-      'LINKEDIN_LI_AT environment variable not set. ' +
-      'Log into LinkedIn in Chrome → DevTools (F12) → Application → Cookies → copy li_at value.'
-    );
-  }
+  const cdpUrl = process.env.LINKEDIN_CDP_URL || 'http://localhost:9222';
 
   // Collect profiles to scrape
   const profilesToScrape = collectProfiles(entities, mode, max_profiles_per_entity, logger);
@@ -57,25 +52,16 @@ async function execute(input, options, tools) {
 
   logger.info(`${profilesToScrape.length} profiles to scrape (mode: ${mode}, rate: ${requests_per_hour}/hr)`);
 
-  // Launch browser — uses LinkedIn-specific proxy if set, otherwise direct connection.
-  // The session cookie must be created from the same IP the browser connects from.
-  // If using a manual VNC login from the server, no proxy is needed.
-  const linkedinProxy = process.env.LINKEDIN_PROXY_URL;
-  const launchOptions = { headless: true };
-  if (linkedinProxy) {
-    launchOptions.proxy = {
-      server: linkedinProxy,
-      username: process.env.LINKEDIN_PROXY_USERNAME || undefined,
-      password: process.env.LINKEDIN_PROXY_PASSWORD || undefined,
-    };
-    logger.info(`Using LinkedIn proxy: ${linkedinProxy}`);
-  }
-
+  // Connect to running Chrome via CDP. A GUI Chrome must be running on the
+  // server with --remote-debugging-port=9222, already authenticated with LinkedIn.
   let browser;
   try {
-    browser = await chromium.launch(launchOptions);
+    browser = await chromium.connectOverCDP(cdpUrl);
   } catch (err) {
-    throw new Error(`Failed to launch browser: ${err.message}. Run: npx playwright install chromium --with-deps`);
+    throw new Error(
+      `Failed to connect to Chrome via CDP at ${cdpUrl}: ${err.message}. ` +
+      'Ensure Chrome is running with --remote-debugging-port=9222 and is logged into LinkedIn.'
+    );
   }
 
   const results = [];
@@ -87,19 +73,11 @@ async function execute(input, options, tools) {
   let sessionValid = false;
 
   try {
-    const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      viewport: { width: 1920, height: 1080 },
-      locale: 'en-US',
-    });
-    await context.addCookies([{
-      name: 'li_at',
-      value: liAt,
-      domain: '.linkedin.com',
-      path: '/',
-      httpOnly: true,
-      secure: true,
-    }]);
+    const contexts = browser.contexts();
+    if (contexts.length === 0) {
+      throw new Error('No browser contexts found in CDP Chrome — is the browser running?');
+    }
+    const context = contexts[0];
 
     // Validate session before batch
     sessionValid = await validateSession(context, logger);
@@ -109,7 +87,7 @@ async function execute(input, options, tools) {
       logger.warn('LinkedIn session invalid — all profiles will use fallback');
       failedProfiles.push(...profilesToScrape);
     } else {
-      // Scrape each profile via Voyager XHR interception
+      // Scrape each profile via Voyager API (called from browser context)
       for (let i = 0; i < profilesToScrape.length; i++) {
         const profile = profilesToScrape[i];
         progress.update(i + 1, profilesToScrape.length, `Scraping ${profile.entity_name} (Voyager)`);
@@ -119,7 +97,7 @@ async function execute(input, options, tools) {
           continue;
         }
 
-        // Rate limit — wait between page loads
+        // Rate limit
         await rateLimiter();
 
         try {
@@ -146,7 +124,8 @@ async function execute(input, options, tools) {
       }
     }
   } finally {
-    await browser.close();
+    // For CDP connections, close() disconnects without closing the actual browser.
+    try { await browser.close(); } catch {}
   }
 
   // ScrapeLinkedIn fallback for failed profiles
@@ -317,9 +296,25 @@ function normalizeLinkedInUrl(slug) {
 
 async function validateSession(context, logger) {
   logger.info('Validating LinkedIn session...');
+
+  // Check if there's already a LinkedIn page open in the browser
+  const existingPage = context.pages().find(p => p.url().includes('linkedin.com'));
+  if (existingPage) {
+    const url = existingPage.url();
+    if (url.includes('/feed') || url.includes('/in/') || url.includes('/mynetwork')) {
+      logger.info('LinkedIn session is valid (existing page found)');
+      return true;
+    }
+    if (url.includes('/login') || url.includes('/authwall') || url.includes('/checkpoint')) {
+      logger.error(`Session invalid — existing page at: ${url}`);
+      return false;
+    }
+  }
+
+  // Navigate a new page to verify
   const page = await context.newPage();
   try {
-    const response = await page.goto('https://www.linkedin.com/feed/', {
+    await page.goto('https://www.linkedin.com/feed/', {
       timeout: 15000,
       waitUntil: 'domcontentloaded',
     });
@@ -339,58 +334,66 @@ async function validateSession(context, logger) {
 }
 
 // ---------------------------------------------------------------------------
-// Voyager XHR interception
+// Voyager API via CDP browser context
 // ---------------------------------------------------------------------------
 
 async function scrapeProfileVoyager(context, slug, logger) {
-  const page = await context.newPage();
-  let voyagerData = null;
+  // Use an existing LinkedIn page to make the API call, or open one if needed.
+  // This avoids opening/closing tabs for each profile.
+  let page = context.pages().find(p => p.url().includes('linkedin.com'));
+  let ownPage = false;
+
+  if (!page) {
+    page = await context.newPage();
+    ownPage = true;
+    await page.goto('https://www.linkedin.com/feed/', { timeout: 15000, waitUntil: 'domcontentloaded' });
+  }
 
   try {
-    const profileUrl = `https://www.linkedin.com/in/${slug}/`;
-    logger.info(`Navigating to ${profileUrl}`);
+    logger.info(`Fetching Voyager API for ${slug}`);
 
-    // Log all Voyager-related XHRs for debugging
-    page.on('response', (resp) => {
-      const url = resp.url();
-      if (url.includes('voyager/api')) {
-        logger.info(`XHR: ${resp.status()} ${url.slice(0, 120)}`);
+    const result = await page.evaluate(async (profileSlug) => {
+      // Extract CSRF token from cookies
+      const csrfToken = document.cookie
+        .split(';').map(c => c.trim())
+        .find(c => c.startsWith('JSESSIONID='))
+        ?.replace('JSESSIONID=', '')
+        .replace(/"/g, '');
+
+      if (!csrfToken) {
+        return { error: 'No JSESSIONID cookie — session may be expired' };
       }
-    });
 
-    // Start waiting for Voyager XHR before navigation (so we don't miss it)
-    const voyagerPromise = page.waitForResponse(
-      (resp) =>
-        resp.url().includes('voyager/api/identity/dash/profiles') &&
-        resp.status() === 200,
-      { timeout: 15000 }
-    ).then((resp) => resp.json()).catch(() => null);
+      const headers = {
+        'csrf-token': csrfToken,
+        'x-restli-protocol-version': '2.0.0',
+        'x-li-lang': 'en_US',
+      };
 
-    const response = await page.goto(profileUrl, {
-      timeout: 30000,
-      waitUntil: 'domcontentloaded',
-    });
+      // Call the Voyager dashProfiles endpoint with full profile decoration
+      const url = `/voyager/api/identity/dash/profiles?q=memberIdentity&memberIdentity=${profileSlug}&decorationId=com.linkedin.voyager.dash.deco.identity.profile.FullProfileWithEntities-109`;
 
-    // Check for redirects (login, authwall)
-    const finalUrl = page.url();
-    logger.info(`Final URL after navigation: ${finalUrl}`);
-    if (finalUrl.includes('/login') || finalUrl.includes('/authwall')) {
-      throw new Error(`Redirected to login: ${finalUrl}`);
+      const res = await fetch(url, { headers });
+      if (!res.ok) {
+        return { error: `Voyager API returned ${res.status}`, status: res.status };
+      }
+
+      return await res.json();
+    }, slug);
+
+    if (result.error) {
+      throw new Error(result.error);
     }
 
-    // Wait for Voyager XHR response (up to 15s)
-    voyagerData = await voyagerPromise;
-
-    if (!voyagerData) {
-      throw new Error('Voyager API response not intercepted — page may not have loaded correctly');
+    const elements = result.elements || [];
+    if (elements.length === 0) {
+      throw new Error('Voyager API returned empty profile');
     }
 
-    const includedCount = (voyagerData.included || []).length;
-    logger.info(`Voyager: ${includedCount} entities captured for ${slug}`);
-
-    return voyagerData;
+    logger.info(`Voyager: profile data received for ${slug} (${(result.elements[0] && Object.keys(result.elements[0]).length) || 0} fields)`);
+    return result;
   } finally {
-    await page.close();
+    if (ownPage) await page.close();
   }
 }
 
@@ -399,44 +402,47 @@ async function scrapeProfileVoyager(context, slug, logger) {
 // ---------------------------------------------------------------------------
 
 function parseVoyagerResponse(data) {
-  const included = data.included || [];
+  // FullProfileWithEntities-109 format: elements[0] contains the full profile
+  // with nested collections (profilePositionGroups, profileEducations, etc.)
+  const el = (data.elements || [])[0] || {};
 
-  // Profile
-  const profile = included.find(e => e.$type && e.$type.endsWith('Profile'));
-  const firstName = profile?.firstName || '';
-  const lastName = profile?.lastName || '';
+  const firstName = el.firstName || '';
+  const lastName = el.lastName || '';
   const fullName = `${firstName} ${lastName}`.trim();
-  const headline = profile?.headline || '';
-  const summary = profile?.summary || '';
+  const headline = el.headline || '';
+  const summary = el.summary || '';
 
-  // Location — resolve from Geo entity via geoLocation URN
+  // Location from nested geoLocation object
   let location = '';
-  if (profile?.geoLocation?.geoUrn) {
-    const geo = included.find(e =>
-      e.$type && e.$type.endsWith('Geo') &&
-      e.entityUrn === profile.geoLocation.geoUrn
-    );
-    location = geo?.defaultLocalizedName || '';
+  if (el.geoLocation?.geo) {
+    location = el.geoLocation.geo.defaultLocalizedName || '';
+  } else if (el.location?.geo) {
+    location = el.location.geo.defaultLocalizedName || '';
   }
 
-  // Positions
-  const positions = included
-    .filter(e => e.$type && e.$type.endsWith('Position'))
-    .map(p => ({
-      title: p.title || '',
-      company: p.companyName || '',
-      location: p.locationName || '',
-      start: formatVoyagerDate(p.dateRange?.start),
-      end: formatVoyagerDate(p.dateRange?.end),
-      description: p.description || '',
-    }))
-    .sort((a, b) => compareDates(b.start, a.start)); // Most recent first
+  // Positions — extracted from profilePositionGroups
+  const positions = [];
+  const posGroups = el.profilePositionGroups?.elements || [];
+  for (const group of posGroups) {
+    const companyName = group.company?.name || group.name || '';
+    const items = group.profilePositionInPositionGroup?.elements || [];
+    for (const p of items) {
+      positions.push({
+        title: p.title || '',
+        company: p.companyName || companyName,
+        location: p.locationName || p.geoLocationName || '',
+        start: formatVoyagerDate(p.dateRange?.start),
+        end: formatVoyagerDate(p.dateRange?.end),
+        description: p.description || '',
+      });
+    }
+  }
+  positions.sort((a, b) => compareDates(b.start, a.start));
 
   // Education
-  const education = included
-    .filter(e => e.$type && e.$type.endsWith('Education'))
+  const education = (el.profileEducations?.elements || [])
     .map(e => ({
-      school: e.schoolName || '',
+      school: e.school?.name || e.schoolName || '',
       degree: e.degreeName || '',
       field: e.fieldOfStudy || '',
       start: formatVoyagerDate(e.dateRange?.start),
@@ -446,22 +452,28 @@ function parseVoyagerResponse(data) {
     .sort((a, b) => compareDates(b.start, a.start));
 
   // Skills
-  const skills = included
-    .filter(e => e.$type && e.$type.endsWith('Skill'))
+  const skills = (el.profileSkills?.elements || [])
     .map(e => e.name || '')
     .filter(Boolean);
 
-  // Languages (may not be in all decorations)
-  const languages = included
-    .filter(e => e.$type && (e.$type.endsWith('Language') || e.$type.includes('Language')))
+  // Languages
+  const languages = (el.profileLanguages?.elements || [])
     .map(e => e.name || '')
     .filter(Boolean);
 
   // Certifications
-  const certifications = included
-    .filter(e => e.$type && e.$type.endsWith('Certification'))
+  const certifications = (el.profileCertifications?.elements || [])
     .map(e => e.name || '')
     .filter(Boolean);
+
+  // Volunteer experience (bonus data)
+  const volunteer = (el.profileVolunteerExperiences?.elements || [])
+    .map(e => ({
+      role: e.role || '',
+      organization: e.companyName || '',
+      description: e.description || '',
+    }))
+    .filter(e => e.role || e.organization);
 
   return {
     full_name: fullName,
@@ -473,6 +485,7 @@ function parseVoyagerResponse(data) {
     skills,
     languages,
     certifications,
+    volunteer,
   };
 }
 
@@ -569,6 +582,7 @@ function normalizeScrapeLinkedIn(data) {
     skills: Array.isArray(skills) ? skills.map(s => typeof s === 'string' ? s : s.name || '') : [],
     languages: Array.isArray(languages) ? languages.map(l => typeof l === 'string' ? l : l.name || '') : [],
     certifications: Array.isArray(certifications) ? certifications.map(c => typeof c === 'string' ? c : c.name || '') : [],
+    volunteer: [],
   };
 }
 
@@ -581,12 +595,13 @@ function calculateCompleteness(parsed) {
   if (parsed.headline) score += 10;
   if (parsed.summary && parsed.summary.length > 50) score += 15;
   if (parsed.positions.length >= 1) score += 20;
-  if (parsed.positions.some(p => p.description && p.description.length > 20)) score += 15;
+  if (parsed.positions.some(p => p.description && p.description.length > 20)) score += 10;
   if (parsed.education.length >= 1) score += 15;
   if (parsed.skills.length >= 1) score += 10;
   if (parsed.languages.length >= 1) score += 5;
   if (parsed.location) score += 5;
   if (parsed.certifications.length >= 1) score += 5;
+  if ((parsed.volunteer || []).length >= 1) score += 5;
   return score;
 }
 
@@ -619,6 +634,12 @@ function formatProfileItem(parsed, score, method, linkedinUrl, entityName) {
   const skillsText = parsed.skills.join(', ');
   const languagesText = parsed.languages.join(', ');
   const certificationsText = parsed.certifications.join(', ');
+  const volunteerText = (parsed.volunteer || []).map(v => {
+    const parts = [v.role];
+    if (v.organization) parts.push(`@ ${v.organization}`);
+    if (v.description) parts.push('\n' + v.description);
+    return parts.join('\n');
+  }).join('\n\n');
 
   const status = score < 50 ? 'incomplete' : 'success';
 
@@ -651,6 +672,8 @@ function formatProfileItem(parsed, score, method, linkedinUrl, entityName) {
     skills: parsed.skills,
     languages: parsed.languages,
     certifications: parsed.certifications,
+    volunteer: parsed.volunteer || [],
+    volunteer_text: volunteerText,
 
     // Metadata
     source_type: 'linkedin_profile',

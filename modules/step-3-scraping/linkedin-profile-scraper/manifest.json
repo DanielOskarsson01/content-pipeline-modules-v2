@@ -1,7 +1,7 @@
 {
   "id": "linkedin-profile-scraper",
   "name": "LinkedIn Profile Scraper",
-  "description": "Scrape full LinkedIn personal profiles (experience, education, skills, languages) via Playwright + Voyager API XHR interception. ScrapeLinkedIn API as fallback.",
+  "description": "Scrape full LinkedIn personal profiles (experience, education, skills, languages) via CDP connection to authenticated Chrome + Voyager API. ScrapeLinkedIn API as fallback.",
   "version": "1.0.0",
   "step": 3,
   "category": "linkedin",
@@ -9,7 +9,7 @@
   "data_operation_default": "add",
   "sort_order": 4,
 
-  "usage_notes": "Requires LINKEDIN_LI_AT environment variable (session cookie from browser DevTools). Optional: SCRAPELINKEDIN_API_KEY for fallback. Rate-limited to ~20 profiles/hour by default.",
+  "usage_notes": "Requires Chrome running with --remote-debugging-port=9222 on the server, already logged into LinkedIn (manual VNC login). Optional: SCRAPELINKEDIN_API_KEY for fallback. Rate-limited to ~20 profiles/hour by default.",
 
   "requires_columns": ["linkedin"],
 
