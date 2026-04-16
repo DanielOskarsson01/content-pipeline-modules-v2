@@ -337,6 +337,14 @@ async function scrapeProfileVoyager(context, slug, logger) {
     const profileUrl = `https://www.linkedin.com/in/${slug}/`;
     logger.info(`Navigating to ${profileUrl}`);
 
+    // Log all Voyager-related XHRs for debugging
+    page.on('response', (resp) => {
+      const url = resp.url();
+      if (url.includes('voyager/api')) {
+        logger.info(`XHR: ${resp.status()} ${url.slice(0, 120)}`);
+      }
+    });
+
     // Start waiting for Voyager XHR before navigation (so we don't miss it)
     const voyagerPromise = page.waitForResponse(
       (resp) =>
@@ -352,6 +360,7 @@ async function scrapeProfileVoyager(context, slug, logger) {
 
     // Check for redirects (login, authwall)
     const finalUrl = page.url();
+    logger.info(`Final URL after navigation: ${finalUrl}`);
     if (finalUrl.includes('/login') || finalUrl.includes('/authwall')) {
       throw new Error(`Redirected to login: ${finalUrl}`);
     }
