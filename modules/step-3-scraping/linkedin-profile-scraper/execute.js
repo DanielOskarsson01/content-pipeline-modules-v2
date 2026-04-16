@@ -57,21 +57,18 @@ async function execute(input, options, tools) {
 
   logger.info(`${profilesToScrape.length} profiles to scrape (mode: ${mode}, rate: ${requests_per_hour}/hr)`);
 
-  // Launch browser with residential proxy if available (LinkedIn blocks datacenter IPs)
-  const proxyUrl = process.env.PROXY_URL;
-  const proxyUser = process.env.PROXY_USERNAME;
-  const proxyPass = process.env.PROXY_PASSWORD;
-
+  // Launch browser — uses LinkedIn-specific proxy if set, otherwise direct connection.
+  // The session cookie must be created from the same IP the browser connects from.
+  // If using a manual VNC login from the server, no proxy is needed.
+  const linkedinProxy = process.env.LINKEDIN_PROXY_URL;
   const launchOptions = { headless: true };
-  if (proxyUrl) {
+  if (linkedinProxy) {
     launchOptions.proxy = {
-      server: proxyUrl,
-      username: proxyUser || undefined,
-      password: proxyPass || undefined,
+      server: linkedinProxy,
+      username: process.env.LINKEDIN_PROXY_USERNAME || undefined,
+      password: process.env.LINKEDIN_PROXY_PASSWORD || undefined,
     };
-    logger.info(`Using proxy: ${proxyUrl}`);
-  } else {
-    logger.warn('No PROXY_URL set — LinkedIn may block datacenter IPs');
+    logger.info(`Using LinkedIn proxy: ${linkedinProxy}`);
   }
 
   let browser;
