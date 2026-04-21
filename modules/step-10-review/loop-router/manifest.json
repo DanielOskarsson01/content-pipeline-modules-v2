@@ -54,13 +54,13 @@
     "display_type": "table",
     "selectable": false,
     "entity_name": "string (required)",
-    "decision": "string (approve|loop_discovery|loop_generation|loop_tone|flag_manual)",
+    "decision": "string (approve|loop_discovery|loop_generation|loop_tone|flag_manual|failed)",
     "route_reason": "string",
     "qa_summary": "string",
     "failed_checks": "string",
     "loop_count": "number",
     "source_page_count": "number",
-    "flagged_when": { "decision": ["loop_discovery", "loop_generation", "loop_tone", "flag_manual"] },
+    "flagged_when": { "decision": ["loop_discovery", "loop_generation", "loop_tone", "flag_manual", "failed"] },
     "detail_schema": {
       "header_fields": [
         "entity_name",

@@ -56,7 +56,7 @@ function findQaItems(items) {
  * Find source page items (from Step 3 scrapers) by checking for text_content.
  */
 function findSourcePages(items) {
-  return (items || []).filter(item => item.text_content);
+  return (items || []).filter(item => item.text_content || item._blob_ref);
 }
 
 /**
@@ -144,7 +144,16 @@ function route(summary, loopCount, sourcePageCount, opts) {
   // Count how many checks actually ran (not "missing")
   const checksRun = Object.values(summary).filter(v => v !== 'missing').length;
 
-  // Rule 0: No QA results at all
+  // Rule 0a: Dead site -- zero source pages means scraping found nothing
+  if (sourcePageCount === 0) {
+    return {
+      decision: 'failed',
+      failure_reason: 'dead_site',
+      route_reason: 'No source pages found (site appears dead or completely blocked). Cannot produce content without sources.',
+    };
+  }
+
+  // Rule 0b: No QA results at all
   if (checksRun === 0) {
     if (default_no_qa === 'approve') {
       return {
@@ -158,10 +167,11 @@ function route(summary, loopCount, sourcePageCount, opts) {
     };
   }
 
-  // Rule 1: Max loops exceeded
+  // Rule 1: Max loops exceeded -- terminal failure, not flag_manual
   if (loopCount >= max_loops) {
     return {
-      decision: 'flag_manual',
+      decision: 'failed',
+      failure_reason: 'max_loops_exceeded',
       route_reason: `Max loop count exceeded (${loopCount}/${max_loops}). Entity has been reworked too many times without passing QA.`,
     };
   }
@@ -269,11 +279,12 @@ async function execute(input, options, tools) {
     const qaSummaryText = formatQaSummary(summary);
 
     // Apply routing rules
-    const { decision, route_reason } = route(summary, loopCount, sourcePageCount, {
+    const routeResult = route(summary, loopCount, sourcePageCount, {
       max_loops,
       min_source_pages,
       default_no_qa,
     });
+    const { decision, route_reason } = routeResult;
 
     // Collect failed check names for the output
     const failedChecks = [];
@@ -299,6 +310,15 @@ async function execute(input, options, tools) {
         failed_checks: failedChecks.length > 0 ? failedChecks.join(', ') : 'none',
         loop_count: loopCount,
         source_page_count: sourcePageCount,
+        // Phase 2 additions: structured QA scores, failure reason, config overrides
+        qa_scores: {
+          keyword: summary.keyword,
+          citation: summary.citation,
+          hallucination: summary.hallucination,
+          meta: summary.meta,
+        },
+        failure_reason: routeResult.failure_reason || null,
+        config_overrides: {},
       }],
       meta: {
         decision,
@@ -321,6 +341,7 @@ async function execute(input, options, tools) {
   const loopGenerationCount = results.filter(r => r.meta.decision === 'loop_generation').length;
   const loopToneCount = results.filter(r => r.meta.decision === 'loop_tone').length;
   const flagManualCount = results.filter(r => r.meta.decision === 'flag_manual').length;
+  const failedCount = results.filter(r => r.meta.decision === 'failed').length;
 
   const parts = [];
   if (approvedCount > 0) parts.push(`${approvedCount} approved`);
@@ -328,6 +349,7 @@ async function execute(input, options, tools) {
   if (loopGenerationCount > 0) parts.push(`${loopGenerationCount} -> generation`);
   if (loopToneCount > 0) parts.push(`${loopToneCount} -> tone`);
   if (flagManualCount > 0) parts.push(`${flagManualCount} flagged`);
+  if (failedCount > 0) parts.push(`${failedCount} failed`);
 
   const description = parts.length > 0
     ? `${parts.join(', ')} of ${totalEntities} entities`
@@ -343,6 +365,7 @@ async function execute(input, options, tools) {
       loop_generation: loopGenerationCount,
       loop_tone: loopToneCount,
       flag_manual: flagManualCount,
+      failed: failedCount,
       errors: [],
       description,
     },
