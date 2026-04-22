@@ -1,0 +1,72 @@
+{
+  "id": "jobtech",
+  "name": "JobTech / Platsbanken",
+  "description": "Swedish public employment service job board. Searches the JobTech API (Arbetsförmedlingen) by keyword and returns matching job postings.",
+  "version": "1.0.0",
+  "step": 1,
+  "category": "Job Search",
+  "cost": "cheap",
+  "data_operation_default": "transform",
+  "sort_order": 1,
+  "depends_on": [],
+  "requires_columns": ["name"],
+  "item_key": "url",
+  "options": [
+    {
+      "name": "keywords",
+      "type": "json",
+      "label": "Search keywords",
+      "description": "Array of job title keywords to search for. Each keyword triggers a separate API call.",
+      "default": ["CMO", "CPO", "CEO"]
+    },
+    {
+      "name": "locations",
+      "type": "json",
+      "label": "Location filters",
+      "description": "Array of location names (used for reference; municipality filtering applied separately).",
+      "default": ["Stockholm", "Remote"]
+    },
+    {
+      "name": "exclude_keywords",
+      "type": "json",
+      "label": "Exclude keywords",
+      "description": "Job titles containing these terms (case-insensitive) are filtered out.",
+      "default": ["intern", "junior", "student"]
+    },
+    {
+      "name": "max_results",
+      "type": "number",
+      "label": "Max results per keyword",
+      "description": "Maximum number of results to fetch per keyword from the API.",
+      "default": 50,
+      "min": 10,
+      "max": 200
+    },
+    {
+      "name": "municipality_code",
+      "type": "text",
+      "label": "Municipality code",
+      "description": "Swedish municipality code to filter by (e.g., 0180 for Stockholm). Leave empty for all Sweden.",
+      "default": ""
+    }
+  ],
+  "options_defaults": {
+    "keywords": ["CMO", "CPO", "CEO"],
+    "locations": ["Stockholm", "Remote"],
+    "exclude_keywords": ["intern", "junior", "student"],
+    "max_results": 50,
+    "municipality_code": ""
+  },
+  "output_schema": {
+    "display_type": "table",
+    "columns": {
+      "title": "string",
+      "company": "string",
+      "location": "string",
+      "url": "string",
+      "source": "string",
+      "externalId": "string",
+      "postedAt": "string"
+    }
+  }
+}

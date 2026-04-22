@@ -1,0 +1,44 @@
+{
+  "id": "cv-generator",
+  "name": "CV Generator",
+  "description": "Generates a tailored CV DOCX from analysis results and pre-approved CV content. Uses variant selection and overrides from the job-analyzer.",
+  "version": "1.0.0",
+  "step": 5,
+  "category": "Job Search",
+  "cost": "cheap",
+  "data_operation_default": "add",
+  "sort_order": 2,
+  "depends_on": ["job-analyzer"],
+  "requires_columns": ["name"],
+  "item_key": "entity_name",
+  "options": [
+    {
+      "name": "cv_source_dir",
+      "type": "text",
+      "label": "CV source directory",
+      "description": "Absolute path to CV source files and generate_core_cvs.js.",
+      "default": "/Users/danieloskarsson/Library/CloudStorage/Dropbox/Projects/JobSearch/CVs"
+    },
+    {
+      "name": "output_dir",
+      "type": "text",
+      "label": "Output directory",
+      "description": "Directory for generated DOCX files.",
+      "default": "/tmp/job-search-output"
+    }
+  ],
+  "options_defaults": {
+    "cv_source_dir": "/Users/danieloskarsson/Library/CloudStorage/Dropbox/Projects/JobSearch/CVs",
+    "output_dir": "/tmp/job-search-output"
+  },
+  "output_schema": {
+    "display_type": "table",
+    "columns": {
+      "entity_name": "string",
+      "cv_file": "string",
+      "suggestions_file": "string",
+      "variant": "string",
+      "status": "string"
+    }
+  }
+}

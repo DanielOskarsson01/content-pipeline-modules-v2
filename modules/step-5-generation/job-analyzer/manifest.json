@@ -1,0 +1,55 @@
+{
+  "id": "job-analyzer",
+  "name": "Job Ad Analyzer",
+  "description": "5-layer analysis of a job ad against CV content. Produces fit score, variant selection, suggestions, and gap identification.",
+  "version": "1.0.0",
+  "step": 5,
+  "category": "Job Search",
+  "cost": "expensive",
+  "data_operation_default": "add",
+  "sort_order": 1,
+  "depends_on": [],
+  "requires_columns": ["name"],
+  "item_key": "entity_name",
+  "options": [
+    {
+      "name": "ai_model",
+      "type": "text",
+      "label": "AI model",
+      "description": "Model for analysis (sonnet recommended for quality, haiku for speed).",
+      "default": "sonnet"
+    },
+    {
+      "name": "cv_source_dir",
+      "type": "text",
+      "label": "CV source directory",
+      "description": "Absolute path to CV source files (section variants, job variants, competency pool, master CV, cv_data).",
+      "default": "/Users/danieloskarsson/Library/CloudStorage/Dropbox/Projects/JobSearch/CVs"
+    },
+    {
+      "name": "temperature",
+      "type": "number",
+      "label": "Temperature",
+      "description": "LLM temperature (0.0-1.0). Lower = more deterministic.",
+      "default": 0.2,
+      "min": 0,
+      "max": 1
+    }
+  ],
+  "options_defaults": {
+    "ai_model": "sonnet",
+    "cv_source_dir": "/Users/danieloskarsson/Library/CloudStorage/Dropbox/Projects/JobSearch/CVs",
+    "temperature": 0.2
+  },
+  "output_schema": {
+    "display_type": "detail",
+    "columns": {
+      "entity_name": "string",
+      "fit_score": "number",
+      "base_variant": "string",
+      "fit_summary": "string",
+      "company_name": "string",
+      "status": "string"
+    }
+  }
+}
