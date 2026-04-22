@@ -167,3 +167,21 @@ Entry types: decision | progress | blocker | idea
 - None — both commits pushed, all tests passing
 
 **Updated by:** session-closer agent
+
+### Session: 2026-04-22 — Pronetgaming scraping fixes (word_count, presets, waitForSelector)
+**Accomplished:**
+- Fixed `word_count` NaN propagation in 3 scraper pass-through paths: browser-scraper (line 196-200), api-scraper (line 147-151), page-scraper reduce (line 276)
+- Enabled presets on url-filter `exclude_patterns` option (`presets_enabled: true` in manifest.json)
+- Added `waitForSelector: 'a'` to browser-crawler depth-2 fetch options — ensures RSC/SPA pages hydrate before link extraction
+- Acceptance test: browser-crawler discovered 7 blog URLs from pronetgaming.com (threshold was 5)
+- Commit: `9a3f9ab` (all 3 fixes in one commit)
+
+**Decisions:**
+- `?? 0` for pass-through maps (preserves legitimate zero), `|| 0` for page-scraper sum reduce (falsy treatment fine in summation)
+- `waitForSelector: 'a'` uses existing browserPool non-fatal handling (try/catch, logs warning, continues)
+- `presets_enabled: true` activates existing PresetField dropdown — no new UI code needed
+
+**Blockers/Questions:**
+- None — committed and pushed, CI/CD deployed
+
+**Updated by:** session-closer agent
