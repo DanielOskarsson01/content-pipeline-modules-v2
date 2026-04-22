@@ -1,0 +1,91 @@
+{
+  "id": "api-search",
+  "name": "API Search",
+  "description": "Generic REST API job search. Supports keyword-search APIs (JobTech, Adzuna) and feed APIs (RemoteOK, Remotive) via provider configs. Adding a new job board = adding JSON config, not code.",
+  "version": "1.0.0",
+  "step": 1,
+  "category": "Job Search",
+  "cost": "cheap",
+  "data_operation_default": "transform",
+  "sort_order": 1,
+  "depends_on": [],
+  "requires_columns": ["name"],
+  "item_key": "url",
+  "options": [
+    {
+      "name": "keywords",
+      "type": "json",
+      "label": "Search keywords",
+      "description": "Search mode: one API call per keyword. Feed mode: client-side filter on title/description.",
+      "default": ["CMO", "CPO", "CEO"]
+    },
+    {
+      "name": "exclude_keywords",
+      "type": "json",
+      "label": "Exclude keywords",
+      "description": "Items whose title contains these terms (case-insensitive) are filtered out.",
+      "default": ["intern", "junior", "student"]
+    },
+    {
+      "name": "max_results",
+      "type": "number",
+      "label": "Max results per keyword",
+      "description": "Search mode: passed to API. Feed mode: max items after filtering.",
+      "default": 50,
+      "min": 10,
+      "max": 500
+    },
+    {
+      "name": "active_providers",
+      "type": "json",
+      "label": "Active providers",
+      "description": "Which provider IDs to use. Built-in: jobtech, remoteok, remotive.",
+      "default": ["jobtech"]
+    },
+    {
+      "name": "custom_providers",
+      "type": "json",
+      "label": "Custom providers",
+      "description": "Array of custom provider config objects. See README for schema.",
+      "default": []
+    },
+    {
+      "name": "provider_params",
+      "type": "json",
+      "label": "Provider parameters",
+      "description": "Extra query params per provider. E.g. {\"jobtech\": {\"municipality\": \"0180\"}}",
+      "default": {}
+    },
+    {
+      "name": "requests_per_minute",
+      "type": "number",
+      "label": "Rate limit (requests/min)",
+      "description": "Global rate limit across all providers.",
+      "default": 30,
+      "min": 1,
+      "max": 120
+    }
+  ],
+  "options_defaults": {
+    "keywords": ["CMO", "CPO", "CEO"],
+    "exclude_keywords": ["intern", "junior", "student"],
+    "max_results": 50,
+    "active_providers": ["jobtech"],
+    "custom_providers": [],
+    "provider_params": {},
+    "requests_per_minute": 30
+  },
+  "output_schema": {
+    "display_type": "table",
+    "columns": {
+      "title": "string",
+      "company": "string",
+      "location": "string",
+      "url": "string",
+      "source": "string",
+      "externalId": "string",
+      "snippet": "string",
+      "postedAt": "string"
+    }
+  }
+}
