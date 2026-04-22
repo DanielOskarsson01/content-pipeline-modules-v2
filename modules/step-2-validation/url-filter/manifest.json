@@ -19,7 +19,8 @@
       "type": "textarea",
       "label": "Exclude URL patterns",
       "description": "One regex pattern per line. URLs matching any pattern will be removed.",
-      "default": ""
+      "default": "",
+      "presets_enabled": true
     },
     {
       "name": "include_patterns",

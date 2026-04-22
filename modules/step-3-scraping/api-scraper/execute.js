@@ -148,6 +148,7 @@ async function execute(input, options, tools) {
     ...item,
     scrape_method: item.scrape_method || 'passed_through',
     extraction_method: item.extraction_method || 'original',
+    word_count: item.word_count ?? 0,
   }));
 
   let doneCount = 0;

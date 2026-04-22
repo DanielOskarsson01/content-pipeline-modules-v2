@@ -273,7 +273,7 @@ async function execute(input, options, tools) {
     const lowContent = items.filter((i) => i.status === 'low_content').length;
     const errors = items.filter((i) => i.status === 'error').length;
     const skipped = items.filter((i) => i.status === 'skipped').length;
-    const totalWords = items.reduce((sum, i) => sum + i.word_count, 0);
+    const totalWords = items.reduce((sum, i) => sum + (i.word_count || 0), 0);
     entityResults.push({
       entity_name: entityName,
       items,

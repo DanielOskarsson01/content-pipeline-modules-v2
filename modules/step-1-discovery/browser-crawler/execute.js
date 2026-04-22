@@ -187,6 +187,7 @@ async function execute(input, options, tools) {
             const res = await browser.fetch(pageUrl, {
               timeout: request_timeout,
               waitForNetworkIdle: true,
+              waitForSelector: 'a',
             });
             if (res.status >= 400) {
               logger.warn(`Depth-2: HTTP ${res.status} for ${pageUrl}`);
