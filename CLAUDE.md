@@ -143,3 +143,27 @@ Entry types: decision | progress | blocker | idea
 - None — committed (9832f4e) and pushed
 
 **Updated by:** session-closer agent
+
+### Session: 2026-04-22 — Replace jobtech with generic api-search module
+**Accomplished:**
+- Diagnosed why jobtech keyword searches produced poor results: JobTech API uses full-text search (not title-only), compound keywords use AND matching (returns 0), municipality codes were configured but never sent
+- Researched RemoteOK and Remotive APIs: both are feed APIs with no keyword search param, requiring a different execution pattern (fetch all, filter client-side)
+- Built generic `api-search` module with two modes: search (keyword per API call) and feed (fetch all, filter client-side)
+- Three built-in providers: jobtech, remoteok, remotive — adding new job boards = JSON config, not code
+- Code review caught 2 issues: missing URL fallback for JobTech (`webpage_url` → `application_details.url`), `_partialItems` not saved inside search-mode keyword loop. Both fixed before commit.
+- Deleted old jobtech module after verification
+- Updated Supabase template `b6ffa614` to use api-search (municipality filter now actually sent to API)
+- All 3 providers tested on production: jobtech 76 items (search mode), remoteok 89 items (feed mode), remotive 17 items (feed mode). 0 errors, 0 HTML leaked, 0 excluded terms leaked, 100% unique externalIds, 100% items with URLs
+- Commits: `d3a7682` (feat: add api-search), `5d2e227` (chore: remove jobtech)
+
+**Decisions:**
+- Two provider modes (search vs feed) instead of assuming all APIs support keyword search — proven by RemoteOK having no search param
+- `url` field stays canonical in output (Step 2+ depends on it); all other fields are field_map-driven and auto-detected by ContentRenderer
+- Provider configs are JSON objects with `mode`, `field_map`, `results_path`, `filter_fields` — no code needed per provider
+- Feed-mode keyword filtering uses case-insensitive substring match on raw fields before mapping (not post-mapping)
+- Municipality filter added to template default as `provider_params.jobtech.municipality: "0180"` (Stockholm)
+
+**Blockers/Questions:**
+- None — both commits pushed, all tests passing
+
+**Updated by:** session-closer agent
