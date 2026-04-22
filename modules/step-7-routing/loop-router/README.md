@@ -5,8 +5,8 @@ Read QA verdicts from Step 6 submodules and route failed entities back to the ap
 | Field | Value |
 |-------|-------|
 | Module ID | `loop-router` |
-| Step | 10 -- Review |
-| Category | review |
+| Step | 7 -- Routing |
+| Category | routing |
 | Cost | cheap |
 | Data operation | transform (one routing decision per entity) |
 

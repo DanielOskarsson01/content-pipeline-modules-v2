@@ -3,8 +3,8 @@
   "name": "Loop Router",
   "description": "Read QA verdicts from Step 6 and route failed entities back to the appropriate earlier step for rework. Pure decision logic -- no API calls.",
   "version": "1.0.0",
-  "step": 10,
-  "category": "review",
+  "step": 7,
+  "category": "routing",
   "cost": "cheap",
   "data_operation_default": "add",
 

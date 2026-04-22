@@ -1,5 +1,5 @@
 /**
- * Loop Router -- Step 10 Review submodule
+ * Loop Router -- Step 7 Routing submodule
  *
  * Reads QA verdicts from Step 6 submodules and produces a routing decision
  * for each entity: approve, loop back to an earlier step, or flag for manual
