@@ -141,6 +141,7 @@ concurrency: 4
 - `text_content` -- full extracted text (visible in detail view)
 - `entity_name` -- which entity this URL belongs to
 - `scrape_method` -- `browser` (re-scraped by Playwright), `wayback` (fetched from Wayback Machine archive), or `passed_through` (kept from page-scraper)
+- `extraction_method` -- `readability`, `cms-dom`, `regex`, or `none` (which text extraction tier produced the content)
 
 **Results are grouped by entity** with per-entity meta: `total`, `browser_scraped`, `browser_success`, `passed_through`, `errors`, `total_words`.
 
@@ -157,6 +158,8 @@ concurrency: 4
 - **Memory-intensive** -- each concurrent browser tab uses significant RAM. Three concurrent tabs on a 2GB server can cause OOM
 - **Does not handle cookie consent banners** -- content behind "Accept cookies" overlays will not be extracted
 - **Does not handle login walls** -- pages requiring authentication are out of scope
+- **Truncation detection** -- after browser extraction, content length is compared against the `og:description` meta tag. If the extracted text is shorter than the og:description, the page is treated as a browser failure (likely truncated/incomplete rendering) and falls through to the Wayback Machine tier
+- **Partial results on timeout** -- uses `_partialItems` to save each scraped result incrementally. If the module times out mid-batch, already-scraped pages are preserved in the pool rather than lost
 - **Same extraction algorithm as page-scraper** -- uses Readability with regex fallback. If the content is genuinely minimal (e.g., a redirect page, a 404), browser rendering will not help
 - **Sort order:** results are sorted with errors first, then skipped, success, and passed-through last
 - **Block page detection (two layers)** -- (1) Extracted text is checked against known Cloudflare markers before returning success; if detected, falls through to Wayback Machine. (2) After all scrapes finish, if 3+ pages returned identical text, they are demoted to error regardless of wording (catches any bot blocker). Both layers prevent block pages from passing through as false successes to the api-scraper

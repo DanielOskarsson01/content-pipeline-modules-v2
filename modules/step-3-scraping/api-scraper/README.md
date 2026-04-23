@@ -186,6 +186,7 @@ You are only charged for successful API calls -- failed requests don't consume c
 - `scrape_method` -- `scrapfly` (API-scraped), `wayback` (Wayback Machine fallback), or `passed_through` (kept from previous scraper)
 - `extraction_method` -- `readability`, `cms-dom`, `regex`, or `none`
 - `scrapfly_credits` -- credits consumed for this URL
+- `possibly_truncated` -- boolean flag set when extracted text is shorter than og:description (potential incomplete rendering)
 
 **Red flags to watch for:**
 - All URLs returning 429 errors -- ScrapFly account is rate-limited or out of credits. Check dashboard
@@ -201,6 +202,8 @@ You are only charged for successful API calls -- failed requests don't consume c
 - **Rate limits are account-wide** -- running multiple pipeline batches simultaneously will share the same rate limit. The `requests_per_minute` option helps but cannot coordinate across separate server processes
 - **Circuit breaker is per-entity** -- the consecutive-429 counter resets between entities. A rate-limited batch should wait before retrying
 - **Wayback Machine content may be stale** -- archived snapshots can be months or years old
+- **Truncation detection** -- after extraction, content length is compared against the `og:description` meta tag. If the extracted text is shorter than the og:description, the item is flagged with `possibly_truncated: true` and `error` set, then falls through to the Wayback Machine tier
+- **Partial results on timeout** -- uses `_partialItems` to save each scraped result incrementally. If the module times out mid-batch, already-scraped pages are preserved in the pool rather than lost
 - **Same extraction algorithm as other scrapers** -- uses Readability with CMS DOM and regex fallbacks. If content is genuinely minimal (redirect page, 404), no scraper will help
 - **Block page detection** -- Cloudflare block pages and generic block text are detected and treated as failures. However, novel block page formats may not be caught
 - **Duplicate text detection requires 3+ matches** -- if only 2 pages return the same block text, they won't be automatically demoted

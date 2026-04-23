@@ -136,6 +136,7 @@ concurrency: 2
 - **Memory-heavy** -- each browser tab consumes significant memory. Running multiple entities concurrently with high `concurrency` can exhaust server RAM
 - **Wayback Machine links may be stale** -- archived snapshots can be months or years old. Links discovered via Wayback may point to pages that no longer exist
 - **Query strings and fragments stripped** -- all URLs have `?query` and `#fragment` removed for cleaner deduplication. This means parameterized pages (e.g., `/products?id=123`) will be collapsed
+- **waitForSelector on depth pages** -- depth-2 page fetches use `waitForSelector: 'a'` to ensure the page hydrates before link extraction. This improves reliability on SPAs and React Server Component sites that render links client-side
 - **No cookie consent handling** -- the browser does not click cookie consent banners. Some sites may show an overlay that hides content/links
 - **Sectioned link detection uses regex** -- nav/header/footer detection relies on HTML tag matching, which may misclassify links on non-standard layouts
 

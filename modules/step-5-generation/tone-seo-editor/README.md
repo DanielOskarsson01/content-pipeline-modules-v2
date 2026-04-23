@@ -3,7 +3,7 @@
 > Post-writing editing pass that refines content for B2B tone and SEO keyword integration.
 
 **Module ID:** `tone-seo-editor` | **Step:** 5 (Generation) | **Category:** generation | **Cost:** medium
-**Version:** 1.0.0 | **Data Operation:** transform
+**Version:** 1.0.0 | **Data Operation:** add (+)
 
 ---
 
@@ -20,10 +20,10 @@ Without a dedicated editing step, improving tone or keyword density requires reg
 Tone & SEO Editor is the third submodule in Step 5's chain, running after content-writer:
 
 ```
-content-analyzer (=) -> seo-planner (+) -> content-writer (+) -> tone-seo-editor (transform)
+content-analyzer (+) -> seo-planner (+) -> content-writer (+) -> tone-seo-editor (+)
 ```
 
-It uses the **transform** data operation — it takes the existing content_markdown and replaces it with a revised version. The content structure, citations, and heading markers are preserved; only tone, clarity, and keyword placement are improved.
+It uses the **add** data operation — it produces a revised version of the content as new pool items. The content structure, citations, and heading markers are preserved; only tone, clarity, and keyword placement are improved.
 
 ### Why Separate From Content-Writer?
 
@@ -161,7 +161,7 @@ If the editing quality is insufficient, the operator can re-run tone-seo-editor 
 - **Step:** 5 (Generation)
 - **Category:** generation
 - **Cost:** medium
-- **Data operation:** transform — replaces content_markdown on existing items
+- **Data operation:** add (+) — produces revised content_markdown as new pool items
 - **Requires:** `content_markdown` from content-writer (via data-shape routing); optionally `seo_plan_json` from seo-planner
 - **Input:** Content items found by field presence (`item.content_markdown`), SEO items found by field presence (`item.seo_plan_json`)
 - **Output:** `results[]` grouped by `entity_name`, one item per entity with revised content_markdown and editing metrics

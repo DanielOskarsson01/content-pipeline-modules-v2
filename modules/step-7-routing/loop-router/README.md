@@ -8,7 +8,7 @@ Read QA verdicts from Step 6 submodules and route failed entities back to the ap
 | Step | 7 -- Routing |
 | Category | routing |
 | Cost | cheap |
-| Data operation | transform (one routing decision per entity) |
+| Data operation | add (one routing decision per entity) |
 
 ---
 
@@ -58,7 +58,7 @@ Rules are evaluated in priority order. First match wins.
 This module uses data-shape routing. It finds its input by checking which fields exist on pool items:
 
 - **QA result items**: items with `qa_pass`, `keyword_score`, `citation_score`, `hallucination_score`, or `meta_title_ok`
-- **Source page items**: items with `text_content` (counted to determine if discovery loops are viable)
+- **Source page items**: items with `text_content` or `_blob_ref` (counted to determine if discovery loops are viable)
 - **Loop count**: read from `entity.loop_count` or `entity.meta.loop_count` (set by the skeleton on rework)
 
 ---
@@ -167,7 +167,10 @@ source_page_count: 18
 | `qa_summary` | string | Multi-line summary showing pass/fail/not-run for each QA check |
 | `failed_checks` | string | Comma-separated list of failed checks, or "none" |
 | `loop_count` | number | How many times this entity has been looped previously |
-| `source_page_count` | number | Number of source pages (text_content items) available |
+| `source_page_count` | number | Number of source pages (text_content or _blob_ref items) available |
+| `qa_scores` | object | Structured per-check verdicts: `{ keyword, citation, hallucination, meta }` — each value is `pass`, `fail`, or `missing` |
+| `failure_reason` | string/null | Machine-readable failure reason (e.g., `max_loops_exceeded`, `multiple_failures`) for downstream terminal-state tracking |
+| `config_overrides` | object | Reserved for future per-entity config overrides (currently empty `{}`) |
 
 ---
 

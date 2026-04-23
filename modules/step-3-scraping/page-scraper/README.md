@@ -136,7 +136,7 @@ extract_meta: true
 - `title` — page title (from `<title>` → og:title → first `<h1>`)
 - `word_count` — words in extracted text
 - `content_type` — HTTP content-type header (e.g., `text/html`)
-- `status` — `success`, `error`, or `skipped`
+- `status` — `success`, `error`, `skipped`, or `low_content`
 - `error` — error message if status is error/skipped (null for success)
 - `text_preview` — first 150 characters of extracted text (for quick table review)
 - `meta_description` — from `<meta name="description">` tag
@@ -154,6 +154,9 @@ extract_meta: true
 
 ## Limitations & Edge Cases
 
+- **Boilerplate detection** — After all pages are scraped, a post-scrape pass checks for duplicate content within each domain. If 3+ pages from the same domain share identical `text_content`, they are demoted from `success` to `low_content` — the scraper likely extracted footer/nav/legal boilerplate instead of the real article. These pages are picked up by browser-scraper for re-extraction
+- **`low_content` status** — Pages get `low_content` status (instead of `error`) in three cases: (1) JavaScript-truncated content detected, (2) word count below 50, or (3) boilerplate duplicate detected. `low_content` signals browser-scraper to re-try the page while keeping the partial content available for review
+- **Partial results on timeout** — Uses `_partialItems` to save each scraped result incrementally. If the module times out mid-batch, already-scraped pages are preserved in the pool rather than lost
 - **Cloudflare/bot-blocker detection** — Extracted text is checked against known Cloudflare block page markers (e.g., "Why have I been blocked", "Cloudflare Ray ID"). Pages matching 2+ markers are marked as `status: 'error'` with `error: 'Cloudflare block page detected'` so the browser-scraper can retry them. This prevents block pages from passing through as false successes
 - **No JavaScript rendering** — This is the Cheerio/Readability equivalent from the original vision. JavaScript-rendered pages return empty or minimal content. The original Content Creation Master planned a Playwright fallback: *"consent walls, JS-rendered content, stubborn DOM"* — a future module for this
 - **No authentication** — Cannot scrape pages behind login walls. The Raw Appendix identified this as a separate concern: *"Consent/JS detection: If typical consent elements or missing DOM content after a light fetch → set `needs_playwright=true`"*

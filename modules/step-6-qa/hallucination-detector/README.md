@@ -8,7 +8,7 @@ Compare generated content claims against original source material to flag statem
 | Step | 6 -- QA |
 | Category | qa |
 | Cost | medium (LLM calls) |
-| Data operation | transform (same items, enriched with QA verdicts) |
+| Data operation | add (new items with QA verdicts) |
 
 ---
 

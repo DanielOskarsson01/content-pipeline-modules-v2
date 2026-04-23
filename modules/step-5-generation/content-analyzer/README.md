@@ -3,7 +3,7 @@
 > Structural fact extraction from scraped content. Classifies into categories, assigns tags, extracts key facts, and maps source citations.
 
 **Module ID:** `content-analyzer` | **Step:** 5 (Generation) | **Category:** analysis | **Cost:** expensive
-**Version:** 1.3.0 | **Data Operation:** transform (＝)
+**Version:** 1.3.0 | **Data Operation:** add (+)
 
 ---
 
@@ -27,7 +27,7 @@ This is the first shape change in the pipeline. Steps 1-4 all work with URL-shap
 The Strategic Architecture describes this transition:
 > *"Step 5 is where raw data becomes structured understanding. The input is many pages per company; the output is one structured profile per company."*
 
-Content-analyzer uses the **transform (＝)** data operation - it reads from the Step 4 pool independently (not chaining from a previous Step 5 submodule) and produces fresh output. The user reviews the analysis before it feeds into seo-planner.
+Content-analyzer uses the **add (+)** data operation - it reads from the Step 4 pool independently (not chaining from a previous Step 5 submodule) and produces fresh output. The user reviews the analysis before it feeds into seo-planner.
 
 ### Why Three Separate Submodules (Not One)
 
@@ -240,7 +240,7 @@ The analysis_json is the single source of truth for downstream submodules. If a 
 - **Step:** 5 (Generation)
 - **Category:** analysis
 - **Cost:** expensive
-- **Data operation:** transform (＝) - reads Step 4 pool independently, produces analysis per entity
+- **Data operation:** add (+) - reads Step 4 pool independently, produces analysis per entity
 - **Requires:** `text_content`, `entity_name` fields in input items
 - **Input:** `input.entities[]` with `items[]` from Step 4 working pool (scraped pages grouped by entity)
 - **Output:** `results[]` grouped by `entity_name`, one item per entity containing flattened display fields + `analysis_json` object

@@ -3,7 +3,7 @@
 > Transform pipeline content into clean, publishable Markdown with optional YAML frontmatter.
 
 **Module ID:** `markdown-output` | **Step:** 8 (Bundling) | **Category:** formatting | **Cost:** cheap
-**Version:** 1.0.0 | **Data Operation:** transform (=)
+**Version:** 1.0.0 | **Data Operation:** add (+)
 
 ---
 
@@ -137,7 +137,7 @@ The other Step 8 modules (html-output, json-output, meta-output) can run in para
 - **Step:** 8 (Bundling)
 - **Category:** formatting
 - **Cost:** cheap
-- **Data operation:** transform (=) -- content reformatted for output
+- **Data operation:** add (+) -- content reformatted for output as new pool items
 - **Requires columns:** none (reads from pool items, not CSV columns)
 - **Depends on:** content-writer
 - **Input:** `input.entities[]` with `items[]` containing `content_markdown` and optionally `analysis_json`
