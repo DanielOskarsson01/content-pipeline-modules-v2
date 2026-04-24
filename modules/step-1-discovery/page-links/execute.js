@@ -194,22 +194,37 @@ function extractLinks(html, baseUrl) {
   return links;
 }
 
+// Tracking params to strip — analytics/ad params that add no content value
+const TRACKING_PARAMS = new Set([
+  'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+  'fbclid', 'gclid', 'gclsrc', 'dclid', 'msclkid',
+  'mc_cid', 'mc_eid', 'ref', 'referrer',
+  '_ga', '_gl', '_hsenc', '_hsmi',
+  'trk', 'trkCampaign', 'sc_campaign', 'sc_channel',
+]);
+
 /**
  * Resolve a potentially relative URL against a base URL.
+ * Strips fragment and tracking params, preserves pagination params (?page=2, ?p=3).
  */
 function resolveUrl(href, baseUrl) {
   try {
-    if (href.startsWith('http://') || href.startsWith('https://')) {
-      return href.split('#')[0].split('?')[0];
+    const resolved = new URL(href, baseUrl);
+
+    // Always strip fragment
+    resolved.hash = '';
+
+    // Strip only tracking params, preserve pagination and content params
+    for (const key of [...resolved.searchParams.keys()]) {
+      if (TRACKING_PARAMS.has(key.toLowerCase())) {
+        resolved.searchParams.delete(key);
+      }
     }
-    // Relative URL — resolve against base
-    const base = new URL(baseUrl);
-    if (href.startsWith('/')) {
-      return `${base.protocol}//${base.host}${href}`.split('#')[0].split('?')[0];
-    }
-    // Relative path
-    const basePath = base.pathname.replace(/\/[^/]*$/, '/');
-    return `${base.protocol}//${base.host}${basePath}${href}`.split('#')[0].split('?')[0];
+
+    // Remove trailing ? if no params remain
+    let url = resolved.toString();
+    if (url.endsWith('?')) url = url.slice(0, -1);
+    return url;
   } catch {
     return null;
   }

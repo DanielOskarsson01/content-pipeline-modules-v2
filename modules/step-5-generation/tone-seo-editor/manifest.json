@@ -39,6 +39,12 @@
       ]
     },
     {
+      "name": "reference_docs",
+      "type": "doc_selector",
+      "label": "Reference Documents",
+      "description": "Reference docs for editing. Upload tone_guide.md, style examples, or brand guidelines for the editing pass."
+    },
+    {
       "name": "temperature",
       "type": "number",
       "label": "Temperature",
@@ -58,6 +64,15 @@
         "casual_informative",
         "technical_precise"
       ]
+    },
+    {
+      "name": "max_tokens",
+      "type": "number",
+      "label": "Max output tokens",
+      "description": "Maximum tokens in the LLM response. Should match or exceed content-writer max_tokens since output is a revised full article.",
+      "default": 16384,
+      "min": 1024,
+      "max": 32768
     },
     {
       "name": "max_content_chars",
@@ -81,7 +96,9 @@
   "options_defaults": {
     "ai_model": "haiku",
     "ai_provider": "anthropic",
+    "reference_docs": [],
     "temperature": 0.4,
+    "max_tokens": 16384,
     "tone_style": "b2b_authoritative",
     "max_content_chars": 50000,
     "prompt": "You are a professional B2B content editor for the iGaming industry. Your job is to EDIT existing content — not rewrite it from scratch. Make targeted, conservative improvements.\n\n### ORIGINAL CONTENT\n\n{content_markdown}\n\n### SEO KEYWORD TARGETS\n\n{keyword_targets}\n\n### TONE INSTRUCTIONS\n\n{tone_instructions}\n\n### EDITING RULES\n\n**SEO keyword placement:**\n- Place primary keywords in H1/H2 headings and first paragraphs of sections where natural\n- Integrate secondary keywords in subheadings and body paragraphs\n- Work long-tail keywords into FAQ answers and detailed paragraphs\n- Remove any negative or off-brand terms from the keyword pack\n- Do NOT stuff keywords — each placement must read naturally\n\n**Tone and clarity:**\n- Apply the specified tone style consistently\n- Shorten sentences over 30 words — split or trim\n- Replace passive voice with active where possible\n- Lead paragraphs with benefits or key facts, not filler\n- Use specific numbers and details over vague qualifiers\n- Replace jargon with clear language unless the term is industry-standard\n\n**Structure improvements:**\n- Add subheadings (H3) to break up sections longer than 300 words\n- Convert lists of 3+ items to bullet points if not already bulleted\n- Ensure each section has a clear topic sentence\n\n**What NOT to do:**\n- Do NOT add new factual claims, statistics, or company details not in the original\n- Do NOT remove existing citations ([#n] references)\n- Do NOT change the heading structure or type markers (e.g., [Overview], [Primary Category: ...])\n- Do NOT remove sections or significantly shorten content\n- Do NOT wrap output in code fences or JSON — return only the revised markdown\n- Do NOT add a preamble or explanation — start directly with the revised content\n\n### OUTPUT\n\nReturn ONLY the revised markdown content. No explanation, no code fences, no preamble."

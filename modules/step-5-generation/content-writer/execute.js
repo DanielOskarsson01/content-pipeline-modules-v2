@@ -110,7 +110,7 @@ function assembleEntityContent(analyzerItem, plannerItem, sourceContent) {
 
 async function execute(input, options, tools) {
   const { entities } = input;
-  const { ai_model, ai_provider, prompt: promptTemplate, reference_docs, max_source_chars } = options;
+  const { ai_model, ai_provider, prompt: promptTemplate, reference_docs, max_source_chars, temperature, max_tokens } = options;
   const { logger, progress, ai } = tools;
 
   const maxChars = max_source_chars || 100000;
@@ -183,6 +183,8 @@ async function execute(input, options, tools) {
         prompt,
         model: ai_model,
         provider: ai_provider,
+        temperature,
+        max_tokens,
       });
 
       // Output is always markdown (v1.2.0+: markdown-only, no JSON output)

@@ -222,7 +222,7 @@ function flattenPlan(plan) {
 
 async function execute(input, options, tools) {
   const { entities } = input;
-  const { ai_model, ai_provider, prompt: promptTemplate, reference_docs } = options;
+  const { ai_model, ai_provider, prompt: promptTemplate, reference_docs, temperature, max_tokens } = options;
   const { logger, progress, ai } = tools;
 
   const results = [];
@@ -278,6 +278,8 @@ async function execute(input, options, tools) {
         prompt,
         model: ai_model,
         provider: ai_provider,
+        temperature,
+        max_tokens,
       });
 
       const plan = parseJsonResponse(response.text);

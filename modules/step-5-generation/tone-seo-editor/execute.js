@@ -156,13 +156,30 @@ function formatKeywordTargets(keywords, seoItem) {
 }
 
 /**
+ * Escape special regex characters in a string.
+ */
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Build the full editing prompt from template + inputs.
  */
-function buildPrompt(promptTemplate, contentMarkdown, keywordTargets, toneInstructions) {
+function buildPrompt(promptTemplate, contentMarkdown, keywordTargets, toneInstructions, referenceDocs) {
   let prompt = promptTemplate;
   prompt = prompt.replace(/\{content_markdown\}/g, contentMarkdown);
   prompt = prompt.replace(/\{keyword_targets\}/g, keywordTargets);
   prompt = prompt.replace(/\{tone_instructions\}/g, toneInstructions);
+
+  // Replace {doc:filename} placeholders with actual doc content
+  if (referenceDocs && typeof referenceDocs === 'object') {
+    for (const [filename, content] of Object.entries(referenceDocs)) {
+      prompt = prompt.replace(new RegExp(`\\{doc:${escapeRegex(filename)}\\}`, 'g'), String(content));
+    }
+  }
+  // Clean up any unreplaced {doc:...} placeholders
+  prompt = prompt.replace(/\{doc:[^}]+\}/g, '');
+
   return prompt;
 }
 
@@ -282,7 +299,7 @@ function formatPlacementsText(placements) {
 
 async function execute(input, options, tools) {
   const { entities } = input;
-  const { ai_model, ai_provider, prompt: promptTemplate, temperature, tone_style, max_content_chars } = options;
+  const { ai_model, ai_provider, prompt: promptTemplate, temperature, max_tokens, tone_style, max_content_chars, reference_docs } = options;
   const { logger, progress, ai } = tools;
 
   const maxChars = max_content_chars || 50000;
@@ -347,13 +364,14 @@ async function execute(input, options, tools) {
     try {
       logger.info(`${entity.name}: editing content with ${ai_provider}/${ai_model} (tone: ${tone_style}, temp: ${temperature})`);
 
-      const prompt = buildPrompt(promptTemplate, truncatedMarkdown, keywordTargets, toneInstructions);
+      const prompt = buildPrompt(promptTemplate, truncatedMarkdown, keywordTargets, toneInstructions, reference_docs);
 
       const response = await ai.complete({
         prompt,
         model: ai_model,
         provider: ai_provider,
         temperature,
+        max_tokens,
       });
 
       // The LLM returns revised markdown directly

@@ -205,7 +205,7 @@ function flattenAnalysis(analysis) {
 
 async function execute(input, options, tools) {
   const { entities } = input;
-  const { ai_model, ai_provider, max_content_chars, prompt: promptTemplate, reference_docs } = options;
+  const { ai_model, ai_provider, max_content_chars, prompt: promptTemplate, reference_docs, temperature, max_tokens } = options;
   const { logger, progress, ai } = tools;
 
   // Warn if critical reference docs are missing — the prompt relies on {doc:master_categories.md}
@@ -254,6 +254,8 @@ async function execute(input, options, tools) {
         prompt,
         model: ai_model,
         provider: ai_provider,
+        temperature,
+        max_tokens,
       });
 
       // Parse JSON response

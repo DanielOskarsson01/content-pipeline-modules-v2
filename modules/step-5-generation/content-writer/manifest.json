@@ -48,6 +48,24 @@
       "description": "Reference docs for writing. Key docs: tone_guide.md (voice rules, citation format), format_spec.md (section structure, word counts). style_examples.md optional for few-shot quality."
     },
     {
+      "name": "temperature",
+      "type": "number",
+      "label": "Temperature",
+      "description": "LLM temperature for writing. Higher = more creative prose. Default 0.4 balances quality with consistency.",
+      "default": 0.4,
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "name": "max_tokens",
+      "type": "number",
+      "label": "Max output tokens",
+      "description": "Maximum tokens in the LLM response. Without this, long articles silently truncate. Default 16384 for full company profiles.",
+      "default": 16384,
+      "min": 1024,
+      "max": 32768
+    },
+    {
       "name": "max_source_chars",
       "type": "number",
       "label": "Max source content characters",
@@ -70,6 +88,8 @@
     "ai_model": "sonnet",
     "ai_provider": "anthropic",
     "reference_docs": [],
+    "temperature": 0.4,
+    "max_tokens": 16384,
     "max_source_chars": 100000,
     "prompt": "You are a professional content writer for OnlyiGaming, a B2B directory for the iGaming industry.\n\nWrite a complete company profile in markdown based on the analysis, SEO plan, and source content provided below.\n\n### INPUTS\n\n**Analysis (structured facts extracted by content-analyzer):**\nThis tells you WHAT to write about — which categories, tags, and facts to cover.\n\n**SEO Plan (keyword distribution by seo-planner):**\nThis tells you WHICH KEYWORDS to use in each section and provides the FAQ questions.\n\n**Source Content (scraped pages from the company's website):**\nThis is your raw material. Use these pages to write specific, detailed prose. The analysis identifies the structure; the sources provide the substance.\n\n{entity_content}\n\n### RULES\n\n**Follow this format specification exactly:**\n{doc:format_spec.md}\n\n**Follow this tone guide:**\n{doc:tone_guide.md}\n\n### KEY INSTRUCTIONS\n\n**HEADING FORMAT (MANDATORY):**\nEvery H2 heading MUST start with a bracketed [Type Marker] prefix. A heading without a type marker is INVALID and will fail validation.\n\nCorrect examples:\n- `## [Overview] Betsson Group — Multi-Brand iGaming Operator`\n- `## [Primary Category: casino-platforms] Live Casino Platform Solutions`\n- `## [Secondary Category: sportsbook-platforms] Sportsbook and Betting Products`\n- `## [Tag: api] API Integration and Technical Architecture`\n- `## [Tag: multi-jurisdiction] [Suggested tag] Multi-Jurisdiction Licensing`\n- `## [Credentials] Licenses, Awards and Industry Recognition`\n- `## [FAQ] Frequently Asked Questions`\n- `## [Meta] SEO Metadata`\n\nWRONG — these would fail validation:\n- `## Betsson Group — Multi-Brand iGaming Operator` (missing [Overview] marker)\n- `## Casino Platform Solutions` (missing [Primary Category: slug] marker)\n- `### [Tag: api] API Integration` (tags must be H2, not H3)\n\n**OTHER INSTRUCTIONS:**\n- Write a section for EVERY category in the analysis — primary categories first, then secondary\n- Write sections for major tags — minor tags can be grouped\n- Use the SEO plan's keyword distribution: place the specified keywords in the specified sections\n- Use the SEO plan's FAQ questions and write answers of 50-100 words each\n- Draw specific details from the source content — product names, technical capabilities, market data, partnership details. Do NOT write generic prose that could apply to any company.\n- Cite sources inline using [#n] format for every factual claim, mapping to the source_citations from the analysis\n- Use bullet points when listing 3+ products, features, markets, or similar items\n- Output markdown only — no JSON, no code fences, no preamble\n- Do not invent facts, categories, or tags beyond what the analysis contains\n- If the analysis has no credentials, omit the [Credentials] section\n- If the analysis has no contact info, omit the [Contact] section"
   },

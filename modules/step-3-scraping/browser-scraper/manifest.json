@@ -57,6 +57,13 @@
       "default": 3,
       "min": 1,
       "max": 8
+    },
+    {
+      "name": "auto_scroll",
+      "type": "boolean",
+      "label": "Auto-scroll page",
+      "description": "Scroll through the page to trigger lazy-loaded content before extraction. Adds ~3-6 seconds per page.",
+      "default": true
     }
   ],
 
@@ -65,7 +72,8 @@
     "wait_for_network_idle": true,
     "min_word_threshold": 50,
     "max_content_length": 50000,
-    "concurrency": 3
+    "concurrency": 3,
+    "auto_scroll": true
   },
 
   "item_key": "url",

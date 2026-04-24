@@ -101,6 +101,7 @@ async function execute(input, options, tools) {
     min_word_threshold = 50,
     max_content_length = 50000,
     concurrency = 3,
+    auto_scroll = true,
   } = options;
 
   if (!browser || !browser.fetch) {
@@ -316,6 +317,7 @@ async function execute(input, options, tools) {
         timeout: request_timeout,
         waitForNetworkIdle: wait_for_network_idle,
         waitForSelector: 'article, main, [role="main"], .entry-content, .post-content',
+        autoScroll: auto_scroll,
       });
 
       const extracted = extractFromHtml(res.body, item.url, item);
