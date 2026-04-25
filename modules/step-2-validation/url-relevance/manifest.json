@@ -44,7 +44,7 @@
       "label": "Drop criteria",
       "presets_enabled": true,
       "description": "Comma-separated list of page types to classify as DROP.",
-      "default": "individual product pages, seasonal campaigns, single game pages, marketing landing pages, demo pages, how-to-play guides, promotional offers, individual blog posts about single products, holiday-themed content, affiliate landing pages, pagination, author archives, tag pages"
+      "default": "seasonal campaigns, single game pages, how-to-play guides, promotional offers, holiday-themed content, affiliate landing pages"
     },
     {
       "name": "confidence_threshold",
@@ -69,7 +69,7 @@
     "ai_model": "haiku",
     "ai_provider": "anthropic",
     "keep_criteria": "about pages, team, leadership, partnerships, integrations, products overview, services overview, awards, milestones, company news, investors, careers, pricing, contact, press releases, compliance, regulatory, case studies, interviews, expansion, acquisitions, funding, annual reports",
-    "drop_criteria": "individual product pages, seasonal campaigns, single game pages, marketing landing pages, demo pages, how-to-play guides, promotional offers, individual blog posts about single products, holiday-themed content, affiliate landing pages, pagination, author archives, tag pages",
+    "drop_criteria": "seasonal campaigns, single game pages, how-to-play guides, promotional offers, holiday-themed content, affiliate landing pages",
     "confidence_threshold": "balanced",
     "max_urls_per_prompt": 200
   },
