@@ -4,7 +4,7 @@
   "description": "Resolves redirects to canonical URLs. Sends HEAD requests to each URL and replaces it with the final destination if redirected (301/302/307/308). Catches www/non-www, HTTP/HTTPS, path rewrites, and vanity URL redirects before they reach scraping.",
   "version": "1.0.0",
   "step": 2,
-  "category": "normalization",
+  "category": "filtering",
   "cost": "cheap",
   "data_operation_default": "transform",
 
