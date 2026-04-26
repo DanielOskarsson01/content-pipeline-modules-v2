@@ -5,11 +5,11 @@
   "version": "1.0.0",
   "step": 2,
   "category": "filtering",
-  "cost": "cheap",
+  "cost": "medium",
   "data_operation_default": "remove",
 
   "depends_on": ["url-dedup", "url-canonicalizer"],
-  "usage_notes": "Run after url-dedup and url-canonicalizer. Use exclude_patterns to remove known junk paths (/wp-admin/, /cart/, /login/). Enable check_status_codes only for small URL sets — sends HEAD request per URL.",
+  "usage_notes": "Run after url-dedup and url-canonicalizer. Use exclude_patterns to remove known junk paths (/wp-admin/, /cart/, /login/). check_status_codes sends HEAD requests and retries 403/429/503 with headless browser for bot-protected sites.",
 
   "requires_columns": ["url"],
 
@@ -33,7 +33,7 @@
       "name": "check_status_codes",
       "type": "boolean",
       "label": "Check HTTP status codes",
-      "description": "Send HEAD requests to verify URLs return 200.",
+      "description": "Send HEAD requests to verify URLs return 200. Automatically retries with headless browser for bot-protected sites (403/429/503).",
       "default": false
     }
   ],

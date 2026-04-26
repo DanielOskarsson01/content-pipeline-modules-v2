@@ -28,7 +28,7 @@ const KEY_PAGE_PATTERNS = [
 
 async function execute(input, options, tools) {
   const { entity } = input;
-  const { max_urls, max_depth_pages, request_timeout, same_domain_only, concurrency } = options;
+  const { max_urls, max_depth_pages, request_timeout, same_domain_only, concurrency, load_more_selector, max_load_more_clicks, max_load_more_seconds } = options;
   const { logger, browser, progress } = tools;
 
   if (!browser || !browser.fetch) {
@@ -63,6 +63,9 @@ async function execute(input, options, tools) {
     const res = await browser.fetch(baseUrl, {
       timeout: request_timeout,
       waitForNetworkIdle: true,
+      clickSelector: load_more_selector || null,
+      maxClicks: load_more_selector ? max_load_more_clicks : 0,
+      maxClickSeconds: load_more_selector ? max_load_more_seconds : 0,
     });
 
     if (res.status >= 400) {
@@ -188,6 +191,9 @@ async function execute(input, options, tools) {
               timeout: request_timeout,
               waitForNetworkIdle: true,
               waitForSelector: 'a',
+              clickSelector: load_more_selector || null,
+              maxClicks: load_more_selector ? max_load_more_clicks : 0,
+              maxClickSeconds: load_more_selector ? max_load_more_seconds : 0,
             });
             if (res.status >= 400) {
               logger.warn(`Depth-2: HTTP ${res.status} for ${pageUrl}`);

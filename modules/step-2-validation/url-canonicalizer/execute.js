@@ -109,9 +109,28 @@ async function execute(input, options, tools) {
 
   logger.info(`Canonicalization complete: ${redirectCount} redirected, ${unchangedCount} unchanged`);
 
+  // Deduplicate by final URL — multiple discovery URLs can resolve to same canonical
+  const seenUrls = new Map();
+  const dedupedResults = [];
+  let dedupCount = 0;
+  for (const result of results) {
+    const normUrl = result.url.replace(/\/+$/, '').toLowerCase();
+    if (seenUrls.has(normUrl)) {
+      const existing = seenUrls.get(normUrl);
+      logger.info(`Dedup: ${result.original_url} resolves to same canonical as ${existing.original_url} → ${result.url}`);
+      dedupCount++;
+    } else {
+      seenUrls.set(normUrl, result);
+      dedupedResults.push(result);
+    }
+  }
+  if (dedupCount > 0) {
+    logger.info(`Deduplication: ${dedupCount} duplicate canonical URLs removed`);
+  }
+
   // Group results by entity
   const byEntity = new Map();
-  for (const result of results) {
+  for (const result of dedupedResults) {
     if (!byEntity.has(result.entity_name)) {
       byEntity.set(result.entity_name, []);
     }
@@ -133,17 +152,20 @@ async function execute(input, options, tools) {
     });
   }
 
-  const description =
-    redirectCount > 0
-      ? `${redirectCount} URLs redirected, ${unchangedCount} unchanged of ${allItems.length} total`
-      : `${allItems.length} URLs — no redirects detected`;
+  const parts = [];
+  if (redirectCount > 0) parts.push(`${redirectCount} redirected`);
+  if (dedupCount > 0) parts.push(`${dedupCount} deduped`);
+  parts.push(`${unchangedCount} unchanged`);
+  const description = `${parts.join(', ')} of ${allItems.length} total → ${dedupedResults.length} output`;
 
   return {
     results: entityResults,
     summary: {
       total_entities: entities.length,
       total_items: allItems.length,
+      output_items: dedupedResults.length,
       redirected: redirectCount,
+      deduplicated: dedupCount,
       unchanged: unchangedCount,
       description,
       errors: [],

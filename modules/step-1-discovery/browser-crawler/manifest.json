@@ -57,6 +57,31 @@
       "default": 2,
       "min": 1,
       "max": 4
+    },
+    {
+      "name": "load_more_selector",
+      "type": "text",
+      "label": "Load More button selector",
+      "description": "CSS selector for a 'Load More' or 'See More' button. If set, the crawler clicks this button repeatedly to reveal all content before extracting links. Leave empty for pages without pagination.",
+      "default": ""
+    },
+    {
+      "name": "max_load_more_clicks",
+      "type": "number",
+      "label": "Max Load More clicks",
+      "description": "Maximum number of times to click the Load More button. The crawler stops early if the button disappears, becomes disabled, or produces no new content.",
+      "default": 10,
+      "min": 0,
+      "max": 50
+    },
+    {
+      "name": "max_load_more_seconds",
+      "type": "number",
+      "label": "Load More time budget (seconds)",
+      "description": "Wall-time budget for the Load More click loop. The crawler stops clicking when this budget is exceeded, even if max clicks hasn't been reached.",
+      "default": 120,
+      "min": 30,
+      "max": 600
     }
   ],
 
@@ -65,7 +90,10 @@
     "max_depth_pages": 5,
     "request_timeout": 20000,
     "same_domain_only": true,
-    "concurrency": 2
+    "concurrency": 2,
+    "load_more_selector": "",
+    "max_load_more_clicks": 10,
+    "max_load_more_seconds": 120
   },
 
   "item_key": "url",

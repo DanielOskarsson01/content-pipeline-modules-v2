@@ -4,15 +4,29 @@
  * Takes URLs from Step 1 working pool, filters by:
  *   1. Exclude patterns (regex, one per line)
  *   2. Include patterns (regex, one per line — if set, only matching URLs kept)
- *   3. Optional HTTP status code check (GET request, mark non-200 as dead_link)
+ *   3. Optional HTTP status code check — tiered: HEAD first, browser retry
+ *      for bot-protected sites (403/429/503)
  *
  * Data operation: REMOVE (➖) — excluded/dead items are removed from pool.
  * Selectable: true — user picks which items to keep during approval.
  */
 
+// Known bot-protection / JS challenge page markers.
+// If a browser-fetched page body contains any of these, the page is blocked.
+// Review periodically — new CDN providers may use different markers.
+// TODO (backlog): Automate marker detection for unknown CDN challenge pages.
+const CHALLENGE_MARKERS = [
+  'cf-browser-verification',
+  'Checking your browser',
+  'Just a moment...',
+  'cf-challenge-running',
+  'Attention Required! | Cloudflare',
+  '_cf_chl_opt',
+];
+
 async function execute(input, options, tools) {
   const { entities } = input;
-  const { logger, http, progress } = tools;
+  const { logger, http, progress, browser } = tools;
   const {
     exclude_patterns = '',
     include_patterns = '',
@@ -91,44 +105,106 @@ async function execute(input, options, tools) {
 
   logger.info(`Pattern filtering: ${patternPassed.length} passed, ${excludedCount} excluded`);
 
-  // Phase 2: HTTP status check (batched for concurrency)
+  // Phase 2: HTTP status check (tiered: HEAD first, browser fallback for bot-protection)
   if (check_status_codes && patternPassed.length > 0) {
-    const BATCH_SIZE = 20;
-    const TIMEOUT = 3000;
+    const HEAD_BATCH = 20;
+    const HEAD_TIMEOUT = 3000;
+    const BROWSER_BATCH = 2;
+    const BROWSER_TIMEOUT = 15000;
     let checked = 0;
 
-    for (let i = 0; i < patternPassed.length; i += BATCH_SIZE) {
-      const batch = patternPassed.slice(i, i + BATCH_SIZE);
+    // 2a: HEAD check all URLs
+    const needsBrowserRetry = [];
+
+    for (let i = 0; i < patternPassed.length; i += HEAD_BATCH) {
+      const batch = patternPassed.slice(i, i + HEAD_BATCH);
 
       const batchResults = await Promise.allSettled(
         batch.map(async (item) => {
           try {
-            const res = await http.head(item.url, { timeout: TIMEOUT });
-            return { item, alive: res.status >= 200 && res.status < 400, detail: `HTTP ${res.status}` };
+            const res = await http.head(item.url, { timeout: HEAD_TIMEOUT });
+            return { item, status: res.status, detail: `HTTP ${res.status}` };
           } catch (err) {
-            return { item, alive: false, detail: err.message };
+            return { item, status: 0, detail: err.message };
           }
         })
       );
 
       for (const settled of batchResults) {
-        const { item, alive, detail } = settled.value || settled.reason || {};
-        if (!alive) {
+        const { item, status, detail } = settled.value || settled.reason || {};
+        if (status >= 200 && status < 400) {
+          results.push({ url: item.url, status: 'kept', matched_pattern: null, entity_name: item.entity_name });
+          keptCount++;
+        } else if ([403, 429, 503].includes(status)) {
+          needsBrowserRetry.push(item);
+        } else {
           logger.info(`Dead link: ${item.url} (${detail})`);
           deadLinkCount++;
-        } else {
-          results.push({
-            url: item.url,
-            status: 'kept',
-            matched_pattern: null,
-            entity_name: item.entity_name,
-          });
-          keptCount++;
         }
       }
 
       checked += batch.length;
-      progress.update(checked, patternPassed.length, `Checking status ${checked} of ${patternPassed.length}`);
+      progress.update(checked, patternPassed.length, `HEAD check ${checked}/${patternPassed.length}`);
+    }
+
+    // 2b: Browser retry for bot-protected URLs
+    if (needsBrowserRetry.length > 0) {
+      logger.info(`Browser retry: ${needsBrowserRetry.length} URLs returned 403/429/503 from HEAD`);
+      let browserChecked = 0;
+
+      for (let i = 0; i < needsBrowserRetry.length; i += BROWSER_BATCH) {
+        const batch = needsBrowserRetry.slice(i, i + BROWSER_BATCH);
+
+        const batchResults = await Promise.allSettled(
+          batch.map(async (item) => {
+            try {
+              const res = await browser.fetch(item.url, {
+                timeout: BROWSER_TIMEOUT,
+                waitForNetworkIdle: true,
+              });
+              const body = res.body || '';
+              const hasChallenge = CHALLENGE_MARKERS.some(m => body.includes(m));
+
+              let alive;
+              if (hasChallenge) {
+                // Challenge markers present → blocked regardless of status or body size
+                alive = false;
+              } else if (res.status >= 200 && res.status < 400) {
+                alive = true;
+              } else if (body.length > 1000) {
+                // Non-2xx but substantial content without challenge markers → passed challenge
+                logger.info(`Browser: ${item.url} returned HTTP ${res.status} but has ${body.length} chars without challenge markers — treating as alive`);
+                alive = true;
+              } else {
+                alive = false;
+              }
+
+              return { item, alive, detail: `Browser: HTTP ${res.status}, body ${body.length} chars${hasChallenge ? ', CHALLENGE DETECTED' : ''}` };
+            } catch (err) {
+              // browser.fetch() runtime error (Playwright crash, OOM) — treat as dead, don't retry
+              return { item, alive: false, detail: `Browser error: ${err.message}` };
+            }
+          })
+        );
+
+        for (const settled of batchResults) {
+          const { item, alive, detail } = settled.value || settled.reason || {};
+          if (alive) {
+            results.push({ url: item.url, status: 'kept', matched_pattern: null, entity_name: item.entity_name });
+            keptCount++;
+          } else {
+            logger.info(`Dead link (browser confirmed): ${item.url} (${detail})`);
+            deadLinkCount++;
+          }
+        }
+
+        browserChecked += batch.length;
+        progress.update(
+          patternPassed.length + browserChecked,
+          patternPassed.length + needsBrowserRetry.length,
+          `Browser retry ${browserChecked}/${needsBrowserRetry.length}`
+        );
+      }
     }
   } else {
     // No status check — all pattern-passed items are kept
