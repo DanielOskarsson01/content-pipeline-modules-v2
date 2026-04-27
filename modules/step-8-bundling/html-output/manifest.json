@@ -1,7 +1,7 @@
 {
   "id": "html-output",
   "name": "HTML Output",
-  "description": "Convert pipeline Markdown to HTML with optional schema.org Organization JSON-LD.",
+  "description": "Convert content-writer Markdown to HTML. Supports schema.org Organization JSON-LD injection, [#n] citation-to-superscript conversion with Sources section, CSS templates (basic/article), and full HTML document wrapping for standalone pages or email.",
   "version": "1.0.0",
   "step": 8,
   "category": "formatting",

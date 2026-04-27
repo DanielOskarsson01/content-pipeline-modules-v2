@@ -1,7 +1,7 @@
 {
   "id": "json-output",
   "name": "JSON Output",
-  "description": "Assemble structured JSON per entity from all available data shapes (analysis, SEO plan, content).",
+  "description": "Assemble structured JSON per entity from all pipeline data (content-analyzer analysis, seo-planner keywords/meta, content-writer markdown). Supports Strapi-ready or flat format. Toggle inclusion of markdown, analysis, SEO plan, and key facts flattening independently.",
   "version": "1.0.0",
   "step": 8,
   "category": "data",

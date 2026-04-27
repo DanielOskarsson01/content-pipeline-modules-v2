@@ -1,7 +1,7 @@
 {
   "id": "url-filter",
   "name": "URL Pattern Filter",
-  "description": "Filter URLs by pattern matching and HTTP status code validation",
+  "description": "Filter URLs using regex include/exclude patterns and optional HTTP status code validation. Supports presets for common entity types (Operator, Affiliate, B2B). Status check sends HEAD requests and automatically retries 403/429/503 URLs with a headless browser (time-budgeted) to detect bot-protection false positives.",
   "version": "1.0.0",
   "step": 2,
   "category": "filtering",

@@ -1,7 +1,7 @@
 {
   "id": "deep-links",
   "name": "Deep Link Crawler",
-  "description": "Follow key pages from earlier discovery and extract links one level deeper",
+  "description": "Second-pass link extraction from the working pool. Reads URLs discovered by sibling Step 1 modules (sitemap-parser, page-links, browser-crawler), fetches those pages, and extracts links one level deeper. Useful for uncovering blog posts, news articles, and subpages not in sitemaps or navigation.",
   "version": "1.0.0",
   "step": 1,
   "category": "crawling",

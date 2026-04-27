@@ -1,7 +1,7 @@
 {
   "id": "sitemap-parser",
   "name": "Sitemap Parser",
-  "description": "Discover URLs from XML sitemaps for each company website",
+  "description": "Discover URLs from XML sitemaps. Fetches sitemap.xml (and nested sitemap indexes), parses XML entries, and returns URLs with metadata. Supports include/exclude regex patterns for filtering at source. Automatically retries with headless browser for bot-protected sites (403/429/503).",
   "version": "1.0.0",
   "step": 1,
   "category": "crawling",

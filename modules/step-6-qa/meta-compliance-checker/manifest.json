@@ -1,7 +1,7 @@
 {
   "id": "meta-compliance-checker",
   "name": "Meta Compliance Checker",
-  "description": "Validate meta titles and descriptions for SEO length requirements and keyword presence.",
+  "description": "Validate meta titles and descriptions against SEO constraints: title max length (default 60), description min/max length (150-160), keyword presence from SEO plan head_terms, and cross-entity duplicate detection. Configurable pass threshold allows partial failures.",
   "version": "1.0.0",
   "step": 6,
   "category": "qa",

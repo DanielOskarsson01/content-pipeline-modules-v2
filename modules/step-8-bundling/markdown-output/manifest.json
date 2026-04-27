@@ -1,7 +1,7 @@
 {
   "id": "markdown-output",
   "name": "Markdown Output",
-  "description": "Clean publishable Markdown with optional YAML frontmatter from pipeline content.",
+  "description": "Produce clean publishable Markdown from content-writer output. Strips [Type Marker] heading prefixes, converts [#n] citations to footnotes or inline links, and optionally adds YAML frontmatter (entity name, categories, tags) for CMS import workflows.",
   "version": "1.0.0",
   "step": 8,
   "category": "formatting",

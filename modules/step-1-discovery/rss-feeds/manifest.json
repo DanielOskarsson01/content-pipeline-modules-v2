@@ -1,7 +1,7 @@
 {
   "id": "rss-feeds",
   "name": "RSS Feed Discovery",
-  "description": "Find RSS/Atom feeds by probing common feed paths on company websites",
+  "description": "Discover RSS and Atom feed URLs by probing common paths (/feed, /rss, /atom.xml, /blog/feed, etc.) and parsing homepage HTML for <link rel=\"alternate\"> feed references. Returns feed URLs with type (RSS/Atom), title, and item count.",
   "version": "1.0.0",
   "step": 1,
   "category": "news",

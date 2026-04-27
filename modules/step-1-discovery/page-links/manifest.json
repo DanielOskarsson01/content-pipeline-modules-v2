@@ -1,7 +1,7 @@
 {
   "id": "page-links",
   "name": "Page Link Extractor",
-  "description": "Extract URLs from homepage navigation, header, footer, and main content areas",
+  "description": "Extract URLs from homepage HTML by parsing navigation, header, footer, and optionally body content areas. Categorizes each link by source location (nav/header/footer/body). Catches about pages, partner pages, team pages, and other key links that sitemaps often miss.",
   "version": "1.0.0",
   "step": 1,
   "category": "crawling",

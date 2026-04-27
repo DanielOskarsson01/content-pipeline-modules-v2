@@ -1,7 +1,7 @@
 {
   "id": "meta-output",
   "name": "Meta Output",
-  "description": "Generate validated SEO metadata (title, description, keywords, OG tags) from pipeline data.",
+  "description": "Assemble validated SEO metadata from seo-planner output: meta title and description (validated against Google's character limits), keywords array from categories/tags/target keywords, Open Graph tags (og:title, og:description, og:type), and optional Twitter Card tags.",
   "version": "1.0.0",
   "step": 8,
   "category": "seo",

@@ -1,7 +1,7 @@
 {
   "id": "company-media",
   "name": "Company Media",
-  "description": "Find company logos, OG images, team photos, product screenshots, and award badges by fetching key pages.",
+  "description": "Discover company visual assets by fetching key pages (homepage, /about, /team, /products). Extracts logos (prefers horizontal/dark variants), OG images, team/leadership photos, product screenshots, and award badges. Validates each image URL via HEAD request.",
   "version": "2.0.0",
   "step": 8,
   "category": "media",

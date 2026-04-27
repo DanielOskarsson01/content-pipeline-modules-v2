@@ -1,7 +1,7 @@
 {
   "id": "url-dedup",
   "name": "URL Deduplicator",
-  "description": "Remove duplicate URLs across entities, normalize formats, strip tracking parameters",
+  "description": "Remove duplicate URLs across all entities in a single pass. Normalizes www/non-www, trailing slashes, case, query parameters (?utm_source, ?ref), and URL fragments (#section) before comparing. First occurrence wins — duplicates are flagged with a reference to the original.",
   "version": "1.0.0",
   "step": 2,
   "category": "filtering",
