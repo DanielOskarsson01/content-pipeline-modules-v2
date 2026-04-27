@@ -2,7 +2,7 @@
 
 > Parse XML sitemaps to discover all indexed URLs for a company website.
 
-**Module ID:** `sitemap-parser` | **Step:** 1 (Discovery) | **Category:** crawling | **Cost:** cheap
+**Module ID:** `sitemap-parser` | **Step:** 1 (Discovery) | **Category:** crawling | **Cost:** medium
 **Version:** 1.0.0 | **Data Operation:** transform (＝)
 
 ---
@@ -64,7 +64,8 @@ The Raw Appendix envisioned tracking `found_via` provenance for every discovered
 |--------|---------|----------------|--------|
 | `max_urls` | 10,000 | Lower to 100-500 for quick scans; raise to 50,000 for exhaustive crawls of large enterprise sites | Directly controls how many URLs enter the pool. Large numbers increase Step 2 filtering load |
 | `include_nested_sitemaps` | true | Disable if the site has many sub-sitemaps for product/game pages you don't need | Prevents following sitemap index files into child sitemaps. Turning off dramatically reduces URLs for sites with thousands of product pages |
-| `url_pattern` | "" (all) | Set to filter URLs early — e.g., `/about\|/company\|/partners` to only keep corporate pages | Regex filter applied before results return. Reduces noise early but be careful not to filter out useful pages |
+| `url_pattern` | "" (all) | Set to filter URLs early — e.g., `/about\|/company\|/partners` to only keep corporate pages | Regex include filter applied before results return. Reduces noise early but be careful not to filter out useful pages |
+| `exclude_patterns` | "" (none) | Add one regex per line to drop B2C template URLs at the source. Use presets for Operator/Affiliate/B2B entity types | Regex exclude filter applied before include filter and max_urls limit. Prevents bulk junk from ever entering the pool |
 
 ## Recipes
 
@@ -90,6 +91,19 @@ When you're building company profiles and only want about/team/partner pages:
 max_urls: 1000
 include_nested_sitemaps: true
 url_pattern: /about|/company|/team|/partner|/career|/press|/investor|/leadership
+```
+
+### Affiliate Entity (drop B2C product pages)
+When profiling an affiliate site like AskGamblers — exclude their product catalog:
+```
+max_urls: 10000
+include_nested_sitemaps: true
+exclude_patterns:
+  /casino-bonuses/latest/[^/]+
+  /casino-affiliate-programs/[^/]+
+  /sports-betting/bonuses/latest/[^/]+
+  /sports-betting/sportsbook-reviews/[^/]+
+  /free-spins/[^/]+
 ```
 
 ### News/Blog Only (targeted for news content)
@@ -142,7 +156,7 @@ The original Content Creation Master envisioned this as a two-gate system: cheap
 
 - **Step:** 1 (Discovery)
 - **Category:** crawling
-- **Cost:** cheap
+- **Cost:** medium
 - **Data operation:** transform (＝) — independent results, merged into pool on approval
 - **Requires:** `website` column in entity data
 - **Input:** `input.entities[]` — each entity must have a `website` field

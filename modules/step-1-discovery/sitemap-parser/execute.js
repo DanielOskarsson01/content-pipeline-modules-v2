@@ -7,7 +7,7 @@
 
 async function execute(input, options, tools) {
   const { entities } = input;
-  const { max_urls, include_nested_sitemaps, url_pattern } = options;
+  const { max_urls, include_nested_sitemaps, url_pattern, exclude_patterns } = options;
   const { logger, http, progress, browser } = tools;
 
   let urlFilter = null;
@@ -16,6 +16,21 @@ async function execute(input, options, tools) {
       urlFilter = new RegExp(url_pattern);
     } catch (e) {
       logger.error(`Invalid URL pattern regex: "${url_pattern}" — ${e.message}. Ignoring filter.`);
+    }
+  }
+
+  // Parse exclude patterns (one regex per line)
+  const excludeRegexes = [];
+  if (exclude_patterns && typeof exclude_patterns === 'string') {
+    for (const line of exclude_patterns.split('\n').map(l => l.trim()).filter(l => l.length > 0)) {
+      try {
+        excludeRegexes.push(new RegExp(line, 'i'));
+      } catch (e) {
+        logger.warn(`Invalid exclude pattern: "${line}" — ${e.message}. Skipping.`);
+      }
+    }
+    if (excludeRegexes.length > 0) {
+      logger.info(`Loaded ${excludeRegexes.length} exclude patterns`);
     }
   }
   const results = [];
@@ -49,10 +64,26 @@ async function execute(input, options, tools) {
         { max_urls, include_nested_sitemaps, http, logger, browser }
       );
 
-      // Apply URL filter if set
+      // Apply exclude patterns first (cheap regex, removes bulk)
+      let afterExclude = urls;
+      let excludedCount = 0;
+      if (excludeRegexes.length > 0) {
+        afterExclude = urls.filter((u) => {
+          for (const re of excludeRegexes) {
+            if (re.test(u.url)) return false;
+          }
+          return true;
+        });
+        excludedCount = urls.length - afterExclude.length;
+        if (excludedCount > 0) {
+          logger.info(`${entity.name}: excluded ${excludedCount} URLs by pattern`);
+        }
+      }
+
+      // Apply include filter if set
       const filtered = urlFilter
-        ? urls.filter((u) => urlFilter.test(u.url))
-        : urls;
+        ? afterExclude.filter((u) => urlFilter.test(u.url))
+        : afterExclude;
 
       const limited = filtered.slice(0, max_urls);
 
@@ -61,7 +92,8 @@ async function execute(input, options, tools) {
         items: limited,
         meta: {
           total_found: urls.length,
-          filtered: urls.length - filtered.length,
+          excluded: excludedCount,
+          filtered: afterExclude.length - filtered.length,
           limited: filtered.length - limited.length,
           returned: limited.length,
           errors: 0
@@ -69,7 +101,7 @@ async function execute(input, options, tools) {
       });
 
       totalItems += limited.length;
-      logger.info(`${entity.name}: found ${urls.length} URLs, returning ${limited.length}`);
+      logger.info(`${entity.name}: found ${urls.length} URLs, excluded ${excludedCount}, returning ${limited.length}`);
 
     } catch (err) {
       logger.error(`${entity.name}: ${err.message}`);

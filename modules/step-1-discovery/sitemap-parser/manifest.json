@@ -34,8 +34,16 @@
     {
       "name": "url_pattern",
       "type": "text",
-      "label": "URL filter pattern",
+      "label": "URL include pattern",
       "description": "Only include URLs matching this pattern (regex). Leave empty for all.",
+      "default": ""
+    },
+    {
+      "name": "exclude_patterns",
+      "type": "textarea",
+      "label": "URL exclude patterns",
+      "presets_enabled": true,
+      "description": "Exclude URLs matching any of these patterns (one regex per line). Applied before max_urls limit. Use presets for common entity types (Operator, Affiliate, B2B).",
       "default": ""
     }
   ],
@@ -43,7 +51,8 @@
   "options_defaults": {
     "max_urls": 10000,
     "include_nested_sitemaps": true,
-    "url_pattern": ""
+    "url_pattern": "",
+    "exclude_patterns": ""
   },
 
   "item_key": "url",
