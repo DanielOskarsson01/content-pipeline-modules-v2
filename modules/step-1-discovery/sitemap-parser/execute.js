@@ -8,7 +8,7 @@
 async function execute(input, options, tools) {
   const { entities } = input;
   const { max_urls, include_nested_sitemaps, url_pattern } = options;
-  const { logger, http, progress } = tools;
+  const { logger, http, progress, browser } = tools;
 
   let urlFilter = null;
   if (url_pattern) {
@@ -46,7 +46,7 @@ async function execute(input, options, tools) {
       logger.info(`Fetching sitemap for ${entity.name}: ${baseUrl}`);
       const urls = await fetchSitemap(
         `${baseUrl.replace(/\/$/, "")}/sitemap.xml`,
-        { max_urls, include_nested_sitemaps, http, logger }
+        { max_urls, include_nested_sitemaps, http, logger, browser }
       );
 
       // Apply URL filter if set
@@ -102,14 +102,30 @@ async function execute(input, options, tools) {
 /**
  * Fetch and parse a sitemap URL. Handles sitemap index files.
  */
-async function fetchSitemap(url, { max_urls, include_nested_sitemaps, http, logger }) {
+async function fetchSitemap(url, { max_urls, include_nested_sitemaps, http, logger, browser }) {
+  let xml;
+
+  // Tiered fetch: HTTP first, browser fallback for 403/429/503
   const response = await http.get(url, { timeout: 15000 });
 
-  if (response.status < 200 || response.status >= 300) {
+  if (response.status >= 200 && response.status < 300) {
+    xml = typeof response.body === "string" ? response.body : String(response.body);
+  } else if ([403, 429, 503].includes(response.status) && browser) {
+    logger.info(`HTTP ${response.status} on ${url} — retrying with browser`);
+    try {
+      const browserRes = await browser.fetch(url, { timeout: 20000, waitForNetworkIdle: true });
+      if (browserRes.status >= 200 && browserRes.status < 400 && browserRes.body) {
+        xml = typeof browserRes.body === "string" ? browserRes.body : String(browserRes.body);
+        logger.info(`Browser fallback succeeded for ${url} (${xml.length} chars)`);
+      } else {
+        throw new Error(`Browser returned HTTP ${browserRes.status} fetching ${url}`);
+      }
+    } catch (browserErr) {
+      throw new Error(`HTTP ${response.status} fetching ${url} (browser fallback also failed: ${browserErr.message})`);
+    }
+  } else {
     throw new Error(`HTTP ${response.status} fetching ${url}`);
   }
-
-  const xml = typeof response.body === "string" ? response.body : String(response.body);
   const urls = [];
 
   // Check if this is a sitemap index (contains <sitemapindex>)
@@ -130,7 +146,8 @@ async function fetchSitemap(url, { max_urls, include_nested_sitemaps, http, logg
           max_urls: max_urls - urls.length,
           include_nested_sitemaps: false, // Don't recurse deeper
           http,
-          logger
+          logger,
+          browser
         });
         urls.push(...childUrls);
       } catch (err) {

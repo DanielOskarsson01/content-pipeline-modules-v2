@@ -150,9 +150,18 @@ async function execute(input, options, tools) {
     // 2b: Browser retry for bot-protected URLs
     if (needsBrowserRetry.length > 0) {
       logger.info(`Browser retry: ${needsBrowserRetry.length} URLs returned 403/429/503 from HEAD`);
+      const BROWSER_BUDGET_SECONDS = 120;
+      const browserDeadline = Date.now() + BROWSER_BUDGET_SECONDS * 1000;
       let browserChecked = 0;
+      let budgetExceeded = false;
 
       for (let i = 0; i < needsBrowserRetry.length; i += BROWSER_BATCH) {
+        // Wall-time budget: stop browser retries when time runs low
+        if (Date.now() >= browserDeadline) {
+          budgetExceeded = true;
+          break;
+        }
+
         const batch = needsBrowserRetry.slice(i, i + BROWSER_BATCH);
 
         const batchResults = await Promise.allSettled(
@@ -204,6 +213,17 @@ async function execute(input, options, tools) {
           patternPassed.length + needsBrowserRetry.length,
           `Browser retry ${browserChecked}/${needsBrowserRetry.length}`
         );
+      }
+
+      // Budget exceeded: keep remaining URLs optimistically (not confirmed dead)
+      if (budgetExceeded) {
+        const remaining = needsBrowserRetry.length - browserChecked;
+        logger.warn(`Browser retry budget exceeded (${BROWSER_BUDGET_SECONDS}s). ${browserChecked} checked, ${remaining} remaining — keeping unchecked URLs (not confirmed dead)`);
+        for (let j = browserChecked; j < needsBrowserRetry.length; j++) {
+          const item = needsBrowserRetry[j];
+          results.push({ url: item.url, status: 'kept', matched_pattern: null, entity_name: item.entity_name });
+          keptCount++;
+        }
       }
     }
   } else {
