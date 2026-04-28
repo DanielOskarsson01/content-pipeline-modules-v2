@@ -59,10 +59,17 @@
       "max": 4
     },
     {
+      "name": "auto_click_load_more",
+      "type": "boolean",
+      "label": "Auto-click Load More buttons",
+      "description": "Automatically detect and click 'Load More', 'Show More', 'See More' buttons to reveal paginated content. Uses text, CSS class, aria, and data-attribute patterns to find the button.",
+      "default": false
+    },
+    {
       "name": "load_more_selector",
       "type": "text",
-      "label": "Load More button selector",
-      "description": "CSS selector for a 'Load More' or 'See More' button. If set, the crawler clicks this button repeatedly to reveal all content before extracting links. Leave empty for pages without pagination.",
+      "label": "Load More selector override",
+      "description": "Advanced: manual CSS/Playwright selector for the Load More button. Overrides auto-detection when set. Supports Playwright :has-text() syntax. Leave empty to use auto-detection.",
       "default": ""
     },
     {
@@ -91,6 +98,7 @@
     "request_timeout": 20000,
     "same_domain_only": true,
     "concurrency": 2,
+    "auto_click_load_more": false,
     "load_more_selector": "",
     "max_load_more_clicks": 10,
     "max_load_more_seconds": 120

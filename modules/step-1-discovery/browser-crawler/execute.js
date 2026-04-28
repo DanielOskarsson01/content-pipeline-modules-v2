@@ -26,9 +26,57 @@ const KEY_PAGE_PATTERNS = [
   '/articles', '/insights', '/media', '/resources', '/company'
 ];
 
+// Auto-detect candidate selectors for "Load More" buttons, in priority order.
+// Buttons first (highest confidence — in-page actions, not navigation links).
+// Playwright :has-text() does case-insensitive substring matching.
+const AUTO_LOAD_MORE_CANDIDATES = [
+  // Buttons with common pagination text
+  'button:has-text("Load More")',
+  'button:has-text("Show More")',
+  'button:has-text("See More")',
+  'button:has-text("View More")',
+  'button:has-text("More Articles")',
+  'button:has-text("More Posts")',
+  'button:has-text("More Stories")',
+  'button:has-text("More Results")',
+  // Role-based buttons (div/span styled as buttons)
+  '[role="button"]:has-text("Load More")',
+  '[role="button"]:has-text("Show More")',
+  '[role="button"]:has-text("See More")',
+  // Class-based patterns (language-agnostic — devs use English class names)
+  'button[class*="load-more"]',
+  'button[class*="loadMore"]',
+  'button[class*="load_more"]',
+  'button[class*="show-more"]',
+  'button[class*="showMore"]',
+  'button[class*="see-more"]',
+  'button[class*="view-more"]',
+  'button[class*="btn-more"]',
+  // Links with pagination text (lower priority — could be navigation)
+  'a:has-text("Load More")',
+  'a:has-text("Show More")',
+  'a:has-text("See More")',
+  'a:has-text("View More")',
+  // Links with explicit load-more classes
+  'a[class*="load-more"]',
+  'a[class*="loadMore"]',
+  'a[class*="show-more"]',
+  'a[class*="see-more"]',
+  // Data attributes (framework-specific patterns)
+  '[data-action*="load-more"]',
+  '[data-action*="loadMore"]',
+  '[data-action*="show-more"]',
+  '[data-testid*="load-more"]',
+  '[data-testid*="loadMore"]',
+  // Aria labels
+  '[aria-label*="load more" i]',
+  '[aria-label*="show more" i]',
+  '[aria-label*="see more" i]',
+];
+
 async function execute(input, options, tools) {
   const { entity } = input;
-  const { max_urls, max_depth_pages, request_timeout, same_domain_only, concurrency, load_more_selector, max_load_more_clicks, max_load_more_seconds } = options;
+  const { max_urls, max_depth_pages, request_timeout, same_domain_only, concurrency, auto_click_load_more, load_more_selector, max_load_more_clicks, max_load_more_seconds } = options;
   const { logger, browser, progress } = tools;
 
   if (!browser || !browser.fetch) {
@@ -52,6 +100,18 @@ async function execute(input, options, tools) {
     ? entity.website
     : `https://${entity.website}`;
 
+  // Resolve click selector: manual override > auto-detect > disabled
+  let clickSelectorValue = null;
+  if (load_more_selector) {
+    clickSelectorValue = load_more_selector;
+    logger.info(`Load More: using manual selector "${load_more_selector}"`);
+  } else if (auto_click_load_more) {
+    clickSelectorValue = AUTO_LOAD_MORE_CANDIDATES;
+    logger.info('Load More: auto-detection enabled');
+  }
+  const clickMaxClicks = clickSelectorValue ? max_load_more_clicks : 0;
+  const clickMaxSeconds = clickSelectorValue ? max_load_more_seconds : 0;
+
   logger.info(`Fetching homepage: ${baseUrl}`);
   progress.update(1, 3, `Fetching homepage for ${entity.name}`);
 
@@ -63,9 +123,9 @@ async function execute(input, options, tools) {
     const res = await browser.fetch(baseUrl, {
       timeout: request_timeout,
       waitForNetworkIdle: true,
-      clickSelector: load_more_selector || null,
-      maxClicks: load_more_selector ? max_load_more_clicks : 0,
-      maxClickSeconds: load_more_selector ? max_load_more_seconds : 0,
+      clickSelector: clickSelectorValue,
+      maxClicks: clickMaxClicks,
+      maxClickSeconds: clickMaxSeconds,
     });
 
     if (res.status >= 400) {
@@ -191,9 +251,9 @@ async function execute(input, options, tools) {
               timeout: request_timeout,
               waitForNetworkIdle: true,
               waitForSelector: 'a',
-              clickSelector: load_more_selector || null,
-              maxClicks: load_more_selector ? max_load_more_clicks : 0,
-              maxClickSeconds: load_more_selector ? max_load_more_seconds : 0,
+              clickSelector: clickSelectorValue,
+              maxClicks: clickMaxClicks,
+              maxClickSeconds: clickMaxSeconds,
             });
             if (res.status >= 400) {
               logger.warn(`Depth-2: HTTP ${res.status} for ${pageUrl}`);
