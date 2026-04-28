@@ -60,6 +60,26 @@ The module also includes a **Wayback Machine fallback** — if even the headless
 | `request_timeout` | 20,000ms | Raise to 30-60s for very slow sites; lower to 10s for known-fast sites | Per-page browser timeout. Too low = missed pages on slow-loading SPAs |
 | `same_domain_only` | true | Set to false if you need cross-domain links (partner sites, subdomains) | Filters out links to external domains. Usually keep true to focus on the entity's own content |
 | `concurrency` | 2 | Lower to 1 on memory-constrained servers; raise to 3-4 on powerful machines | How many internal pages to fetch in parallel. Browser tabs are memory-heavy |
+| `auto_click_load_more` | false | Enable when target sites hide content behind "Load More" / "Show More" buttons | Auto-detects and clicks pagination buttons before extracting links. Uses 35+ selectors covering text, CSS class, aria, and data-attribute patterns |
+| `load_more_selector` | "" | Only when auto-detection misses a specific site's button | Advanced override: manual Playwright selector (supports `:has-text()` syntax). Takes priority over auto-detection |
+| `max_load_more_clicks` | 10 | Raise to 20-50 for sites with large paginated lists (50+ items) | How many times to click the button. Stops early if button disappears or content stops growing |
+| `max_load_more_seconds` | 120 | Raise to 300+ for very slow-loading paginated content | Wall-time budget for clicking. Prevents runaway click loops |
+
+## Load More Auto-Detection
+
+When `auto_click_load_more` is enabled, the crawler tries 35+ Playwright selectors in priority order to find the pagination button:
+
+1. **Buttons by text** (highest confidence) -- `button:has-text("Load More")`, `Show More`, `See More`, `View More`, `More Articles`, `More Posts`, `More Stories`, `More Results`
+2. **Role-based buttons** -- `[role="button"]:has-text(...)` for div/span styled as buttons
+3. **Class-based patterns** -- `[class*="load-more"]`, `loadMore`, `show-more`, `btn-more`, etc. (language-agnostic -- devs use English class names)
+4. **Links by text** (lower confidence) -- `a:has-text("Load More")`, etc.
+5. **Links by class** -- `a[class*="load-more"]`, etc.
+6. **Data attributes** -- `[data-action*="load-more"]`, `[data-testid*="loadMore"]`
+7. **Aria labels** -- `[aria-label*="load more" i]`, `[aria-label*="show more" i]`
+
+The first visible match wins. Playwright's `:has-text()` does case-insensitive substring matching, so `button:has-text("Load More")` catches "Load More", "LOAD MORE", "Load more posts", etc.
+
+**Safety features:** The click loop stops after 2 consecutive clicks that produce no new content, when the button disappears or becomes disabled, or when the time budget is exceeded.
 
 ## Recipes
 
@@ -71,6 +91,7 @@ max_depth_pages: 5
 request_timeout: 20000
 same_domain_only: true
 concurrency: 2
+auto_click_load_more: false
 ```
 
 ### Quick Homepage Scan
@@ -91,6 +112,21 @@ max_depth_pages: 15
 request_timeout: 30000
 same_domain_only: true
 concurrency: 3
+auto_click_load_more: true
+max_load_more_clicks: 20
+```
+
+### Paginated Blog/News Discovery
+For sites that hide blog posts behind Load More buttons:
+```
+max_urls: 500
+max_depth_pages: 10
+request_timeout: 25000
+same_domain_only: true
+concurrency: 2
+auto_click_load_more: true
+max_load_more_clicks: 30
+max_load_more_seconds: 180
 ```
 
 ### Cross-Domain Discovery
@@ -139,6 +175,7 @@ concurrency: 2
 - **waitForSelector on depth pages** -- depth-2 page fetches use `waitForSelector: 'a'` to ensure the page hydrates before link extraction. This improves reliability on SPAs and React Server Component sites that render links client-side
 - **No cookie consent handling** -- the browser does not click cookie consent banners. Some sites may show an overlay that hides content/links
 - **Sectioned link detection uses regex** -- nav/header/footer detection relies on HTML tag matching, which may misclassify links on non-standard layouts
+- **Load More auto-detection is heuristic** -- relies on common English text, class names, and attributes. Non-English button text or custom web components may not be detected. Use `load_more_selector` override for those cases
 
 ## What Happens Next
 
