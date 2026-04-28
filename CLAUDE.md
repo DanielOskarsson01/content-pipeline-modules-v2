@@ -185,3 +185,24 @@ Entry types: decision | progress | blocker | idea
 - None — committed and pushed, CI/CD deployed
 
 **Updated by:** session-closer agent
+
+### Session: 2026-04-28 — Job Search E2E pipeline validated end-to-end
+**Accomplished:**
+- Fixed api-search snippet truncation: full description text now preserved as `text_content` field (line 127) alongside 200-char `snippet` for UI display. Eliminates need for browser-scraper on SPA URLs.
+- Ran full E2E pipeline on Hetzner: api-search (77 jobs, all with text_content) → job-analyzer (fit score 78, CEO variant, 31.8K tokens, 114s) → cv-generator (2.6MB tailored CV + suggestions DOCX, 1.7s)
+- Verified auto-execute handles skip_steps correctly: Steps 0,2-4,6-10 skipped, Steps 1+5 executed
+- Discovered browser-scraper fails on all 76 Platsbanken URLs (SPA — duplicate text/block page detection). Root cause: arbetsformedlingen.se is React SPA, static HTML is empty shell.
+- Generated 4 output documents: Jobs Found (77 jobs table), Job Analysis (5-layer framework), Suggestions & Gaps (4 gaps, 6 suggestions), Tailored CV (CEO variant for Tre/Hi3G Head of Commercial)
+- Template updated: execution_plan simplified to Steps 1+5 only (skip 2-4,6-10), submodules_per_step only defines api-search and job-analyzer+cv-generator
+- Commit `87b2137` pushed: `feat: preserve full text_content in api-search for downstream modules`
+
+**Decisions:**
+- Store full text as `text_content` at discovery time (api-search) rather than requiring a separate scraping step — JobTech API already returns complete descriptions, re-scraping SPA URLs is wasteful and fails
+- Skip Steps 2-4 in Job Search template — url-dedup unnecessary (externalId dedup in api-search), browser-scraper can't handle Platsbanken SPAs, no filtering needed
+- Auto-execute (not manual step approval) is the correct flow for production — it handles skip_steps via safeSkipStep(), manual approval requires at least one submodule run per step
+- Kept snippet truncated at 200 chars for display (UI table) — text_content is the full-length field for downstream consumption
+
+**Blockers/Questions:**
+- None — pipeline working E2E. Ready for multi-entity production runs.
+
+**Updated by:** session-closer agent
