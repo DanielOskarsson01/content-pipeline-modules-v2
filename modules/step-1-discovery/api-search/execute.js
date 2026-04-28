@@ -120,9 +120,13 @@ function mapItem(rawItem, provider) {
       continue;
     }
     let val = resolveFieldValue(rawItem, fieldSpec);
-    // Strip HTML from snippet
+    // Strip HTML from snippet; store full text as text_content for downstream modules
     if (canonical === 'snippet' && val) {
-      val = stripHtml(val).slice(0, 200);
+      const fullText = stripHtml(val);
+      if (fullText.length > 200) {
+        mapped.text_content = fullText;
+      }
+      val = fullText.slice(0, 200);
     }
     mapped[canonical] = val;
   }
