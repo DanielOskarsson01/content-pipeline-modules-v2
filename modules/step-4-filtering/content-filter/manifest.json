@@ -42,14 +42,16 @@
       "type": "string",
       "label": "Exclude title keywords (comma-separated)",
       "description": "Pages with these words in the title are excluded. E.g. 'cookie,privacy,terms,login,404'.",
-      "default": "cookie,privacy,terms,login,404,cart,checkout"
+      "default": "cookie,privacy,terms,login,404,cart,checkout",
+      "presets_enabled": true
     },
     {
       "name": "exclude_url_patterns",
       "type": "string",
       "label": "Exclude URL patterns (comma-separated)",
       "description": "Safety net — pages matching these URL patterns are excluded. Note: overlaps with Step 2 url-filter; only catches items that bypassed or weren't run through url-filter.",
-      "default": "/tag/,/author/,/page/,/category/,/wp-admin/"
+      "default": "/tag/,/author/,/page/,/category/,/wp-admin/",
+      "presets_enabled": true
     }
   ],
 
