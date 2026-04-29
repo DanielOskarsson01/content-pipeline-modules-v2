@@ -148,6 +148,10 @@ async function fetchSitemap(url, { max_urls, include_nested_sitemaps, http, logg
       const browserRes = await browser.fetch(url, { timeout: 20000, waitForNetworkIdle: true });
       if (browserRes.status >= 200 && browserRes.status < 400 && browserRes.body) {
         xml = typeof browserRes.body === "string" ? browserRes.body : String(browserRes.body);
+        // Verify we got XML, not a Cloudflare challenge page
+        if (!xml.includes('<urlset') && !xml.includes('<sitemapindex')) {
+          throw new Error(`Browser returned HTML instead of sitemap XML (likely Cloudflare challenge page)`);
+        }
         logger.info(`Browser fallback succeeded for ${url} (${xml.length} chars)`);
       } else {
         throw new Error(`Browser returned HTTP ${browserRes.status} fetching ${url}`);
