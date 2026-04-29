@@ -1,0 +1,77 @@
+{
+  "id": "csv-discovery",
+  "name": "CSV Discovery",
+  "step": 1,
+  "description": "Import items from CSV files in a local directory. Reads all unprocessed CSVs, maps columns to pipeline item format. Designed for external tools (Cowork, cron scripts) that drop discovery results into a shared folder.",
+  "cost": "cheap",
+  "item_key": "url",
+  "data_operation_default": "transform",
+  "requires_columns": [],
+  "options": [
+    {
+      "name": "source_dir",
+      "label": "Source directory",
+      "type": "text",
+      "required": true,
+      "description": "Absolute path to folder containing CSV files"
+    },
+    {
+      "name": "file_pattern",
+      "label": "File pattern",
+      "type": "text",
+      "default": "jobs-*.csv",
+      "description": "Glob pattern for CSV filenames to process"
+    },
+    {
+      "name": "column_map",
+      "label": "Column mapping",
+      "type": "json",
+      "default": {
+        "url": "url",
+        "title": "title",
+        "company": "company",
+        "location": "location",
+        "snippet": "snippet",
+        "postedAt": "posted_date",
+        "externalId": "url"
+      },
+      "description": "Maps pipeline field names to CSV column headers"
+    },
+    {
+      "name": "source_label",
+      "label": "Source label",
+      "type": "text",
+      "default": "linkedin",
+      "description": "Value for the 'source' field on output items"
+    },
+    {
+      "name": "skip_processed",
+      "label": "Skip already-processed files",
+      "type": "boolean",
+      "default": true,
+      "description": "Track processed files and skip them on re-runs"
+    },
+    {
+      "name": "exclude_keywords",
+      "label": "Exclude keywords",
+      "type": "json",
+      "default": [],
+      "description": "Filter out items whose title contains these terms (case-insensitive)"
+    }
+  ],
+  "options_defaults": {
+    "file_pattern": "jobs-*.csv",
+    "column_map": {
+      "url": "url",
+      "title": "title",
+      "company": "company",
+      "location": "location",
+      "snippet": "snippet",
+      "postedAt": "posted_date",
+      "externalId": "url"
+    },
+    "source_label": "linkedin",
+    "skip_processed": true,
+    "exclude_keywords": []
+  }
+}
