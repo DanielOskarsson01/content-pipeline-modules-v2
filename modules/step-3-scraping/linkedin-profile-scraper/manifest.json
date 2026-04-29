@@ -1,15 +1,15 @@
 {
   "id": "linkedin-profile-scraper",
   "name": "LinkedIn Scraper",
-  "description": "Scrape LinkedIn profiles (experience, education, skills) or job descriptions via CDP + Voyager API. Modes: bio (personal profiles), company_people (employee profiles), job_description (enrich pool items with full job text).",
-  "version": "1.0.0",
+  "description": "Scrape LinkedIn profiles (experience, education, skills) or job descriptions via the LinkedIn Profile API. Modes: bio (personal profiles), company_people (employee profiles), job_description (enrich pool items with full job text).",
+  "version": "1.2.0",
   "step": 3,
   "category": "linkedin",
   "cost": "expensive",
   "data_operation_default": "add",
   "sort_order": 4,
 
-  "usage_notes": "Requires Chrome running with --remote-debugging-port=9222 on the server, already logged into LinkedIn (manual VNC login). Optional: SCRAPELINKEDIN_API_KEY for fallback. Rate-limited to ~20 profiles/hour by default.",
+  "usage_notes": "Requires the LinkedIn Profile API running on localhost:3847 (PM2: profile-api), with Chrome authenticated to LinkedIn. Optional: SCRAPELINKEDIN_API_KEY for fallback. Rate-limited to ~20 profiles/hour by default.",
 
   "requires_columns": [],
 
@@ -44,7 +44,7 @@
       "name": "fallback_to_scrapelinkedin",
       "type": "boolean",
       "label": "ScrapeLinkedIn fallback",
-      "description": "When Playwright/Voyager fails (cookie expired, CAPTCHA), try ScrapeLinkedIn API ($0.01/profile) as fallback. Requires SCRAPELINKEDIN_API_KEY env var.",
+      "description": "When Profile API fails (session expired, service down), try ScrapeLinkedIn API ($0.01/profile) as fallback. Requires SCRAPELINKEDIN_API_KEY env var.",
       "default": true
     }
   ],

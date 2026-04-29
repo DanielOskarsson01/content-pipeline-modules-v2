@@ -5,15 +5,15 @@
  *   bio / company_people — Scrape LinkedIn personal profiles (ADD operation)
  *   job_description     — Enrich pool items with full LinkedIn job descriptions (TRANSFORM)
  *
- * All modes use CDP connection to a running Chrome instance authenticated with
- * LinkedIn, calling the Voyager REST API from within the browser context.
+ * All modes delegate to the LinkedIn Profile API (localhost:3847), which manages
+ * the CDP connection to an authenticated Chrome instance and calls LinkedIn's
+ * Voyager REST API. This submodule is a thin HTTP client.
  *
- * Requires: Chrome running with --remote-debugging-port=9222 on the server.
  * Optional: SCRAPELINKEDIN_API_KEY for profile fallback.
  */
 
-// Direct Playwright import for CDP connection to running Chrome instance.
-const { chromium } = require('playwright');
+const PROFILE_API_URL = process.env.LINKEDIN_API_URL || 'http://localhost:3847';
+const PROFILE_API_KEY = process.env.LINKEDIN_API_KEY || 'oig-pipeline-2026';
 
 // ---------------------------------------------------------------------------
 // Main execute function
@@ -34,8 +34,6 @@ async function execute(input, options, tools) {
     return executeJobMode(input, options, tools);
   }
 
-  const cdpUrl = process.env.LINKEDIN_CDP_URL || 'http://localhost:9222';
-
   // Collect profiles to scrape
   const profilesToScrape = collectProfiles(entities, mode, max_profiles_per_entity, logger);
 
@@ -53,80 +51,53 @@ async function execute(input, options, tools) {
 
   logger.info(`${profilesToScrape.length} profiles to scrape (mode: ${mode}, rate: ${requests_per_hour}/hr)`);
 
-  // Connect to running Chrome via CDP. A GUI Chrome must be running on the
-  // server with --remote-debugging-port=9222, already authenticated with LinkedIn.
-  let browser;
-  try {
-    browser = await chromium.connectOverCDP(cdpUrl);
-  } catch (err) {
-    throw new Error(
-      `Failed to connect to Chrome via CDP at ${cdpUrl}: ${err.message}. ` +
-      'Ensure Chrome is running with --remote-debugging-port=9222 and is logged into LinkedIn.'
-    );
-  }
+  // Check if Profile API is healthy (validates LinkedIn session)
+  const sessionValid = await checkApiHealth(tools, logger);
 
   const results = [];
   const failedProfiles = [];
   let consecutiveFailures = 0;
-  let voyagerAborted = false;
+  let voyagerAborted = !sessionValid;
   const rateLimiter = createRateLimiter(requests_per_hour);
   let voyagerSuccessCount = 0;
-  let sessionValid = false;
 
-  try {
-    const contexts = browser.contexts();
-    if (contexts.length === 0) {
-      throw new Error('No browser contexts found in CDP Chrome — is the browser running?');
-    }
-    const context = contexts[0];
+  if (!sessionValid) {
+    logger.warn('LinkedIn Profile API unavailable — all profiles will use fallback');
+    failedProfiles.push(...profilesToScrape);
+  } else {
+    // Scrape each profile via Profile API
+    for (let i = 0; i < profilesToScrape.length; i++) {
+      const profile = profilesToScrape[i];
+      progress.update(i + 1, profilesToScrape.length, `Scraping ${profile.entity_name}`);
 
-    // Validate session before batch
-    sessionValid = await validateSession(context, logger);
-    voyagerAborted = !sessionValid;
+      if (voyagerAborted) {
+        failedProfiles.push(profile);
+        continue;
+      }
 
-    if (!sessionValid) {
-      logger.warn('LinkedIn session invalid — all profiles will use fallback');
-      failedProfiles.push(...profilesToScrape);
-    } else {
-      // Scrape each profile via Voyager API (called from browser context)
-      for (let i = 0; i < profilesToScrape.length; i++) {
-        const profile = profilesToScrape[i];
-        progress.update(i + 1, profilesToScrape.length, `Scraping ${profile.entity_name} (Voyager)`);
+      await rateLimiter();
 
-        if (voyagerAborted) {
-          failedProfiles.push(profile);
-          continue;
-        }
+      try {
+        const apiData = await scrapeProfileViaApi(profile.slug, tools, logger);
+        const parsed = normalizeProfileApiResponse(apiData);
+        const score = calculateCompleteness(parsed);
+        const item = formatProfileItem(parsed, score, 'voyager', profile.linkedin_url, profile.entity_name);
 
-        // Rate limit
-        await rateLimiter();
+        results.push(item);
+        voyagerSuccessCount++;
+        consecutiveFailures = 0;
+        if (tools._partialItems) tools._partialItems.push(item);
+      } catch (err) {
+        logger.warn(`Profile API failed for ${profile.slug}: ${err.message}`);
+        consecutiveFailures++;
+        failedProfiles.push(profile);
 
-        try {
-          const voyagerData = await scrapeProfileVoyager(context, profile.slug, logger);
-          const parsed = parseVoyagerResponse(voyagerData);
-          const score = calculateCompleteness(parsed);
-          const item = formatProfileItem(parsed, score, 'voyager', profile.linkedin_url, profile.entity_name);
-
-          results.push(item);
-          voyagerSuccessCount++;
-          consecutiveFailures = 0;
-          if (tools._partialItems) tools._partialItems.push(item);
-        } catch (err) {
-          logger.warn(`Voyager failed for ${profile.slug}: ${err.message}`);
-          consecutiveFailures++;
-          failedProfiles.push(profile);
-
-          // Circuit breaker: 3 consecutive failures → stop Voyager
-          if (consecutiveFailures >= 3) {
-            logger.error(`Circuit breaker: 3 consecutive Voyager failures — queuing remaining ${profilesToScrape.length - i - 1} profiles for fallback`);
-            voyagerAborted = true;
-          }
+        if (consecutiveFailures >= 3) {
+          logger.error(`Circuit breaker: 3 consecutive failures — queuing remaining ${profilesToScrape.length - i - 1} profiles for fallback`);
+          voyagerAborted = true;
         }
       }
     }
-  } finally {
-    // For CDP connections, close() disconnects without closing the actual browser.
-    try { await browser.close(); } catch {}
   }
 
   // ScrapeLinkedIn fallback for failed profiles
@@ -143,7 +114,7 @@ async function execute(input, options, tools) {
           linkedin_url: profile.linkedin_url,
           full_name: profile.entity_name,
           status: 'error',
-          error: 'Voyager failed, no ScrapeLinkedIn API key for fallback',
+          error: 'Profile API failed, no ScrapeLinkedIn API key for fallback',
           scrape_method: 'none',
           completeness_score: 0,
         });
@@ -184,21 +155,19 @@ async function execute(input, options, tools) {
       }
     }
   } else if (failedProfiles.length > 0) {
-    // Fallback disabled — mark remaining as errors
     for (const profile of failedProfiles) {
       results.push({
         entity_name: profile.entity_name,
         linkedin_url: profile.linkedin_url,
         full_name: profile.entity_name,
         status: 'error',
-        error: 'Voyager failed, fallback disabled',
+        error: 'Profile API failed, fallback disabled',
         scrape_method: 'none',
         completeness_score: 0,
       });
     }
   }
 
-  // Group results by entity
   const entityResults = groupByEntity(results);
 
   const totalSuccess = voyagerSuccessCount + fallbackSuccessCount;
@@ -227,6 +196,59 @@ async function execute(input, options, tools) {
 }
 
 // ---------------------------------------------------------------------------
+// Profile API communication
+// ---------------------------------------------------------------------------
+
+async function checkApiHealth(tools, logger) {
+  try {
+    const response = await tools.http.get(`${PROFILE_API_URL}/api/health`, { timeout: 10000 });
+    const body = typeof response.body === 'string' ? JSON.parse(response.body) : response.body;
+    if (body.status === 'ok') {
+      logger.info(`LinkedIn Profile API healthy (page: ${body.page})`);
+      return true;
+    }
+    logger.error(`LinkedIn Profile API unhealthy: ${body.error || 'unknown'}`);
+    return false;
+  } catch (err) {
+    logger.error(`LinkedIn Profile API unreachable: ${err.message}`);
+    return false;
+  }
+}
+
+async function scrapeProfileViaApi(slug, tools, logger) {
+  logger.info(`Fetching profile via API: ${slug}`);
+  const response = await tools.http.get(
+    `${PROFILE_API_URL}/api/profile/${slug}`,
+    {
+      headers: { 'x-api-key': PROFILE_API_KEY },
+      timeout: 30000,
+    }
+  );
+  const body = typeof response.body === 'string' ? JSON.parse(response.body) : response.body;
+  if (response.status >= 400 || body.error) {
+    throw new Error(body.error || `Profile API returned HTTP ${response.status}`);
+  }
+  logger.info(`Profile API: ${slug} — ${body.name || 'unknown'} (${(body.positions || []).length} positions)`);
+  return body;
+}
+
+async function scrapeJobViaApi(jobId, tools, logger) {
+  logger.info(`Fetching job via API: ${jobId}`);
+  const response = await tools.http.get(
+    `${PROFILE_API_URL}/api/job/${jobId}`,
+    {
+      headers: { 'x-api-key': PROFILE_API_KEY },
+      timeout: 30000,
+    }
+  );
+  const body = typeof response.body === 'string' ? JSON.parse(response.body) : response.body;
+  if (response.status >= 400 || body.error) {
+    throw new Error(body.error || `Job API returned HTTP ${response.status}`);
+  }
+  return body;
+}
+
+// ---------------------------------------------------------------------------
 // Profile collection from entities
 // ---------------------------------------------------------------------------
 
@@ -251,7 +273,7 @@ function collectProfiles(entities, mode, maxPerEntity, logger) {
         linkedin_url: normalizeLinkedInUrl(slug),
       });
     } else {
-      // company_people mode — look for employee profile links in entity data
+      // company_people mode
       const employeeUrls = entity.employees || entity.employee_profiles || [];
       const urls = Array.isArray(employeeUrls) ? employeeUrls : [];
       let count = 0;
@@ -279,10 +301,8 @@ function collectProfiles(entities, mode, maxPerEntity, logger) {
 
 function extractSlug(url) {
   if (!url) return null;
-  // Handle full URLs and bare slugs
   const match = url.match(/\/in\/([^/?#]+)/);
   if (match) return match[1];
-  // Maybe it's just the slug
   if (/^[a-zA-Z0-9-]+$/.test(url) && url.includes('-')) return url;
   return null;
 }
@@ -292,205 +312,53 @@ function normalizeLinkedInUrl(slug) {
 }
 
 // ---------------------------------------------------------------------------
-// Session validation
+// Profile API response normalization
 // ---------------------------------------------------------------------------
 
-async function validateSession(context, logger) {
-  logger.info('Validating LinkedIn session...');
-
-  // Check if there's already a LinkedIn page open in the browser
-  const existingPage = context.pages().find(p => p.url().includes('linkedin.com'));
-  if (existingPage) {
-    const url = existingPage.url();
-    if (url.includes('/feed') || url.includes('/in/') || url.includes('/mynetwork')) {
-      logger.info('LinkedIn session is valid (existing page found)');
-      return true;
-    }
-    if (url.includes('/login') || url.includes('/authwall') || url.includes('/checkpoint')) {
-      logger.error(`Session invalid — existing page at: ${url}`);
-      return false;
-    }
-  }
-
-  // Navigate a new page to verify
-  const page = await context.newPage();
-  try {
-    await page.goto('https://www.linkedin.com/feed/', {
-      timeout: 15000,
-      waitUntil: 'domcontentloaded',
-    });
-    const finalUrl = page.url();
-    if (finalUrl.includes('/login') || finalUrl.includes('/authwall') || finalUrl.includes('/checkpoint')) {
-      logger.error(`Session invalid — redirected to: ${finalUrl}`);
-      return false;
-    }
-    logger.info('LinkedIn session is valid');
-    return true;
-  } catch (err) {
-    logger.error(`Session validation failed: ${err.message}`);
-    return false;
-  } finally {
-    await page.close();
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Voyager API via CDP browser context
-// ---------------------------------------------------------------------------
-
-async function scrapeProfileVoyager(context, slug, logger) {
-  // Use an existing LinkedIn page to make the API call, or open one if needed.
-  // This avoids opening/closing tabs for each profile.
-  let page = context.pages().find(p => p.url().includes('linkedin.com'));
-  let ownPage = false;
-
-  if (!page) {
-    page = await context.newPage();
-    ownPage = true;
-    await page.goto('https://www.linkedin.com/feed/', { timeout: 15000, waitUntil: 'domcontentloaded' });
-  }
-
-  try {
-    logger.info(`Fetching Voyager API for ${slug}`);
-
-    const result = await page.evaluate(async (profileSlug) => {
-      // Extract CSRF token from cookies
-      const csrfToken = document.cookie
-        .split(';').map(c => c.trim())
-        .find(c => c.startsWith('JSESSIONID='))
-        ?.replace('JSESSIONID=', '')
-        .replace(/"/g, '');
-
-      if (!csrfToken) {
-        return { error: 'No JSESSIONID cookie — session may be expired' };
-      }
-
-      const headers = {
-        'csrf-token': csrfToken,
-        'x-restli-protocol-version': '2.0.0',
-        'x-li-lang': 'en_US',
-      };
-
-      // Call the Voyager dashProfiles endpoint with full profile decoration
-      const url = `/voyager/api/identity/dash/profiles?q=memberIdentity&memberIdentity=${profileSlug}&decorationId=com.linkedin.voyager.dash.deco.identity.profile.FullProfileWithEntities-109`;
-
-      const res = await fetch(url, { headers });
-      if (!res.ok) {
-        return { error: `Voyager API returned ${res.status}`, status: res.status };
-      }
-
-      return await res.json();
-    }, slug);
-
-    if (result.error) {
-      throw new Error(result.error);
-    }
-
-    const elements = result.elements || [];
-    if (elements.length === 0) {
-      throw new Error('Voyager API returned empty profile');
-    }
-
-    logger.info(`Voyager: profile data received for ${slug} (${(result.elements[0] && Object.keys(result.elements[0]).length) || 0} fields)`);
-    return result;
-  } finally {
-    if (ownPage) await page.close();
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Voyager response parsing
-// ---------------------------------------------------------------------------
-
-function parseVoyagerResponse(data) {
-  // FullProfileWithEntities-109 format: elements[0] contains the full profile
-  // with nested collections (profilePositionGroups, profileEducations, etc.)
-  const el = (data.elements || [])[0] || {};
-
-  const firstName = el.firstName || '';
-  const lastName = el.lastName || '';
-  const fullName = `${firstName} ${lastName}`.trim();
-  const headline = el.headline || '';
-  const summary = el.summary || '';
-
-  // Location from nested geoLocation object
-  let location = '';
-  if (el.geoLocation?.geo) {
-    location = el.geoLocation.geo.defaultLocalizedName || '';
-  } else if (el.location?.geo) {
-    location = el.location.geo.defaultLocalizedName || '';
-  }
-
-  // Positions — extracted from profilePositionGroups
-  const positions = [];
-  const posGroups = el.profilePositionGroups?.elements || [];
-  for (const group of posGroups) {
-    const companyName = group.company?.name || group.name || '';
-    const items = group.profilePositionInPositionGroup?.elements || [];
-    for (const p of items) {
-      positions.push({
-        title: p.title || '',
-        company: p.companyName || companyName,
-        location: p.locationName || p.geoLocationName || '',
-        start: formatVoyagerDate(p.dateRange?.start),
-        end: formatVoyagerDate(p.dateRange?.end),
-        description: p.description || '',
-      });
-    }
-  }
+function normalizeProfileApiResponse(data) {
+  const positions = (data.positions || []).map(p => ({
+    title: p.title || '',
+    company: p.company || '',
+    location: p.location || '',
+    start: formatDateObj(p.start),
+    end: formatDateObj(p.end),
+    description: p.description || '',
+  }));
   positions.sort((a, b) => compareDates(b.start, a.start));
 
-  // Education
-  const education = (el.profileEducations?.elements || [])
-    .map(e => ({
-      school: e.school?.name || e.schoolName || '',
-      degree: e.degreeName || '',
-      field: e.fieldOfStudy || '',
-      start: formatVoyagerDate(e.dateRange?.start),
-      end: formatVoyagerDate(e.dateRange?.end),
-      description: e.description || '',
-    }))
-    .sort((a, b) => compareDates(b.start, a.start));
-
-  // Skills
-  const skills = (el.profileSkills?.elements || [])
-    .map(e => e.name || '')
-    .filter(Boolean);
-
-  // Languages
-  const languages = (el.profileLanguages?.elements || [])
-    .map(e => e.name || '')
-    .filter(Boolean);
-
-  // Certifications
-  const certifications = (el.profileCertifications?.elements || [])
-    .map(e => e.name || '')
-    .filter(Boolean);
-
-  // Volunteer experience (bonus data)
-  const volunteer = (el.profileVolunteerExperiences?.elements || [])
-    .map(e => ({
-      role: e.role || '',
-      organization: e.companyName || '',
-      description: e.description || '',
-    }))
-    .filter(e => e.role || e.organization);
+  const education = (data.educations || []).map(e => ({
+    school: e.school || '',
+    degree: e.degree || '',
+    field: e.field || '',
+    start: formatDateObj(e.start),
+    end: formatDateObj(e.end),
+    description: e.description || '',
+  }));
+  education.sort((a, b) => compareDates(b.start, a.start));
 
   return {
-    full_name: fullName,
-    headline,
-    location,
-    summary,
+    full_name: data.name || '',
+    headline: data.headline || '',
+    location: data.location || '',
+    summary: data.summary || '',
     positions,
     education,
-    skills,
-    languages,
-    certifications,
-    volunteer,
+    skills: Array.isArray(data.skills) ? data.skills : [],
+    languages: Array.isArray(data.languages)
+      ? data.languages.map(l => typeof l === 'string' ? l : l.name || '').filter(Boolean)
+      : [],
+    certifications: Array.isArray(data.certifications)
+      ? data.certifications.map(c => typeof c === 'string' ? c : c.name || '').filter(Boolean)
+      : [],
+    volunteer: (data.volunteer || []).map(v => ({
+      role: v.role || '',
+      organization: v.org || v.organization || '',
+      description: v.description || '',
+    })).filter(v => v.role || v.organization),
   };
 }
 
-function formatVoyagerDate(dateObj) {
+function formatDateObj(dateObj) {
   if (!dateObj) return null;
   const { month, year } = dateObj;
   if (!year) return null;
@@ -502,7 +370,6 @@ function formatVoyagerDate(dateObj) {
 }
 
 function compareDates(a, b) {
-  // Sort helper for date strings like "Mar 2023" or "2023" or null
   const parseYear = (d) => {
     if (!d) return 0;
     const match = d.match(/(\d{4})/);
@@ -550,7 +417,6 @@ async function scrapeProfileScrapeLinkedIn(linkedinUrl, apiKey, tools, logger) {
 }
 
 function normalizeScrapeLinkedIn(data) {
-  // Normalize ScrapeLinkedIn response to same shape as Voyager parsed output
   const positions = (data.experience || data.positions || []).map(p => ({
     title: p.title || p.position || '',
     company: p.company || p.company_name || '',
@@ -611,7 +477,6 @@ function calculateCompleteness(parsed) {
 // ---------------------------------------------------------------------------
 
 function formatProfileItem(parsed, score, method, linkedinUrl, entityName) {
-  // Format positions as readable text
   const experienceText = parsed.positions.map(p => {
     const dateStr = [p.start, p.end || 'Present'].filter(Boolean).join(' — ');
     const header = `${p.title}${p.company ? ' @ ' + p.company : ''}`;
@@ -622,7 +487,6 @@ function formatProfileItem(parsed, score, method, linkedinUrl, entityName) {
     return parts.join('\n');
   }).join('\n\n---\n\n');
 
-  // Format education as readable text
   const educationText = parsed.education.map(e => {
     const dateStr = [e.start, e.end].filter(Boolean).join(' — ');
     const parts = [e.school];
@@ -645,7 +509,6 @@ function formatProfileItem(parsed, score, method, linkedinUrl, entityName) {
   const status = score < 50 ? 'incomplete' : 'success';
 
   return {
-    // Display columns
     linkedin_url: linkedinUrl,
     full_name: parsed.full_name,
     headline: parsed.headline,
@@ -658,16 +521,12 @@ function formatProfileItem(parsed, score, method, linkedinUrl, entityName) {
     status,
     error: null,
     entity_name: entityName,
-
-    // Detail view / downstream fields
     summary: parsed.summary,
     experience_text: experienceText,
     education_text: educationText,
     skills_text: skillsText,
     languages_text: languagesText,
     certifications_text: certificationsText,
-
-    // Structured data for downstream content generation
     positions: parsed.positions,
     education: parsed.education,
     skills: parsed.skills,
@@ -675,8 +534,6 @@ function formatProfileItem(parsed, score, method, linkedinUrl, entityName) {
     certifications: parsed.certifications,
     volunteer: parsed.volunteer || [],
     volunteer_text: volunteerText,
-
-    // Metadata
     source_type: 'linkedin_profile',
     found_via: 'linkedin_profile_scraper',
   };
@@ -722,8 +579,6 @@ function groupByEntity(results) {
 
 function extractJobId(url) {
   if (!url) return null;
-  // Handles both numeric-only URLs (/jobs/view/1234567890)
-  // and slug-style URLs (/jobs/view/head-of-marketing-1234567890/)
   const match = url.match(/linkedin\.com\/jobs\/view\/(?:.*?[-/])?(\d{5,})/);
   return match ? match[1] : null;
 }
@@ -755,58 +610,9 @@ function collectJobs(entities, logger) {
   return jobs;
 }
 
-async function scrapeJobVoyager(context, jobId, logger) {
-  let page = context.pages().find(p => p.url().includes('linkedin.com'));
-  let ownPage = false;
-
-  if (!page) {
-    page = await context.newPage();
-    ownPage = true;
-    await page.goto('https://www.linkedin.com/feed/', { timeout: 15000, waitUntil: 'domcontentloaded' });
-  }
-
-  try {
-    logger.info(`Fetching Voyager job API for job ${jobId}`);
-
-    const result = await page.evaluate(async (jid) => {
-      const csrfToken = document.cookie
-        .split(';').map(c => c.trim())
-        .find(c => c.startsWith('JSESSIONID='))
-        ?.replace('JSESSIONID=', '')
-        .replace(/"/g, '');
-
-      if (!csrfToken) {
-        return { error: 'No JSESSIONID cookie — session may be expired' };
-      }
-
-      const headers = {
-        'csrf-token': csrfToken,
-        'x-restli-protocol-version': '2.0.0',
-        'x-li-lang': 'en_US',
-      };
-
-      const res = await fetch(`/voyager/api/jobs/jobPostings/${jid}`, { headers });
-      if (!res.ok) {
-        return { error: `Voyager job API returned ${res.status}`, status: res.status };
-      }
-
-      return await res.json();
-    }, jobId);
-
-    if (result.error) {
-      throw new Error(result.error);
-    }
-
-    return result;
-  } finally {
-    if (ownPage) await page.close();
-  }
-}
-
 function parseJobResponse(data) {
   const title = data.title || data.jobPostingTitle || '';
 
-  // Description — multiple possible shapes
   let description = '';
   if (data.description) {
     if (typeof data.description === 'string') {
@@ -816,7 +622,6 @@ function parseJobResponse(data) {
     }
   }
 
-  // Company name — deeply nested in Voyager response
   let company = '';
   if (data.companyDetails) {
     const details = Object.values(data.companyDetails)[0];
@@ -832,7 +637,6 @@ function parseJobResponse(data) {
 
   const location = data.formattedLocation || '';
 
-  // Workplace type
   let workplaceType = '';
   if (data.workplaceTypesResolutionResults) {
     workplaceType = Object.values(data.workplaceTypesResolutionResults)
@@ -858,7 +662,6 @@ async function executeJobMode(input, options, tools) {
   const { entities } = input;
   const { logger, progress } = tools;
   const { requests_per_hour = 20 } = options;
-  const cdpUrl = process.env.LINKEDIN_CDP_URL || 'http://localhost:9222';
 
   const jobs = collectJobs(entities, logger);
 
@@ -880,109 +683,89 @@ async function executeJobMode(input, options, tools) {
 
   logger.info(`${jobs.length} LinkedIn jobs to scrape (rate: ${requests_per_hour}/hr)`);
 
-  let browser;
-  try {
-    browser = await chromium.connectOverCDP(cdpUrl);
-  } catch (err) {
-    throw new Error(
-      `Failed to connect to Chrome via CDP at ${cdpUrl}: ${err.message}. ` +
-      'Ensure Chrome is running with --remote-debugging-port=9222 and is logged into LinkedIn.'
-    );
+  // Check if Profile API is healthy
+  const sessionValid = await checkApiHealth(tools, logger);
+  if (!sessionValid) {
+    logger.error('LinkedIn Profile API unavailable — cannot scrape job descriptions');
+    return {
+      results: entities.map(e => ({
+        entity_name: e.name,
+        items: (e.items || []).map(item => ({ ...item, scrape_method: 'none', status: 'error', error: 'LinkedIn Profile API unavailable' })),
+        meta: { total: (e.items || []).length, scraped: 0, errors: (e.items || []).length },
+      })),
+      summary: {
+        total_entities: entities.length,
+        total_items: jobs.length,
+        voyager_status: 'session_expired',
+        description: `API unavailable — 0 of ${jobs.length} jobs scraped`,
+        errors: ['LinkedIn Profile API unavailable — check profile-api service'],
+      },
+    };
   }
 
-  const enrichedMap = new Map(); // jobId → enriched item
+  const enrichedMap = new Map();
   let voyagerSuccessCount = 0;
   let consecutiveFailures = 0;
   let voyagerAborted = false;
   const rateLimiter = createRateLimiter(requests_per_hour);
   const errors = [];
 
-  try {
-    const contexts = browser.contexts();
-    if (contexts.length === 0) {
-      throw new Error('No browser contexts found in CDP Chrome');
-    }
-    const context = contexts[0];
+  for (let i = 0; i < jobs.length; i++) {
+    const job = jobs[i];
+    progress.update(i + 1, jobs.length, `Job ${i + 1}/${jobs.length} (${job._jobId})`);
 
-    const sessionValid = await validateSession(context, logger);
-    if (!sessionValid) {
-      logger.error('LinkedIn session invalid — cannot scrape job descriptions');
-      return {
-        results: entities.map(e => ({
-          entity_name: e.name,
-          items: (e.items || []).map(item => ({ ...item, scrape_method: 'none', status: 'error', error: 'LinkedIn session expired' })),
-          meta: { total: (e.items || []).length, scraped: 0, errors: (e.items || []).length },
-        })),
-        summary: {
-          total_entities: entities.length,
-          total_items: jobs.length,
-          voyager_status: 'session_expired',
-          description: `Session expired — 0 of ${jobs.length} jobs scraped`,
-          errors: ['LinkedIn session expired — re-login via VNC'],
-        },
+    if (voyagerAborted) {
+      enrichedMap.set(job._jobId, { ...job, scrape_method: 'none', status: 'error', error: 'Aborted (circuit breaker)' });
+      errors.push(`Job ${job._jobId}: circuit breaker`);
+      continue;
+    }
+
+    await rateLimiter();
+
+    try {
+      const voyagerData = await scrapeJobViaApi(job._jobId, tools, logger);
+      const parsed = parseJobResponse(voyagerData);
+
+      const enriched = {
+        ...job,
+        title: parsed.title || job.title,
+        company: parsed.company || job.company,
+        location: parsed.location || job.location,
+        text_content: parsed.description,
+        workplace_type: parsed.workplaceType,
+        employment_type: parsed.employmentType,
+        seniority_level: parsed.seniority,
+        industries: parsed.industries,
+        job_functions: parsed.jobFunctions,
+        postedAt: parsed.postedAt || job.postedAt,
+        scrape_method: 'voyager',
+        status: parsed.description ? 'success' : 'incomplete',
+        source_type: 'linkedin_job',
       };
-    }
+      delete enriched._jobId;
 
-    for (let i = 0; i < jobs.length; i++) {
-      const job = jobs[i];
-      progress.update(i + 1, jobs.length, `Job ${i + 1}/${jobs.length} (${job._jobId})`);
+      enrichedMap.set(job._jobId, enriched);
+      voyagerSuccessCount++;
+      consecutiveFailures = 0;
+      logger.info(`Job ${job._jobId}: ${parsed.description.length} chars`);
 
-      if (voyagerAborted) {
-        enrichedMap.set(job._jobId, { ...job, scrape_method: 'none', status: 'error', error: 'Voyager aborted (circuit breaker)' });
-        errors.push(`Job ${job._jobId}: circuit breaker`);
-        continue;
+      if (tools._partialItems) {
+        tools._partialItems.length = 0;
+        tools._partialItems.push(...enrichedMap.values());
       }
+    } catch (err) {
+      logger.warn(`Job ${job._jobId}: ${err.message}`);
+      consecutiveFailures++;
+      errors.push(`Job ${job._jobId}: ${err.message}`);
+      enrichedMap.set(job._jobId, { ...job, scrape_method: 'none', status: 'error', error: err.message });
 
-      await rateLimiter();
-
-      try {
-        const voyagerData = await scrapeJobVoyager(context, job._jobId, logger);
-        const parsed = parseJobResponse(voyagerData);
-
-        const enriched = {
-          ...job,
-          title: parsed.title || job.title,
-          company: parsed.company || job.company,
-          location: parsed.location || job.location,
-          text_content: parsed.description,
-          workplace_type: parsed.workplaceType,
-          employment_type: parsed.employmentType,
-          seniority_level: parsed.seniority,
-          industries: parsed.industries,
-          job_functions: parsed.jobFunctions,
-          postedAt: parsed.postedAt || job.postedAt,
-          scrape_method: 'voyager',
-          status: parsed.description ? 'success' : 'incomplete',
-          source_type: 'linkedin_job',
-        };
-        delete enriched._jobId;
-
-        enrichedMap.set(job._jobId, enriched);
-        voyagerSuccessCount++;
-        consecutiveFailures = 0;
-        logger.info(`Job ${job._jobId}: ${parsed.description.length} chars`);
-
-        if (tools._partialItems) {
-          tools._partialItems.length = 0;
-          tools._partialItems.push(...enrichedMap.values());
-        }
-      } catch (err) {
-        logger.warn(`Job ${job._jobId}: ${err.message}`);
-        consecutiveFailures++;
-        errors.push(`Job ${job._jobId}: ${err.message}`);
-        enrichedMap.set(job._jobId, { ...job, scrape_method: 'none', status: 'error', error: err.message });
-
-        if (consecutiveFailures >= 3) {
-          logger.error('Circuit breaker: 3 consecutive failures — aborting remaining jobs');
-          voyagerAborted = true;
-        }
+      if (consecutiveFailures >= 3) {
+        logger.error('Circuit breaker: 3 consecutive failures — aborting remaining jobs');
+        voyagerAborted = true;
       }
     }
-  } finally {
-    try { await browser.close(); } catch {}
   }
 
-  // Rebuild entity results — enriched items replace originals, non-LinkedIn items pass through
   const entityResults = entities.map(e => {
     const items = (e.items || []).map(item => {
       const jobId = extractJobId(item.url);
@@ -1029,7 +812,6 @@ function createRateLimiter(requestsPerHour) {
     const elapsed = now - lastRequestTime;
     const waitMs = Math.max(0, minIntervalMs - elapsed);
     if (waitMs > 0) {
-      // Add human-like jitter (0-5 seconds)
       const jitter = Math.floor(Math.random() * 5000);
       await new Promise(resolve => setTimeout(resolve, waitMs + jitter));
     }

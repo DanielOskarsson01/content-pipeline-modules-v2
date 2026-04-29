@@ -1,9 +1,9 @@
 # LinkedIn Scraper
 
-> Scrape LinkedIn profiles (bio/company_people modes) or enrich pool items with full LinkedIn job descriptions (job_description mode) via CDP + Voyager API.
+> Scrape LinkedIn profiles (bio/company_people modes) or enrich pool items with full LinkedIn job descriptions (job_description mode) via the LinkedIn Profile API.
 
 **Module ID:** `linkedin-profile-scraper` | **Step:** 3 (Scraping) | **Category:** linkedin | **Cost:** expensive
-**Version:** 1.1.0 | **Data Operation:** add (+) for profiles, transform for job_description
+**Version:** 1.2.0 | **Data Operation:** add (+) for profiles, transform for job_description
 
 ---
 
@@ -11,40 +11,41 @@
 
 This module takes LinkedIn profile URLs and extracts complete professional data -- full job descriptions with tasks and results, education history, skills, languages, and the About summary. The output feeds into downstream content generation (Step 4/5) to produce biographical articles, "People to Know" features, leadership spotlights, and "Key People" sections in company profiles.
 
-The module uses **CDP (Chrome DevTools Protocol) connection + Voyager REST API** as its primary method. A GUI Chrome instance must be running on the server with `--remote-debugging-port=9222`, authenticated with LinkedIn via manual VNC login. The module connects to this browser via CDP, then calls LinkedIn's internal Voyager API directly from within the browser context using `fetch()`. This returns the full structured profile JSON (the `FullProfileWithEntities-109` decoration) -- the same data LinkedIn's own frontend uses, in a stable format with no CSS selectors to maintain.
+The module delegates all LinkedIn interaction to the **LinkedIn Profile API** (`localhost:3847`), a dedicated service that manages the CDP connection to an authenticated Chrome instance and calls LinkedIn's internal Voyager REST API. This submodule is a thin HTTP client -- it calls the API, maps the response, and formats the output.
 
-LinkedIn aggressively blocks headless browsers and session cookies from datacenter IPs. By connecting to a real GUI Chrome instance that was manually authenticated (solving CAPTCHAs interactively), the module uses a genuine browser session that LinkedIn trusts.
+The Profile API uses a real GUI Chrome instance that was manually authenticated (solving CAPTCHAs interactively via VNC), so LinkedIn trusts the session. The API handles CDP connection pooling, Chrome auto-recovery, and structured logging.
 
-When the primary method fails (expired session, LinkedIn API changes), the module falls back to the **ScrapeLinkedIn API** ($0.01/profile) -- a paid service that uses its own AI agent to scrape profiles.
+When the primary method fails (expired session, API unavailable), the module falls back to the **ScrapeLinkedIn API** ($0.01/profile) -- a paid service that uses its own AI agent to scrape profiles.
 
 ```
 Seed CSV / linkedin-discovery (Step 1)
     ↓ entities with linkedin column
 linkedin-profile-scraper (this module)
+    ↓ calls Profile API (localhost:3847)
     ↓ structured profile data
 content-analyzer (Step 4) → content-writer (Step 5) → biographical articles
 ```
 
-### How the CDP + Voyager Approach Works
+### Architecture
 
-1. Connect to running Chrome via CDP (`chromium.connectOverCDP('http://localhost:9222')`)
-2. Reuse an existing LinkedIn tab in the browser (or open one to `/feed/`)
-3. Call the Voyager API directly via `page.evaluate(fetch('/voyager/api/identity/dash/profiles?...'))` with CSRF token from cookies
-4. Parse the nested `elements[0]` response (profilePositionGroups, profileEducations, profileSkills, etc.)
-5. Rate limit to ~3 min between API calls (20/hour default) with random jitter
+1. Health check via `GET /api/health` -- verifies Profile API is running and LinkedIn session is active
+2. For each profile: `GET /api/profile/{slug}` -- returns structured profile JSON (name, positions, education, skills, etc.)
+3. For each job: `GET /api/job/{jobId}` -- returns raw Voyager job posting data
+4. Rate limit to ~3 min between API calls (20/hour default) with random jitter
+5. Map API response to submodule output format (completeness scoring, text formatting)
 
 ### Server Setup Requirements
 
-1. **VNC server** running on the server (TigerVNC on `:1`, noVNC on port 6080)
-2. **Chrome** started on the VNC display with CDP: `DISPLAY=:1 chrome --no-sandbox --remote-debugging-port=9222 --user-data-dir=/root/.config/google-chrome-for-testing`
+1. **Profile API** running as PM2 process (`pm2 show profile-api`) on port 3847
+2. **Chrome** running with `--remote-debugging-port=9222` (managed by profile-api's auto-recovery)
 3. **Manual LinkedIn login** -- connect via noVNC (`http://server:6080/vnc.html`), open LinkedIn, complete CAPTCHA, reach the feed
 4. Chrome stays running between module runs -- sessions last weeks/months
 
 ### Safety Features
 
-**Session validation:** Before scraping, checks if the CDP Chrome has a LinkedIn page open. If not, navigates to `/feed/` to verify the session is active. If redirected to login, skips Voyager entirely and routes all profiles to the ScrapeLinkedIn fallback.
+**Health check:** Before scraping, calls `/api/health` to verify the Profile API is running and has an active LinkedIn session. If unhealthy, skips Voyager entirely and routes all profiles to the ScrapeLinkedIn fallback.
 
-**Circuit breaker:** If 3 consecutive profiles fail via Voyager, the module stops API calls and queues all remaining profiles for the ScrapeLinkedIn fallback. Prevents burning time on a dead session.
+**Circuit breaker:** If 3 consecutive profiles fail, the module stops API calls and queues all remaining profiles for the ScrapeLinkedIn fallback. Prevents burning time on a dead session.
 
 **Completeness scoring:** Every scraped profile gets a 0-100 score based on which sections were captured. Profiles scoring below 50 are flagged as "incomplete" in the results.
 
@@ -58,7 +59,7 @@ content-analyzer (Step 4) → content-writer (Step 5) → biographical articles
 **Skip when:**
 - Entities don't have LinkedIn profile URLs (this module requires `linkedin` column)
 - You only need company-level data -- use the LinkedIn Company Scraper (B015) instead
-- Chrome with CDP is not running on the server (no `--remote-debugging-port=9222`)
+- Profile API is not running on the server (`pm2 show profile-api`)
 
 **Tune the settings when:**
 - Scraping more than 50 profiles -- consider lowering rate to 15/hr for safety
@@ -168,7 +169,7 @@ Input: pool items with `url` containing `linkedin.com/jobs/view/{jobId}`. The mo
 - `voyager_status: "session_expired"` in summary -- the Chrome browser session has expired. Re-login via VNC: connect to noVNC, navigate to LinkedIn, complete CAPTCHA, reach the feed
 - All profiles showing `scrape_method: "scrapelinkedin"` -- Voyager failed completely, likely expired session or Chrome not running
 - `completeness_score` below 50 on multiple profiles -- either profiles are genuinely thin, or the scraper is being blocked
-- `status: "error"` with "Failed to connect to Chrome via CDP" -- Chrome is not running with `--remote-debugging-port=9222`. Start it on the VNC display
+- `status: "error"` with "Profile API unavailable" -- the profile-api PM2 process is down or Chrome is not running. Check `pm2 show profile-api`
 
 ## Cost
 
@@ -185,7 +186,7 @@ Input: pool items with `url` containing `linkedin.com/jobs/view/{jobId}`. The mo
 
 ## Limitations
 
-- **Requires Chrome running with CDP** -- a GUI Chrome instance must be running on the server with `--remote-debugging-port=9222`, authenticated with LinkedIn. Session expires after weeks/months and requires manual VNC re-login
+- **Requires Profile API running** -- the `profile-api` PM2 process must be running on port 3847, with Chrome authenticated to LinkedIn
 - **Requires VNC setup** -- TigerVNC + noVNC must be installed on the server for manual LinkedIn login (CAPTCHA solving)
 - **One profile at a time** -- no concurrency. LinkedIn tracks API calls and concurrent sessions look suspicious
 - **Rate limited by design** -- 20 profiles/hour is intentionally slow. Faster rates risk account restrictions
@@ -193,7 +194,6 @@ Input: pool items with `url` containing `linkedin.com/jobs/view/{jobId}`. The mo
 - **Private profiles** -- returns empty positions/education. Marked as `status: "incomplete"` with low completeness score
 - **ScrapeLinkedIn fallback is non-deterministic** -- uses an AI agent that sometimes misses sections. Known to return incomplete data
 - **Company_people mode depends on upstream** -- requires employee profile URLs from B015 company scraper or seed CSV with employee links
-- **Playwright must be installed** -- requires `playwright` npm package and matching Chromium browser version
 - **GDPR consideration** -- profiles of public figures (CEOs, founders) fall under Legitimate Interest. Published content should include an attribution link back to the LinkedIn profile (stored in `linkedin_url`)
 
 ## What Happens Next
@@ -216,7 +216,7 @@ For company profiles, executive data from this module populates the "Key People"
 - **Output:** `{ results[], summary }` grouped by entity_name
 - **Selectable:** false -- all profiles are generally wanted
 - **Detail view:** header (linkedin_url as link, full_name, headline, location, status badge, completeness_score, scrape_method) + sections (About, Experience, Education, Skills as prose)
-- **Error handling:** session pre-check → per-profile Voyager with circuit breaker (3 failures) → ScrapeLinkedIn fallback → error. Partial success supported
-- **External dependencies:** `playwright` (CDP connection), `tools.http` (ScrapeLinkedIn API calls), `tools.logger`, `tools.progress`, `tools._partialItems`
-- **Environment variables:** `LINKEDIN_CDP_URL` (optional, defaults to `http://localhost:9222`), `SCRAPELINKEDIN_API_KEY` (optional, for fallback)
-- **Server infrastructure:** TigerVNC on `:1`, noVNC on port 6080, Chrome with `--remote-debugging-port=9222` on VNC display
+- **Error handling:** health check → per-profile API call with circuit breaker (3 failures) → ScrapeLinkedIn fallback → error. Partial success supported
+- **External dependencies:** `tools.http` (Profile API + ScrapeLinkedIn API calls), `tools.logger`, `tools.progress`, `tools._partialItems`
+- **Environment variables:** `LINKEDIN_API_URL` (optional, defaults to `http://localhost:3847`), `LINKEDIN_API_KEY` (optional, defaults to `oig-pipeline-2026`), `SCRAPELINKEDIN_API_KEY` (optional, for fallback)
+- **Server infrastructure:** Profile API on port 3847 (PM2), TigerVNC on `:1`, noVNC on port 6080, Chrome with `--remote-debugging-port=9222`
