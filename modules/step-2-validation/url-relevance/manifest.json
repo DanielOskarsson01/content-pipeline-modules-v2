@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "step": 2,
   "category": "filtering",
-  "cost": "cheap",
+  "cost": "medium",
   "data_operation_default": "remove",
 
   "depends_on": ["url-dedup", "url-filter"],
