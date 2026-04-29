@@ -1,19 +1,15 @@
 /**
- * LinkedIn Profile Scraper — Step 3 Scraping submodule
+ * LinkedIn Scraper — Step 3 Scraping submodule
  *
- * Scrapes full LinkedIn personal profiles via CDP connection to a running
- * Chrome instance. A GUI Chrome must be running on the server with
- * --remote-debugging-port=9222, authenticated with LinkedIn (manual login).
- * The module connects via CDP, opens pages in the existing authenticated
- * context, and calls the Voyager REST API from within the browser to get
- * structured profile JSON.
+ * Modes:
+ *   bio / company_people — Scrape LinkedIn personal profiles (ADD operation)
+ *   job_description     — Enrich pool items with full LinkedIn job descriptions (TRANSFORM)
  *
- * Fallback: ScrapeLinkedIn API ($0.01/profile) when Voyager fails.
- *
- * Data operation: ADD (➕) — produces profile items from entity linkedin_url.
+ * All modes use CDP connection to a running Chrome instance authenticated with
+ * LinkedIn, calling the Voyager REST API from within the browser context.
  *
  * Requires: Chrome running with --remote-debugging-port=9222 on the server.
- * Optional: SCRAPELINKEDIN_API_KEY for fallback.
+ * Optional: SCRAPELINKEDIN_API_KEY for profile fallback.
  */
 
 // Direct Playwright import for CDP connection to running Chrome instance.
@@ -32,6 +28,11 @@ async function execute(input, options, tools) {
     max_profiles_per_entity = 5,
     fallback_to_scrapelinkedin = true,
   } = options;
+
+  // Job description mode — completely different flow
+  if (mode === 'job_description') {
+    return executeJobMode(input, options, tools);
+  }
 
   const cdpUrl = process.env.LINKEDIN_CDP_URL || 'http://localhost:9222';
 
@@ -713,6 +714,304 @@ function groupByEntity(results) {
   }
 
   return entityResults;
+}
+
+// ---------------------------------------------------------------------------
+// Job description mode
+// ---------------------------------------------------------------------------
+
+function extractJobId(url) {
+  if (!url) return null;
+  // Handles both numeric-only URLs (/jobs/view/1234567890)
+  // and slug-style URLs (/jobs/view/head-of-marketing-1234567890/)
+  const match = url.match(/linkedin\.com\/jobs\/view\/(?:.*?[-/])?(\d{5,})/);
+  return match ? match[1] : null;
+}
+
+function collectJobs(entities, logger) {
+  const jobs = [];
+  const seen = new Set();
+
+  for (const entity of entities) {
+    const items = entity.items || [];
+    for (const item of items) {
+      const url = item.url;
+      if (!url || !url.includes('linkedin.com/jobs/')) continue;
+      const jobId = extractJobId(url);
+      if (!jobId || seen.has(jobId)) continue;
+      seen.add(jobId);
+      jobs.push({
+        ...item,
+        entity_name: entity.name || item.entity_name || 'unknown',
+        _jobId: jobId,
+      });
+    }
+  }
+
+  if (jobs.length === 0) {
+    logger.info('No LinkedIn job URLs found in pool items');
+  }
+
+  return jobs;
+}
+
+async function scrapeJobVoyager(context, jobId, logger) {
+  let page = context.pages().find(p => p.url().includes('linkedin.com'));
+  let ownPage = false;
+
+  if (!page) {
+    page = await context.newPage();
+    ownPage = true;
+    await page.goto('https://www.linkedin.com/feed/', { timeout: 15000, waitUntil: 'domcontentloaded' });
+  }
+
+  try {
+    logger.info(`Fetching Voyager job API for job ${jobId}`);
+
+    const result = await page.evaluate(async (jid) => {
+      const csrfToken = document.cookie
+        .split(';').map(c => c.trim())
+        .find(c => c.startsWith('JSESSIONID='))
+        ?.replace('JSESSIONID=', '')
+        .replace(/"/g, '');
+
+      if (!csrfToken) {
+        return { error: 'No JSESSIONID cookie — session may be expired' };
+      }
+
+      const headers = {
+        'csrf-token': csrfToken,
+        'x-restli-protocol-version': '2.0.0',
+        'x-li-lang': 'en_US',
+      };
+
+      const res = await fetch(`/voyager/api/jobs/jobPostings/${jid}`, { headers });
+      if (!res.ok) {
+        return { error: `Voyager job API returned ${res.status}`, status: res.status };
+      }
+
+      return await res.json();
+    }, jobId);
+
+    if (result.error) {
+      throw new Error(result.error);
+    }
+
+    return result;
+  } finally {
+    if (ownPage) await page.close();
+  }
+}
+
+function parseJobResponse(data) {
+  const title = data.title || data.jobPostingTitle || '';
+
+  // Description — multiple possible shapes
+  let description = '';
+  if (data.description) {
+    if (typeof data.description === 'string') {
+      description = data.description;
+    } else {
+      description = data.description.text || data.description.rawText || '';
+    }
+  }
+
+  // Company name — deeply nested in Voyager response
+  let company = '';
+  if (data.companyDetails) {
+    const details = Object.values(data.companyDetails)[0];
+    if (details?.companyResolutionResult?.name) {
+      company = details.companyResolutionResult.name;
+    } else if (details?.company?.name) {
+      company = details.company.name;
+    } else if (typeof details === 'object' && details?.name) {
+      company = details.name;
+    }
+  }
+  if (!company) company = data.companyName || '';
+
+  const location = data.formattedLocation || '';
+
+  // Workplace type
+  let workplaceType = '';
+  if (data.workplaceTypesResolutionResults) {
+    workplaceType = Object.values(data.workplaceTypesResolutionResults)
+      .map(t => t.localizedName || '').filter(Boolean).join(', ');
+  } else if (data.workplaceType) {
+    workplaceType = String(data.workplaceType);
+  }
+
+  const employmentType = data.formattedEmploymentStatus || '';
+  const seniority = data.formattedExperienceLevel || '';
+  const industries = (data.formattedIndustries || []).join(', ');
+  const jobFunctions = (data.formattedJobFunctions || []).join(', ');
+
+  let postedAt = null;
+  if (data.listedAt) {
+    postedAt = new Date(data.listedAt).toISOString();
+  }
+
+  return { title, description, company, location, workplaceType, employmentType, seniority, industries, jobFunctions, postedAt };
+}
+
+async function executeJobMode(input, options, tools) {
+  const { entities } = input;
+  const { logger, progress } = tools;
+  const { requests_per_hour = 20 } = options;
+  const cdpUrl = process.env.LINKEDIN_CDP_URL || 'http://localhost:9222';
+
+  const jobs = collectJobs(entities, logger);
+
+  if (jobs.length === 0) {
+    return {
+      results: entities.map(e => ({
+        entity_name: e.name,
+        items: e.items || [],
+        meta: { total: (e.items || []).length, scraped: 0, errors: 0 },
+      })),
+      summary: {
+        total_entities: entities.length,
+        total_items: 0,
+        description: 'No LinkedIn job URLs found in pool items',
+        errors: [],
+      },
+    };
+  }
+
+  logger.info(`${jobs.length} LinkedIn jobs to scrape (rate: ${requests_per_hour}/hr)`);
+
+  let browser;
+  try {
+    browser = await chromium.connectOverCDP(cdpUrl);
+  } catch (err) {
+    throw new Error(
+      `Failed to connect to Chrome via CDP at ${cdpUrl}: ${err.message}. ` +
+      'Ensure Chrome is running with --remote-debugging-port=9222 and is logged into LinkedIn.'
+    );
+  }
+
+  const enrichedMap = new Map(); // jobId → enriched item
+  let voyagerSuccessCount = 0;
+  let consecutiveFailures = 0;
+  let voyagerAborted = false;
+  const rateLimiter = createRateLimiter(requests_per_hour);
+  const errors = [];
+
+  try {
+    const contexts = browser.contexts();
+    if (contexts.length === 0) {
+      throw new Error('No browser contexts found in CDP Chrome');
+    }
+    const context = contexts[0];
+
+    const sessionValid = await validateSession(context, logger);
+    if (!sessionValid) {
+      logger.error('LinkedIn session invalid — cannot scrape job descriptions');
+      return {
+        results: entities.map(e => ({
+          entity_name: e.name,
+          items: (e.items || []).map(item => ({ ...item, scrape_method: 'none', status: 'error', error: 'LinkedIn session expired' })),
+          meta: { total: (e.items || []).length, scraped: 0, errors: (e.items || []).length },
+        })),
+        summary: {
+          total_entities: entities.length,
+          total_items: jobs.length,
+          voyager_status: 'session_expired',
+          description: `Session expired — 0 of ${jobs.length} jobs scraped`,
+          errors: ['LinkedIn session expired — re-login via VNC'],
+        },
+      };
+    }
+
+    for (let i = 0; i < jobs.length; i++) {
+      const job = jobs[i];
+      progress.update(i + 1, jobs.length, `Job ${i + 1}/${jobs.length} (${job._jobId})`);
+
+      if (voyagerAborted) {
+        enrichedMap.set(job._jobId, { ...job, scrape_method: 'none', status: 'error', error: 'Voyager aborted (circuit breaker)' });
+        errors.push(`Job ${job._jobId}: circuit breaker`);
+        continue;
+      }
+
+      await rateLimiter();
+
+      try {
+        const voyagerData = await scrapeJobVoyager(context, job._jobId, logger);
+        const parsed = parseJobResponse(voyagerData);
+
+        const enriched = {
+          ...job,
+          title: parsed.title || job.title,
+          company: parsed.company || job.company,
+          location: parsed.location || job.location,
+          text_content: parsed.description,
+          workplace_type: parsed.workplaceType,
+          employment_type: parsed.employmentType,
+          seniority_level: parsed.seniority,
+          industries: parsed.industries,
+          job_functions: parsed.jobFunctions,
+          postedAt: parsed.postedAt || job.postedAt,
+          scrape_method: 'voyager',
+          status: parsed.description ? 'success' : 'incomplete',
+          source_type: 'linkedin_job',
+        };
+        delete enriched._jobId;
+
+        enrichedMap.set(job._jobId, enriched);
+        voyagerSuccessCount++;
+        consecutiveFailures = 0;
+        logger.info(`Job ${job._jobId}: ${parsed.description.length} chars`);
+
+        if (tools._partialItems) {
+          tools._partialItems.length = 0;
+          tools._partialItems.push(...enrichedMap.values());
+        }
+      } catch (err) {
+        logger.warn(`Job ${job._jobId}: ${err.message}`);
+        consecutiveFailures++;
+        errors.push(`Job ${job._jobId}: ${err.message}`);
+        enrichedMap.set(job._jobId, { ...job, scrape_method: 'none', status: 'error', error: err.message });
+
+        if (consecutiveFailures >= 3) {
+          logger.error('Circuit breaker: 3 consecutive failures — aborting remaining jobs');
+          voyagerAborted = true;
+        }
+      }
+    }
+  } finally {
+    try { await browser.close(); } catch {}
+  }
+
+  // Rebuild entity results — enriched items replace originals, non-LinkedIn items pass through
+  const entityResults = entities.map(e => {
+    const items = (e.items || []).map(item => {
+      const jobId = extractJobId(item.url);
+      return jobId && enrichedMap.has(jobId) ? enrichedMap.get(jobId) : item;
+    });
+    return {
+      entity_name: e.name,
+      items,
+      meta: {
+        total: items.length,
+        scraped: items.filter(i => i.scrape_method === 'voyager').length,
+        errors: items.filter(i => i.status === 'error').length,
+      },
+    };
+  });
+
+  return {
+    results: entityResults,
+    summary: {
+      total_entities: entities.length,
+      total_items: jobs.length,
+      voyager_success: voyagerSuccessCount,
+      voyager_aborted: voyagerAborted,
+      description: errors.length > 0
+        ? `${voyagerSuccessCount} of ${jobs.length} job descriptions scraped (${errors.length} errors)`
+        : `${voyagerSuccessCount} of ${jobs.length} job descriptions scraped`,
+      errors,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

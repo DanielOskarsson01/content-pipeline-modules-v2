@@ -1,9 +1,9 @@
-# LinkedIn Profile Scraper
+# LinkedIn Scraper
 
-> Scrape full LinkedIn personal profiles -- experience, education, skills, languages -- and produce structured biographical data for content generation.
+> Scrape LinkedIn profiles (bio/company_people modes) or enrich pool items with full LinkedIn job descriptions (job_description mode) via CDP + Voyager API.
 
 **Module ID:** `linkedin-profile-scraper` | **Step:** 3 (Scraping) | **Category:** linkedin | **Cost:** expensive
-**Version:** 1.0.0 | **Data Operation:** add (+)
+**Version:** 1.1.0 | **Data Operation:** add (+) for profiles, transform for job_description
 
 ---
 
@@ -70,7 +70,7 @@ content-analyzer (Step 4) → content-writer (Step 5) → biographical articles
 | Option | Default | When to Change | What It Does |
 |--------|---------|----------------|--------------|
 | `requests_per_hour` | 20 | Lower to 10-15 if LinkedIn shows warnings; raise to 30-40 for faster throughput (riskier) | Minimum time between page loads. 20/hr = ~3 min between profiles. LinkedIn may flag accounts above 50/hr |
-| `mode` | `bio` | Switch to `company_people` when entities are companies with employee links from B015 | `bio` = entity is a person, scrape their profile. `company_people` = entity is a company, scrape employee profiles from employee link arrays |
+| `mode` | `bio` | Switch to `company_people` for employee profiles from B015, or `job_description` to enrich LinkedIn job URLs with full descriptions | `bio` = scrape personal profile. `company_people` = scrape employee profiles. `job_description` = enrich pool items with full LinkedIn job text |
 | `max_profiles_per_entity` | 5 | Raise to 10-15 for comprehensive company coverage; lower to 2-3 for quick executive-only scraping | Only used in `company_people` mode. Limits how many employee profiles to scrape per company entity |
 | `fallback_to_scrapelinkedin` | true | Disable if you don't have API credits or prefer to retry later with a fresh session | When Voyager fails for a profile, tries ScrapeLinkedIn API ($0.01/profile). Requires `SCRAPELINKEDIN_API_KEY` env var |
 
@@ -122,6 +122,14 @@ mode: bio
 max_profiles_per_entity: 5
 fallback_to_scrapelinkedin: false
 ```
+
+### Job Description Scraping
+When enriching LinkedIn job URLs from csv-discovery with full job descriptions:
+```
+requests_per_hour: 20
+mode: job_description
+```
+Input: pool items with `url` containing `linkedin.com/jobs/view/{jobId}`. The module extracts the job ID, calls the Voyager job API, and enriches each item with `text_content` (full description), `workplace_type`, `employment_type`, `seniority_level`, etc. Non-LinkedIn items pass through unchanged.
 
 ## What Good Output Looks Like
 
