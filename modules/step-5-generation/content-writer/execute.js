@@ -1,17 +1,16 @@
 /**
  * Content Writer — Step 5 Generation submodule
  *
- * Writes comprehensive company profiles using THREE inputs:
- * 1. Content analysis (what to write about — categories, tags, facts)
- * 2. SEO plan (which keywords to use in each section, FAQs)
+ * Writes content using up to THREE inputs:
+ * 1. Content analysis (required — what to write about)
+ * 2. SEO plan (optional — keyword distribution, FAQs)
  * 3. Scraped source content (raw material for specific, detailed prose)
  *
- * v1.3.0: Writer receives scraped source content alongside analysis and plan.
- * This gives the writer raw material to produce specific prose instead of
- * inflating summaries from the analysis alone.
+ * v1.4.0: seo-planner dependency is optional. Writer warns and proceeds
+ * without SEO plan section when seo-planner has not run upstream.
  *
- * Data operation: ADD (+) — adds written content alongside analysis and plan.
- * Requires BOTH content-analyzer and seo-planner to have run first.
+ * Data operation: ADD (+) — adds written content alongside analysis.
+ * Requires content-analyzer. seo-planner is optional.
  */
 
 /**
@@ -82,24 +81,26 @@ function assembleSourceContent(scrapedItems, maxChars) {
 }
 
 /**
- * Assemble entity content from analyzer output, planner output, AND scraped sources.
- * v1.3.0: Three sections instead of two.
+ * Assemble entity content from analyzer output, optional planner output, and scraped sources.
+ * v1.4.0: plannerItem is optional — SEO plan section omitted when null.
  */
 function assembleEntityContent(analyzerItem, plannerItem, sourceContent) {
   const parts = [];
 
-  parts.push('=== COMPANY ANALYSIS ===');
+  parts.push('=== CONTENT ANALYSIS ===');
   if (analyzerItem.analysis_json) {
     parts.push(JSON.stringify(analyzerItem.analysis_json, null, 2));
   } else {
     parts.push(JSON.stringify(analyzerItem, null, 2));
   }
 
-  parts.push('\n=== SEO CONTENT PLAN ===');
-  if (plannerItem.seo_plan_json) {
-    parts.push(JSON.stringify(plannerItem.seo_plan_json, null, 2));
-  } else {
-    parts.push(JSON.stringify(plannerItem, null, 2));
+  if (plannerItem) {
+    parts.push('\n=== SEO CONTENT PLAN ===');
+    if (plannerItem.seo_plan_json) {
+      parts.push(JSON.stringify(plannerItem.seo_plan_json, null, 2));
+    } else {
+      parts.push(JSON.stringify(plannerItem, null, 2));
+    }
   }
 
   parts.push('\n=== SOURCE CONTENT (scraped pages) ===');
@@ -138,11 +139,8 @@ async function execute(input, options, tools) {
       logger.warn(`${entity.name}: no scraped source pages with text_content found — writer will rely on analysis/plan only`);
     }
 
-    if (!analyzerItem || !plannerItem) {
-      const missing = [];
-      if (!analyzerItem) missing.push('content-analyzer');
-      if (!plannerItem) missing.push('seo-planner');
-      const errMsg = `Missing upstream output: ${missing.join(', ')}. Run these submodules first.`;
+    if (!analyzerItem) {
+      const errMsg = 'Missing upstream output: content-analyzer. Run content-analyzer first.';
       logger.error(`${entity.name}: ${errMsg}`);
       errors.push(`${entity.name}: ${errMsg}`);
 
@@ -165,10 +163,14 @@ async function execute(input, options, tools) {
       continue;
     }
 
+    if (!plannerItem) {
+      logger.warn(`${entity.name}: no seo-planner output found — writing without SEO plan`);
+    }
+
     try {
-      // Get meta title from planner for reference
-      const metaTitle = plannerItem.seo_plan_json?.meta?.title
-        || plannerItem.meta_title
+      // Get meta title from planner for reference (planner may be absent)
+      const metaTitle = plannerItem?.seo_plan_json?.meta?.title
+        || plannerItem?.meta_title
         || entity.name;
 
       logger.info(`${entity.name}: writing content with ${ai_provider}/${ai_model} (${scrapedItems.length} source pages)`);

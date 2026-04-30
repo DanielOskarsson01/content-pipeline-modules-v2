@@ -1,15 +1,16 @@
 {
   "id": "content-writer",
   "name": "Content Writer",
-  "description": "AI-powered long-form content generation. Writes company profiles using THREE inputs: analysis (what to write about), SEO plan (which keywords to use), and scraped source content (raw material for specific details). Produces markdown with [#n] citations and [Type Marker] section headings. Requires both content-analyzer and seo-planner.",
-  "version": "1.3.0",
+  "description": "AI-powered long-form content generation. Writes content using analysis (required), optional SEO plan (keyword distribution), and scraped source content (raw material for specific details). Produces markdown output. Requires content-analyzer; seo-planner is optional.",
+  "version": "1.4.0",
   "step": 5,
   "category": "generation",
   "cost": "expensive",
   "data_operation_default": "add",
 
-  "depends_on": ["content-analyzer", "seo-planner"],
-  "usage_notes": "Requires both content-analyzer and seo-planner to have completed. Use sonnet for production-quality content; haiku produces acceptable drafts. Increase max_source_chars for companies with extensive source material.",
+  "depends_on": ["content-analyzer"],
+  "optional_depends_on": ["seo-planner"],
+  "usage_notes": "Requires content-analyzer. seo-planner is optional — if absent, writer warns and proceeds without SEO plan section. Use sonnet for production-quality content; haiku produces acceptable drafts. Increase max_source_chars for entities with extensive source material.",
 
   "requires_columns": [
     "entity_name",

@@ -1,9 +1,9 @@
 # Content Writer
 
-> Write full company profiles using analysis data, SEO plan, and scraped source content.
+> Write content using analysis data, optional SEO plan, and scraped source content.
 
 **Module ID:** `content-writer` | **Step:** 5 (Generation) | **Category:** generation | **Cost:** expensive
-**Version:** 1.3.0 | **Data Operation:** add (➕)
+**Version:** 1.4.0 | **Data Operation:** add (➕)
 
 ---
 
@@ -29,19 +29,19 @@ Content-writer is the third and final submodule in Step 5's chain:
 content-analyzer (＝) -> seo-planner (➕) -> content-writer (➕)
 ```
 
-It uses the **add (➕)** data operation - it chains from the working pool, finding BOTH content-analyzer AND seo-planner items by their `source_submodule` fields, plus the original scraped source content. It needs all three: the analysis provides structure, the SEO plan provides keywords, and the source content provides raw material for specific, detailed prose.
+It uses the **add (➕)** data operation - it chains from the working pool, finding content-analyzer items (required) and seo-planner items (optional) by their `source_submodule` fields, plus the original scraped source content. The analysis provides structure, the SEO plan (when present) provides keywords, and the source content provides raw material for specific, detailed prose. If seo-planner has not run, the writer warns and proceeds without the SEO plan section.
 
 This is the most expensive individual LLM call in the pipeline. The prompt includes the full analysis JSON, the full SEO plan, scraped source content, and potentially multiple reference documents (tone guide, format spec). With Sonnet, expect $0.08-0.15 per company depending on article length and input size.
 
-### v1.3.0: Three Inputs
+### v1.4.0: Optional SEO Plan
 
-In v1.3.0, content-writer was updated to receive **three inputs** instead of two:
+In v1.4.0, the seo-planner dependency was made optional. The writer accepts up to **three inputs**:
 
-1. **Analysis** (from content-analyzer) - tells the writer WHAT to write about: categories, tags, facts
-2. **SEO Plan** (from seo-planner) - tells the writer WHICH KEYWORDS to use in each section
+1. **Analysis** (from content-analyzer, required) - tells the writer WHAT to write about
+2. **SEO Plan** (from seo-planner, optional) - tells the writer WHICH KEYWORDS to use in each section
 3. **Source Content** (scraped pages from Step 4) - gives the writer RAW MATERIAL for specific, detailed prose
 
-Previously, the writer only had the analysis and SEO plan. This meant it could only inflate the analysis summary into longer prose - resulting in generic, repetitive content. With access to the original scraped pages, the writer can draw specific product names, technical details, market data, and partnership information directly from the source.
+When seo-planner has not run upstream, the writer logs a warning and omits the SEO plan section from the assembled content. The LLM receives only the analysis and source content. Templates that don't use seo-planner should customize the prompt to omit SEO-specific instructions.
 
 ### Why This Is the First "Prose" Output
 
@@ -93,8 +93,8 @@ The difference between content-writer with and without reference docs is the dif
 - Reference docs dramatically affect quality - always use tone guide and format spec if available
 - Source content volume - adjust max_source_chars if companies have many pages
 
-**Can use without seo-planner for:**
-- Not recommended. Without an SEO plan, content-writer must decide keywords on its own, producing worse results. If you skip seo-planner, embed keyword guidance directly in the prompt.
+**Without seo-planner:**
+- Fully supported since v1.4.0. The writer warns and proceeds with analysis + source content only. For best results without an SEO plan, embed keyword guidance directly in the prompt.
 
 **Don't use when:**
 - You only need categorization (use content-analyzer alone)
@@ -210,13 +210,13 @@ For now, the approved content_markdown is the deliverable. Copy it, import it, o
 - **Step:** 5 (Generation)
 - **Category:** generation
 - **Cost:** expensive
-- **Data operation:** add (➕) - chains from working pool, finds both content-analyzer AND seo-planner items by source_submodule, plus scraped source content items
-- **Requires:** `entity_name`, `text_content` in input items; `analysis_json` from content-analyzer; `seo_plan_json` from seo-planner
+- **Data operation:** add (➕) - chains from working pool, finds content-analyzer items (required) and seo-planner items (optional) by source_submodule, plus scraped source content items
+- **Requires:** `entity_name`, `text_content` in input items; `analysis_json` from content-analyzer. Optional: `seo_plan_json` from seo-planner
 - **Input:** Content-analyzer output, seo-planner output, and scraped source pages from working pool (found via `source_submodule` field)
 - **Output:** `results[]` grouped by `entity_name`, one item per entity containing word_count, section_count, has_citations, content_preview, and content_markdown
 - **Display type:** cards (not table) - one card per entity with expandable detail modal showing full article as prose
 - **Selectable:** true - operators approve/reject entire entity article
 - **Detail view:** `detail_schema` with header (entity_name, status as badge, word_count, meta_title) and sections (content_markdown as prose, meta_title as text, error). The prose section is scrollable and is the primary way users read the article
-- **Error handling:** Missing analysis/SEO plan input, LLM failures handled per-entity. Entities missing upstream data get clear error: "Missing upstream output: [module names]. Run these submodules first." Warns (doesn't fail) if no scraped source pages are found.
+- **Error handling:** Missing analysis input and LLM failures handled per-entity. Entities missing content-analyzer get clear error: "Missing upstream output: content-analyzer. Run content-analyzer first." Missing seo-planner logs a warning and proceeds. Warns (doesn't fail) if no scraped source pages are found.
 - **Dependencies:** `tools.ai` (LLM calls), `tools.logger`, `tools.progress`
 - **Files:** `manifest.json`, `execute.js`
