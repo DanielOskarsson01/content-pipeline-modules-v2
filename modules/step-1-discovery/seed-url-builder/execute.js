@@ -169,6 +169,9 @@ async function execute(input, options, tools) {
       ? `${totalItems} URLs found across ${successCount} of ${entities.length} entities (${errors.length} failed)`
       : `${totalItems} URLs found across ${entities.length} entities`;
 
+  // Save final results as partial items for consistency
+  if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
+
   return {
     results,
     summary: {

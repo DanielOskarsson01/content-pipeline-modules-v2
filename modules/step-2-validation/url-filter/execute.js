@@ -277,6 +277,9 @@ async function execute(input, options, tools) {
       ? `${keptCount} kept, ${removedCount} removed (${parts.join(', ')}) of ${allItems.length} total`
       : `${allItems.length} URLs — all passed filters`;
 
+  // Push final results for partial-save on timeout/abort
+  if (tools._partialItems) tools._partialItems.push(...results);
+
   return {
     results: entityResults,
     summary: {

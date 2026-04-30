@@ -264,14 +264,16 @@ async function execute(input, options, tools) {
 
       // Nothing to clean
       if (!originalText.trim()) {
-        cleanedItems.push({
+        const emptyItem = {
           ...item,
           text_content: '',
           word_count: 0,
           stripped_chars: 0,
           boilerplate_ratio: 0,
           flagged: false,
-        });
+        };
+        cleanedItems.push(emptyItem);
+        if (tools._partialItems) tools._partialItems.push(emptyItem);
         continue;
       }
 
@@ -323,14 +325,16 @@ async function execute(input, options, tools) {
 
       totalStrippedChars += finalStripped;
 
-      cleanedItems.push({
+      const cleanedItem = {
         ...item,
         text_content: finalText,
         word_count: countWords(finalText),
         stripped_chars: finalStripped,
         boilerplate_ratio: flagged ? 0 : boilerplateRatio,
         flagged,
-      });
+      };
+      cleanedItems.push(cleanedItem);
+      if (tools._partialItems) tools._partialItems.push(cleanedItem);
     }
 
     results.push({

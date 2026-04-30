@@ -397,7 +397,7 @@ async function execute(input, options, tools) {
       const hasAnything = bestLogo || (ogImage && validSet.has(ogImage)) || validTeam.length || validScreenshots.length || validAwards.length;
       const status = hasAnything ? (bestLogo ? 'ok' : 'partial') : 'no_media';
 
-      results.push({
+      const entityResult = {
         entity_name: entity.name,
         items: [{
           entity_name: entity.name,
@@ -421,7 +421,9 @@ async function execute(input, options, tools) {
           screenshots: validScreenshots.length,
           awards: validAwards.length,
         },
-      });
+      };
+      results.push(entityResult);
+      if (tools._partialItems) tools._partialItems.push(...entityResult.items);
 
       logger.info(`${entity.name}: logo=${bestLogo ? 'yes' : 'no'}, team=${validTeam.length}, screenshots=${validScreenshots.length}, awards=${validAwards.length}`);
 

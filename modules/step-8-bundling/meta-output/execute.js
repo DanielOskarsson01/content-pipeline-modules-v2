@@ -157,7 +157,7 @@ async function execute(input, options, tools) {
         logger.warn(`${entity.name}: ${warnings.join('; ')}`);
       }
 
-      results.push({
+      const entityResult = {
         entity_name: entity.name,
         items: [{
           entity_name: entity.name,
@@ -170,7 +170,9 @@ async function execute(input, options, tools) {
           meta_json: JSON.stringify(metaObj, null, 2),
         }],
         meta: { status, keyword_count: keywordCount, warnings },
-      });
+      };
+      results.push(entityResult);
+      if (tools._partialItems) tools._partialItems.push(...entityResult.items);
 
       logger.info(`${entity.name}: title=${titleLength}ch, desc=${descriptionLength}ch, keywords=${keywordCount}, status=${status}`);
     } catch (err) {

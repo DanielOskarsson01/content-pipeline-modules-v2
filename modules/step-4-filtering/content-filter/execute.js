@@ -85,7 +85,9 @@ async function execute(input, options, tools) {
 
     // 1. Drop errors/skipped
     if (drop_errors && (item.status === 'error' || item.status === 'skipped')) {
-      results.push(buildResult(item, 'excluded', `Scrape failed: ${item.status}`));
+      const resultItem = buildResult(item, 'excluded', `Scrape failed: ${item.status}`);
+      results.push(resultItem);
+      if (tools._partialItems) tools._partialItems.push(resultItem);
       excludedCount++;
       reasonCounts.scrape_failed++;
       continue;
@@ -94,7 +96,9 @@ async function execute(input, options, tools) {
     // 2. Minimum word count
     const wordCount = item.word_count || 0;
     if (wordCount < min_word_count) {
-      results.push(buildResult(item, 'excluded', `Too short: ${wordCount} words (min: ${min_word_count})`));
+      const resultItem = buildResult(item, 'excluded', `Too short: ${wordCount} words (min: ${min_word_count})`);
+      results.push(resultItem);
+      if (tools._partialItems) tools._partialItems.push(resultItem);
       excludedCount++;
       reasonCounts.too_short++;
       continue;
@@ -109,7 +113,9 @@ async function execute(input, options, tools) {
         if (ENGLISH_STOP_WORDS.has(word)) stopWordHits++;
       }
       if (stopWordHits < 3) {
-        results.push(buildResult(item, 'excluded', 'Non-English content detected'));
+        const resultItem = buildResult(item, 'excluded', 'Non-English content detected');
+        results.push(resultItem);
+        if (tools._partialItems) tools._partialItems.push(resultItem);
         excludedCount++;
         reasonCounts.non_english++;
         continue;
@@ -120,7 +126,9 @@ async function execute(input, options, tools) {
     const urlLower = item.url.toLowerCase();
     const matchedUrlPattern = urlPatterns.find((pattern) => urlLower.includes(pattern.toLowerCase()));
     if (matchedUrlPattern) {
-      results.push(buildResult(item, 'excluded', `URL pattern: ${matchedUrlPattern}`));
+      const resultItem = buildResult(item, 'excluded', `URL pattern: ${matchedUrlPattern}`);
+      results.push(resultItem);
+      if (tools._partialItems) tools._partialItems.push(resultItem);
       excludedCount++;
       reasonCounts.url_pattern++;
       continue;
@@ -130,14 +138,18 @@ async function execute(input, options, tools) {
     const titleLower = (item.title || '').toLowerCase();
     const matchedKeyword = titleKeywords.find((kw) => titleLower.includes(kw.toLowerCase()));
     if (matchedKeyword) {
-      results.push(buildResult(item, 'excluded', `Title keyword: ${matchedKeyword}`));
+      const resultItem = buildResult(item, 'excluded', `Title keyword: ${matchedKeyword}`);
+      results.push(resultItem);
+      if (tools._partialItems) tools._partialItems.push(resultItem);
       excludedCount++;
       reasonCounts.title_keyword++;
       continue;
     }
 
     // 6. Passed all filters — kept
-    results.push(buildResult(item, 'kept', null));
+    const resultItem = buildResult(item, 'kept', null);
+    results.push(resultItem);
+    if (tools._partialItems) tools._partialItems.push(resultItem);
     keptCount++;
   }
 

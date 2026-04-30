@@ -84,22 +84,26 @@ async function execute(input, options, tools) {
       if (status === 'redirected') {
         logger.info(`Redirect: ${detail}`);
         redirectCount++;
-        results.push({
+        const resultItem = {
           url: finalUrl,
           original_url: item.url,
           status: 'redirected',
           redirect_detail: detail,
           entity_name: item.entity_name,
-        });
+        };
+        results.push(resultItem);
+        if (tools._partialItems) tools._partialItems.push(resultItem);
       } else {
         unchangedCount++;
-        results.push({
+        const resultItem = {
           url: item.url,
           original_url: item.url,
           status: 'unchanged',
           redirect_detail: detail || null,
           entity_name: item.entity_name,
-        });
+        };
+        results.push(resultItem);
+        if (tools._partialItems) tools._partialItems.push(resultItem);
       }
     }
 

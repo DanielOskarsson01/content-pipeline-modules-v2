@@ -103,6 +103,8 @@ async function execute(input, options, tools) {
       totalItems += limited.length;
       logger.info(`${entity.name}: found ${urls.length} URLs, excluded ${excludedCount}, returning ${limited.length}`);
 
+      // Save partial results in case next entity times out
+      if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
     } catch (err) {
       logger.error(`${entity.name}: ${err.message}`);
       results.push({

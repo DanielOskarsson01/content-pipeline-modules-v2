@@ -300,7 +300,7 @@ async function execute(input, options, tools) {
       ` | sources: ${sourcePageCount} | loops: ${loopCount}`
     );
 
-    results.push({
+    const entityResult = {
       entity_name: entity.name,
       items: [{
         entity_name: entity.name,
@@ -330,7 +330,9 @@ async function execute(input, options, tools) {
         qa_citation: summary.citation,
         qa_hallucination: summary.hallucination,
       },
-    });
+    };
+    results.push(entityResult);
+    if (tools._partialItems) tools._partialItems.push(...entityResult.items);
   }
 
   // --- Summary ---

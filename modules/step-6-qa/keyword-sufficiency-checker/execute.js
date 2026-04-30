@@ -642,7 +642,7 @@ module.exports = async function execute(input, options, tools) {
       (negativeResult.found.length > 0 ? ` | NEGATIVES FOUND: ${negativeResult.found.join(', ')}` : '')
     );
 
-    results.push({
+    const entityResult = {
       entity_name: entity.name,
       items: [{
         entity_name: entity.name,
@@ -666,7 +666,9 @@ module.exports = async function execute(input, options, tools) {
         negatives_found_count: negativeResult.found.length,
         short_content: shortContent,
       },
-    });
+    };
+    results.push(entityResult);
+    if (tools._partialItems) tools._partialItems.push(...entityResult.items);
   }
 
   // --- Summary ---

@@ -422,7 +422,7 @@ async function execute(input, options, tools) {
       `${uncitedClaims.length} uncited claims`
     );
 
-    results.push({
+    const entityResult = {
       entity_name: entity.name,
       items: [{
         entity_name: entity.name,
@@ -446,7 +446,9 @@ async function execute(input, options, tools) {
         broken_citations: brokenCitations.length,
         dead_urls: deadUrls.length,
       },
-    });
+    };
+    results.push(entityResult);
+    if (tools._partialItems) tools._partialItems.push(...entityResult.items);
   }
 
   // --- Build summary ---

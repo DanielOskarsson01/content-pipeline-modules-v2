@@ -208,7 +208,7 @@ async function execute(input, options, tools) {
       const sectionCount = countSections(finalMarkdown);
       const preview = finalMarkdown.substring(0, 200).replace(/\n/g, ' ');
 
-      results.push({
+      const entityResult = {
         entity_name: entity.name,
         items: [{
           entity_name: entity.name,
@@ -219,7 +219,9 @@ async function execute(input, options, tools) {
           content_preview: preview,
         }],
         meta: { word_count: wordCount, section_count: sectionCount },
-      });
+      };
+      results.push(entityResult);
+      if (tools._partialItems) tools._partialItems.push(...entityResult.items);
 
       logger.info(`${entity.name}: ${wordCount} words, ${sectionCount} sections`);
     } catch (err) {

@@ -129,6 +129,9 @@ async function execute(input, options, tools) {
     ? `Found ${duplicateCount} duplicates. ${uniqueCount} unique of ${allItems.length} total`
     : `${allItems.length} URLs — no duplicates found`;
 
+  // Push final results for partial-save on timeout/abort
+  if (tools._partialItems) tools._partialItems.push(...results);
+
   return {
     results: entityResults,
     summary: {

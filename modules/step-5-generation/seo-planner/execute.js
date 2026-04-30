@@ -261,6 +261,7 @@ async function execute(input, options, tools) {
         }],
         meta: { status: 'error' },
       });
+      if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
       continue;
     }
 
@@ -324,6 +325,7 @@ async function execute(input, options, tools) {
       } else {
         logger.info(`${entity.name}: SEO plan complete — keyword: "${flat.primary_keyword}", ${flat.faq_count} FAQs`);
       }
+      if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
 
     } catch (err) {
       logger.error(`${entity.name}: SEO planning failed — ${err.message}`);
@@ -349,6 +351,7 @@ async function execute(input, options, tools) {
         }],
         meta: { status: 'error' },
       });
+      if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
     }
   }
 

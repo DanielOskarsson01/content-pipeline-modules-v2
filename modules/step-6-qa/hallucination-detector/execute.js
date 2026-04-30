@@ -488,7 +488,7 @@ async function execute(input, options, tools) {
       `${unsupportedClaims.length} unsupported of ${totalClaims} claims`
     );
 
-    results.push({
+    const entityResult = {
       entity_name: entity.name,
       items: [{
         entity_name: entity.name,
@@ -511,7 +511,9 @@ async function execute(input, options, tools) {
         unsupported: unsupportedClaims.length,
         batches_sent: batches.length,
       },
-    });
+    };
+    results.push(entityResult);
+    if (tools._partialItems) tools._partialItems.push(...entityResult.items);
   }
 
   // --- Build summary ---

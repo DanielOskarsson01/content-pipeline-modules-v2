@@ -234,7 +234,7 @@ ${html}
       const sizeKb = Math.round(Buffer.byteLength(finalHtml, 'utf8') / 1024 * 10) / 10;
       const preview = finalHtml.replace(/<[^>]+>/g, ' ').substring(0, 200).replace(/\s+/g, ' ').trim();
 
-      results.push({
+      const entityResult = {
         entity_name: entity.name,
         items: [{
           entity_name: entity.name,
@@ -245,7 +245,9 @@ ${html}
           content_preview: preview,
         }],
         meta: { html_size_kb: sizeKb, heading_count: headingCount, has_schema_org: hasSchemaOrg },
-      });
+      };
+      results.push(entityResult);
+      if (tools._partialItems) tools._partialItems.push(...entityResult.items);
 
       logger.info(`${entity.name}: ${sizeKb}KB HTML, ${headingCount} headings${hasSchemaOrg ? ', with schema.org' : ''}`);
     } catch (err) {

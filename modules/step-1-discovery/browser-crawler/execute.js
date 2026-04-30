@@ -188,6 +188,9 @@ async function execute(input, options, tools) {
 
   logger.info(`Homepage: ${homepageLinks.length} links extracted${usedWaybackMachine ? ' (via Wayback Machine)' : ''}`);
 
+  // Save homepage links as partial results in case depth-2 crawling times out
+  if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...homepageLinks); }
+
   // Tag all homepage links with found_on
   for (const link of homepageLinks) {
     link.found_on = resolvedBaseUrl;
@@ -293,6 +296,9 @@ async function execute(input, options, tools) {
     for (const links of pageResults) {
       if (links) depthLinks.push(...links);
     }
+
+    // Update partial items with homepage + depth-2 links combined
+    if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...homepageLinks, ...depthLinks); }
   }
 
   logger.info(`Depth-2: ${depthLinks.length} links from ${keyPages.length} pages`);

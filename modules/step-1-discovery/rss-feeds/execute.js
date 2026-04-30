@@ -140,6 +140,9 @@ async function execute(input, options, tools) {
 
       totalItems += limited.length;
       logger.info(`${name}: ${limited.length} feed(s) discovered`);
+
+      // Save partial results in case next entity times out
+      if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
     } catch (err) {
       logger.error(`${name}: ${err.message}`);
       results.push({

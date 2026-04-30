@@ -235,6 +235,7 @@ async function execute(input, options, tools) {
         items: [],
         meta: { pages_analyzed: 0, status: 'skipped' },
       });
+      if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
       continue;
     }
 
@@ -288,6 +289,7 @@ async function execute(input, options, tools) {
       });
 
       logger.info(`${entity.name}: analysis complete — ${flat.primary_category}, ${flat.tags_preview}`);
+      if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
 
     } catch (err) {
       logger.error(`${entity.name}: analysis failed — ${err.message}`);
@@ -312,6 +314,7 @@ async function execute(input, options, tools) {
         }],
         meta: { pages_analyzed: 0, status: 'error' },
       });
+      if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
     }
   }
 

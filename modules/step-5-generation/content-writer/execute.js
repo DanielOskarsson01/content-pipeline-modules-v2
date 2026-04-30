@@ -161,6 +161,7 @@ async function execute(input, options, tools) {
         }],
         meta: { status: 'error' },
       });
+      if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
       continue;
     }
 
@@ -215,6 +216,7 @@ async function execute(input, options, tools) {
       });
 
       logger.info(`${entity.name}: content written — ${wordCount} words, ${sectionCount} sections, citations: ${citations}`);
+      if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
 
     } catch (err) {
       logger.error(`${entity.name}: content writing failed — ${err.message}`);
@@ -235,6 +237,7 @@ async function execute(input, options, tools) {
         }],
         meta: { status: 'error' },
       });
+      if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
     }
   }
 

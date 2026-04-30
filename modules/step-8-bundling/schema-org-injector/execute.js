@@ -464,7 +464,7 @@ async function execute(input, options, tools) {
       const scriptBlock = `<script type="application/ld+json">\n${jsonLdString}\n</script>`;
       const sizeKb = Math.round(Buffer.byteLength(scriptBlock, 'utf8') / 1024 * 10) / 10;
 
-      results.push({
+      const entityResult = {
         entity_name: entity.name,
         items: [{
           entity_name: entity.name,
@@ -483,7 +483,9 @@ async function execute(input, options, tools) {
           validation_error_count: allValidationErrors.length,
           jsonld_size_kb: sizeKb,
         },
-      });
+      };
+      results.push(entityResult);
+      if (tools._partialItems) tools._partialItems.push(...entityResult.items);
 
       logger.info(`${entity.name}: ${schemaTypes.join(', ')} — ${sizeKb}KB${allValidationErrors.length > 0 ? ` (${allValidationErrors.length} validation warnings)` : ''}`);
 

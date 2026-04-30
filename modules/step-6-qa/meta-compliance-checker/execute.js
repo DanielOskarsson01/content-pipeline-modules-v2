@@ -380,7 +380,7 @@ async function execute(input, options, tools) {
       (violations.length > 0 ? ` -- ${violations.join('; ')}` : '')
     );
 
-    results.push({
+    const entityResult = {
       entity_name: entity.name,
       items: [{
         entity_name: entity.name,
@@ -399,7 +399,9 @@ async function execute(input, options, tools) {
         checks_total: checksTotal,
         violations_count: violations.length,
       },
-    });
+    };
+    results.push(entityResult);
+    if (tools._partialItems) tools._partialItems.push(...entityResult.items);
   }
 
   // Build summary

@@ -173,11 +173,13 @@ async function execute(input, options, tools) {
 
       logger.info(`${entity.name}: ${kept} KEEP, ${maybe} MAYBE, ${dropped} DROP`);
 
-      results.push({
+      const entityResult = {
         entity_name: entity.name,
         items: classifiedItems,
         meta: { total_found: items.length, kept, maybe, dropped, errors: 0 },
-      });
+      };
+      results.push(entityResult);
+      if (tools._partialItems) tools._partialItems.push(...classifiedItems);
 
       totalItems += classifiedItems.length;
 
@@ -192,12 +194,14 @@ async function execute(input, options, tools) {
         entity_name: entity.name,
       }));
 
-      results.push({
+      const fallbackResult = {
         entity_name: entity.name,
         items: fallbackItems,
         error: err.message,
         meta: { total_found: items.length, kept: 0, maybe: items.length, dropped: 0, errors: 1 },
-      });
+      };
+      results.push(fallbackResult);
+      if (tools._partialItems) tools._partialItems.push(...fallbackItems);
 
       totalItems += fallbackItems.length;
       errors.push(`${entity.name}: ${err.message}`);

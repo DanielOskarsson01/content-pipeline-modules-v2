@@ -224,6 +224,7 @@ async function execute(input, options, tools) {
         items: [{ entity_name: entity.name, status: 'error', error: 'No analysis data from job-analyzer' }],
         meta: { errors: 1 }
       });
+      if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
       errors.push(`${entity.name}: No analysis data`);
       continue;
     }
@@ -277,6 +278,7 @@ async function execute(input, options, tools) {
           errors: 0
         }
       });
+      if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
 
     } catch (err) {
       logger.error(`${entity.name}: CV generation failed — ${err.message}`);
@@ -285,6 +287,7 @@ async function execute(input, options, tools) {
         items: [{ entity_name: entity.name, status: 'error', error: err.message }],
         meta: { errors: 1 }
       });
+      if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
       errors.push(`${entity.name}: ${err.message}`);
     }
   }

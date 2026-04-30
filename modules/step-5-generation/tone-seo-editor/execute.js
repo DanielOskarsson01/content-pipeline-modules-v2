@@ -338,6 +338,7 @@ async function execute(input, options, tools) {
         }],
         meta: { status: 'error' },
       });
+      if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
       continue;
     }
 
@@ -434,6 +435,7 @@ async function execute(input, options, tools) {
       });
 
       logger.info(`${entity.name}: editing complete — ${toneChangesCount} lines changed, ${keywordsPlacedCount} keywords placed, kw occurrences ${kwBefore}->${kwAfter}`);
+      if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
 
     } catch (err) {
       logger.error(`${entity.name}: editing failed — ${err.message}`);
@@ -456,6 +458,7 @@ async function execute(input, options, tools) {
         }],
         meta: { status: 'error' },
       });
+      if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
     }
   }
 

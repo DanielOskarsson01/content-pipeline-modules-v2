@@ -160,7 +160,7 @@ async function execute(input, options, tools) {
       const sizeKb = Math.round(Buffer.byteLength(jsonString, 'utf8') / 1024 * 10) / 10;
       const fieldCount = countFields(jsonObj);
 
-      results.push({
+      const entityResult = {
         entity_name: entity.name,
         items: [{
           entity_name: entity.name,
@@ -172,7 +172,9 @@ async function execute(input, options, tools) {
           has_seo_plan: seoItems.length > 0,
         }],
         meta: { field_count: fieldCount, json_size_kb: sizeKb },
-      });
+      };
+      results.push(entityResult);
+      if (tools._partialItems) tools._partialItems.push(...entityResult.items);
 
       logger.info(`${entity.name}: ${fieldCount} fields, ${sizeKb}KB JSON (${output_format} format)`);
     } catch (err) {
