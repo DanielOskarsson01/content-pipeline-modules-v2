@@ -2,7 +2,7 @@
   "id": "content-analyzer",
   "name": "Content Analyzer",
   "description": "Structural fact extraction from scraped content. Classifies into categories (fixed taxonomy), assigns tags, extracts key facts (people, licenses, awards, partnerships, offices, contact), and maps source citations. No summaries, opinions, or marketing prose — pure classification and extraction.",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "step": 5,
   "category": "analysis",
   "cost": "expensive",
@@ -99,9 +99,7 @@
     "selectable": true,
     "entity_name": "string",
     "status": "string",
-    "primary_category": "string",
-    "tags_preview": "string",
-    "facts_preview": "string",
+    "summary_preview": "string",
     "word_count": "number",
     "model_used": "string",
     "downloadable_fields": [
@@ -114,36 +112,9 @@
           "field": "status",
           "display": "badge"
         },
-        "primary_category",
         "model_used"
       ],
-      "sections": [
-        {
-          "field": "categories_text",
-          "label": "Categories",
-          "display": "text"
-        },
-        {
-          "field": "tags_text",
-          "label": "Tags",
-          "display": "text"
-        },
-        {
-          "field": "key_facts_text",
-          "label": "Key Facts",
-          "display": "prose"
-        },
-        {
-          "field": "source_citations_text",
-          "label": "Source Citations",
-          "display": "text"
-        },
-        {
-          "field": "error",
-          "label": "Error",
-          "display": "text"
-        }
-      ]
+      "dynamic_sections_field": "_dynamic_sections"
     }
   }
 }

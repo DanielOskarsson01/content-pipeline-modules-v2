@@ -1,74 +1,12 @@
 /**
  * API Search - Step 1 Discovery submodule
  *
- * Generic REST API job search with two provider modes:
- *   - search: one API call per keyword, server-side filtering (JobTech, Adzuna)
- *   - feed:   one API call total, client-side keyword filtering (RemoteOK, Remotive)
+ * Generic REST API search with two provider modes:
+ *   - search: one API call per keyword, server-side filtering
+ *   - feed:   one API call total, client-side keyword filtering
  *
- * Adding a new job board = adding a JSON provider config, not writing code.
+ * Adding a new API source = adding a JSON provider config, not writing code.
  */
-
-// ── Built-in provider configs ─────────────────────────────────────
-
-const BUILTIN_PROVIDERS = {
-  jobtech: {
-    id: 'jobtech',
-    name: 'JobTech / Platsbanken (Sweden)',
-    mode: 'search',
-    url: 'https://jobsearch.api.jobtechdev.se/search',
-    keyword_param: 'q',
-    limit_param: 'limit',
-    results_path: 'hits',
-    filter_fields: [],
-    field_map: {
-      url: ['webpage_url', 'application_details.url'],
-      title: 'headline',
-      company: 'employer.name',
-      location: 'workplace_address.municipality',
-      snippet: 'description.text',
-      postedAt: 'publication_date',
-      externalId: 'id'
-    },
-    auth: null
-  },
-  remoteok: {
-    id: 'remoteok',
-    name: 'RemoteOK',
-    mode: 'feed',
-    url: 'https://remoteok.com/api',
-    results_path: '$slice_first',
-    filter_fields: ['position', 'description'],
-    field_map: {
-      url: ['url', '$remoteok_slug'],
-      title: 'position',
-      company: 'company',
-      location: 'location',
-      snippet: 'description',
-      postedAt: 'date',
-      externalId: ['id', 'slug']
-    },
-    auth: null
-  },
-  remotive: {
-    id: 'remotive',
-    name: 'Remotive',
-    mode: 'feed',
-    url: 'https://remotive.com/api/remote-jobs',
-    limit_param: 'limit',
-    results_path: 'jobs',
-    filter_fields: ['title', 'description'],
-    field_map: {
-      url: 'url',
-      title: 'title',
-      company: 'company_name',
-      location: 'candidate_required_location',
-      snippet: 'description',
-      postedAt: 'publication_date',
-      externalId: 'id'
-    },
-    auth: null
-  }
-};
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -227,23 +165,16 @@ async function execute(input, options, tools) {
     keywords = [],
     exclude_keywords = [],
     max_results = 50,
-    active_providers = ['jobtech'],
-    custom_providers = [],
+    providers: providersConfig = [],
     provider_params = {},
     requests_per_minute = 30
   } = options;
   const { logger, http, progress } = tools;
 
-  // Merge built-in + custom providers, filter to active
-  const allProviders = { ...BUILTIN_PROVIDERS };
-  for (const cp of custom_providers) {
-    if (cp && cp.id) allProviders[cp.id] = cp;
-  }
-
-  const providers = active_providers
-    .map(id => allProviders[id])
+  // Use providers from options, filtering out those with missing auth
+  const providers = (Array.isArray(providersConfig) ? providersConfig : [])
     .filter(p => {
-      if (!p) return false;
+      if (!p || !p.id) return false;
       // Validate auth
       if (p.auth && p.auth.type === 'query_param' && p.auth.env_var) {
         if (!process.env[p.auth.env_var]) {

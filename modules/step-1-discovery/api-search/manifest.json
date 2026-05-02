@@ -1,10 +1,10 @@
 {
   "id": "api-search",
   "name": "API Search",
-  "description": "Generic REST API job search. Supports keyword-search APIs (JobTech, Adzuna) and feed APIs (RemoteOK, Remotive) via provider configs. Adding a new job board = adding JSON config, not code.",
+  "description": "Generic REST API search. Supports keyword-search APIs and feed APIs via provider configs. Adding a new API source = adding JSON config, not code.",
   "version": "1.0.0",
   "step": 1,
-  "category": "Job Search",
+  "category": "search",
   "cost": "cheap",
   "data_operation_default": "transform",
   "sort_order": 1,
@@ -36,17 +36,11 @@
       "max": 500
     },
     {
-      "name": "active_providers",
+      "name": "providers",
       "type": "json",
-      "label": "Active providers",
-      "description": "Which provider IDs to use. Built-in: jobtech, remoteok, remotive.",
-      "default": ["jobtech"]
-    },
-    {
-      "name": "custom_providers",
-      "type": "json",
-      "label": "Custom providers",
-      "description": "Array of custom provider config objects. See README for schema.",
+      "label": "API Providers",
+      "presets_enabled": true,
+      "description": "Provider configurations. Each provider is a JSON object with: id, name, mode (search or feed), url, field_map, and optional auth. See README for schema.",
       "default": []
     },
     {
@@ -70,8 +64,7 @@
     "keywords": ["CMO", "CPO", "CEO"],
     "exclude_keywords": ["intern", "junior", "student"],
     "max_results": 50,
-    "active_providers": ["jobtech"],
-    "custom_providers": [],
+    "providers": [],
     "provider_params": {},
     "requests_per_minute": 30
   },

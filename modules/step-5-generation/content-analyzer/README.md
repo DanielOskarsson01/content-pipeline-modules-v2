@@ -3,7 +3,7 @@
 > Structural fact extraction from scraped content. Classifies into categories, assigns tags, extracts key facts, and maps source citations.
 
 **Module ID:** `content-analyzer` | **Step:** 5 (Generation) | **Category:** analysis | **Cost:** expensive
-**Version:** 1.3.0 | **Data Operation:** add (+)
+**Version:** 1.4.0 | **Data Operation:** add (+)
 
 ---
 
@@ -151,16 +151,15 @@ reference_docs: [master_categories.md]
 - Output is valid JSON - not prose, not markdown, not an article
 
 **Output fields per entity:**
-- `entity_name` - company name (carried from input)
+- `entity_name` - entity name (carried from input)
 - `status` - `analyzed` or `error`
-- `primary_category` - comma-joined primary category slugs
-- `tags_preview` - comma-joined tag slugs (first 5, with count of remaining)
-- `facts_preview` - human-readable key facts summary (e.g., "Est. 2015 . Malta . ~200 employees")
+- `summary_preview` - auto-generated preview from the first few meaningful values in the analysis
 - `word_count` - total source words analyzed
 - `model_used` - which AI model was used (e.g., "anthropic/haiku")
 - `analysis_json` - the full structured analysis object (carried to pool for downstream submodules)
+- `_dynamic_sections` - auto-generated section definitions for the detail modal (derived from the LLM's JSON keys)
 
-**Detail view sections:** categories (text), tags (text), key facts (prose), source citations (text)
+**Detail view sections:** Dynamic — auto-generated from the LLM's JSON response keys. Labels are derived from key names (e.g., `key_facts` → "Key Facts"). Sections display as prose (multi-line) or text (single-line) depending on content. If the LLM returns non-JSON, the raw response is shown as a single "Analysis" prose section.
 
 **The analysis_json structure:**
 ```json
@@ -246,7 +245,7 @@ The analysis_json is the single source of truth for downstream submodules. If a 
 - **Output:** `results[]` grouped by `entity_name`, one item per entity containing flattened display fields + `analysis_json` object
 - **Display type:** cards (not table) - one card per entity with expandable detail modal
 - **Selectable:** true - operators approve/reject entire entity analysis
-- **Detail view:** `detail_schema` with header (entity_name, status as badge, primary_category, model_used) and sections (categories_text, tags_text, key_facts_text as prose, source_citations_text, error)
-- **Error handling:** LLM failures, JSON parse errors, and missing input are handled per-entity (partial success pattern). Failed entities include error message and raw LLM response
+- **Detail view:** `detail_schema` with header (entity_name, status as badge, model_used) and dynamic sections auto-generated from LLM JSON keys via `_dynamic_sections`
+- **Error handling:** LLM failures and missing input are handled per-entity (partial success pattern). JSON parse failures fall back to displaying raw LLM text as a prose section. Failed entities include error message in a dynamic error section
 - **Dependencies:** `tools.ai` (LLM calls), `tools.logger`, `tools.progress`
 - **Files:** `manifest.json`, `execute.js`

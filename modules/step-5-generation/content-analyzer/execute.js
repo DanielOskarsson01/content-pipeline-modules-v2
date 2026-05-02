@@ -85,122 +85,130 @@ function parseJsonResponse(text) {
 }
 
 /**
- * Extract slug string from a category entry.
- * v1.3.0 uses {slug, why, source} objects; v1.2.0 used {slug, why}; v1.0.0 used plain strings.
+ * Common acronyms that should be uppercased in auto-derived labels.
  */
-function catSlug(entry) {
-  return typeof entry === 'string' ? entry : (entry?.slug || entry?.label || String(entry));
+const ACRONYMS = new Set(['llm', 'ai', 'url', 'api', 'id', 'cta', 'roi', 'seo', 'qa', 'ui', 'ux', 'serp', 'pse', 'csv', 'json', 'html', 'css', 'sql', 'http', 'ip', 'dns']);
+
+/**
+ * Convert a snake_case or camelCase key to a human-readable label.
+ * Handles acronyms: 'llm_response' → 'LLM Response', 'ai_model' → 'AI Model'.
+ */
+function keyToLabel(key) {
+  return key
+    .replace(/_/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(' ')
+    .map(word => ACRONYMS.has(word.toLowerCase()) ? word.toUpperCase() : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+const MAX_SECTION_CHARS = 2000;
+
+/**
+ * Render any JSON value as human-readable text for display.
+ * Depth-limited to prevent runaway recursion on deeply nested LLM output.
+ */
+function renderValue(value, depth = 0) {
+  if (value === null || value === undefined) return 'Not available';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+
+  // At max depth, fall back to compact JSON
+  if (depth >= 2) {
+    const json = JSON.stringify(value);
+    return json.length > 200 ? json.substring(0, 200) + '...' : json;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return 'None';
+    // Array of primitives → comma-separated
+    if (value.every(v => typeof v === 'string' || typeof v === 'number')) {
+      return value.join(', ');
+    }
+    // Array of objects → one line per entry, pick readable fields
+    return value.map(item => {
+      if (typeof item === 'string' || typeof item === 'number') return String(item);
+      if (typeof item === 'object' && item !== null) {
+        // Pick display-friendly fields, skip metadata like 'source', 'evidence'
+        const parts = Object.entries(item)
+          .filter(([k]) => k !== 'source' && k !== 'evidence')
+          .map(([k, v]) => {
+            if (typeof v === 'string' || typeof v === 'number') return `${v}`;
+            return renderValue(v, depth + 1);
+          })
+          .filter(Boolean);
+        return parts.join(' — ');
+      }
+      return String(item);
+    }).join('\n');
+  }
+
+  if (typeof value === 'object') {
+    const entries = Object.entries(value).filter(([, v]) => v !== null && v !== undefined);
+    if (entries.length === 0) return 'Not available';
+    return entries.map(([k, v]) => {
+      const label = keyToLabel(k);
+      const rendered = renderValue(v, depth + 1);
+      return `${label}: ${rendered}`;
+    }).join('\n');
+  }
+
+  return String(value);
 }
 
 /**
- * Extract slug string from a tag entry.
- * v1.3.0/v1.2.0: existing = [{slug, why}], suggested_new = [{label, why, evidence}]
- * v1.0.0: existing/suggested = ["string"]
+ * Build a short preview string from the first few meaningful values in the analysis.
+ * Used in the card list view for at-a-glance scanning.
  */
-function tagSlug(entry) {
-  return typeof entry === 'string' ? entry : (entry?.slug || entry?.label || String(entry));
+function buildPreview(analysis) {
+  const previews = [];
+  for (const [, value] of Object.entries(analysis)) {
+    if (previews.length >= 3) break;
+    if (typeof value === 'string' && value.length > 0 && value.length < 100) {
+      previews.push(value);
+    } else if (Array.isArray(value) && value.length > 0) {
+      const items = value
+        .map(v => typeof v === 'string' ? v : (v?.slug || v?.label || v?.name || v?.detail || ''))
+        .filter(Boolean)
+        .slice(0, 3);
+      if (items.length > 0) previews.push(items.join(', '));
+    } else if (typeof value === 'number') {
+      previews.push(String(value));
+    }
+    // Skip objects — not useful for preview
+  }
+  return previews.join(' · ') || 'Analysis complete';
 }
 
 /**
- * Flatten analysis JSON into display-friendly fields for the output table.
- * Handles v1.3.0 (structural extraction, {detail, source} objects),
- * v1.2.0 ({slug, why} objects), and v1.0.0 (plain strings) schemas.
+ * Auto-flatten any LLM JSON response into display fields and dynamic section definitions.
+ * No hardcoded knowledge of specific schemas — adapts to whatever the prompt produces.
  */
 function flattenAnalysis(analysis) {
-  const categories = analysis.categories || {};
-  const tags = analysis.tags || {};
-  const facts = analysis.key_facts || {};
-
-  // v1.3.0/v1.2.0: primary is array of {slug, why}; v1.0.0: primary is a string
-  let primaryCats = Array.isArray(categories.primary) ? categories.primary : (categories.primary ? [categories.primary] : []);
-  let secondaryCats = Array.isArray(categories.secondary) ? categories.secondary : [];
-  // Promote secondary to primary if LLM returned empty primary
-  if (primaryCats.length === 0 && secondaryCats.length > 0) {
-    primaryCats = secondaryCats;
-    secondaryCats = [];
-  }
-  const primaryCategory = primaryCats.map(catSlug).join(', ') || 'Unknown';
-
-  // Tags: v1.2.0+ uses suggested_new; v1.0.0 uses suggested
-  const existingTags = (tags.existing || []).map(tagSlug);
-  const suggestedTags = (tags.suggested_new || tags.suggested || []).map(tagSlug);
-  const allTags = [...existingTags, ...suggestedTags];
-  const tagsPreview = allTags.slice(0, 5).join(', ') + (allTags.length > 5 ? ` (+${allTags.length - 5})` : '');
-
-  const factParts = [];
-  if (facts.founded) factParts.push(`Est. ${facts.founded}`);
-  if (facts.headquarters || facts.hq) factParts.push(facts.headquarters || facts.hq);
-  if (facts.employees) factParts.push(`~${facts.employees} employees`);
-  const factsPreview = factParts.join(' · ') || 'No facts extracted';
-
-  // Build detail text fields
-  const categoriesText = [
-    primaryCats.length ? `Primary: ${primaryCats.map(c => typeof c === 'string' ? c : `${c.slug} (${c.why})`).join(', ')}` : null,
-    secondaryCats.length ? `Secondary: ${secondaryCats.map(c => typeof c === 'string' ? c : `${c.slug} (${c.why})`).join(', ')}` : null,
-  ].filter(Boolean).join('\n') || 'No categories assigned';
-
-  const tagsText = [
-    existingTags.length ? `Existing: ${existingTags.join(', ')}` : null,
-    suggestedTags.length ? `Suggested new: ${suggestedTags.join(', ')}` : null,
-  ].filter(Boolean).join('\n') || 'No tags extracted';
-
-  // Key people: v1.3.0 uses {name, role, source}; v1.2.0 uses {name, role}; v1.0.0 uses strings
-  const keyPeople = (facts.key_people || []).map(p =>
-    typeof p === 'string' ? p : `${p.name} — ${p.role}`
-  );
-
-  // Key facts text — handles both structured objects and plain strings
-  const keyFactsParts = [];
-  if (facts.founded) keyFactsParts.push(`Founded: ${facts.founded}`);
-  if (facts.headquarters || facts.hq) keyFactsParts.push(`Headquarters: ${facts.headquarters || facts.hq}`);
-  if (facts.employees) keyFactsParts.push(`Employees: ${facts.employees}`);
-  if (keyPeople.length) keyFactsParts.push(`Key People: ${keyPeople.join(', ')}`);
-
-  // v1.3.0: licenses/awards/partnerships are [{detail, source}]; v1.2.0: plain strings
-  const licenses = (facts.licenses || []).map(l => typeof l === 'string' ? l : l.detail);
-  if (licenses.length) keyFactsParts.push(`Licenses: ${licenses.join(', ')}`);
-
-  const awards = (facts.awards || []).map(a => typeof a === 'string' ? a : a.detail);
-  if (awards.length) keyFactsParts.push(`Awards: ${awards.join(', ')}`);
-
-  const partnerships = (facts.partnerships || []).map(p => typeof p === 'string' ? p : p.detail);
-  if (partnerships.length) keyFactsParts.push(`Partnerships: ${partnerships.join(', ')}`);
-
-  // v1.3.0: offices array
-  const offices = facts.offices || [];
-  if (offices.length && offices.some(o => o !== null)) {
-    keyFactsParts.push(`Offices: ${offices.filter(Boolean).join(', ')}`);
-  }
-
-  // v1.3.0: contact object
-  const contact = facts.contact || {};
-  const contactParts = [];
-  if (contact.email) contactParts.push(`Email: ${contact.email}`);
-  if (contact.phone) contactParts.push(`Phone: ${contact.phone}`);
-  if (contact.website) contactParts.push(`Website: ${contact.website}`);
-  if (contactParts.length) keyFactsParts.push(contactParts.join(', '));
-
-  const keyFactsText = keyFactsParts.join('\n') || 'No facts extracted';
-
-  // Citations: v1.3.0 uses [{index, url, title}]; v1.2.0 uses [{claim, sources}]; v1.0.0 uses strings
-  const citations = analysis.source_citations || [];
-  const citationsText = citations.length > 0
-    ? citations.map((c, i) => {
-        if (typeof c === 'string') return `${i + 1}. ${c}`;
-        if (c.index !== undefined) return `[#${c.index}] ${c.url}${c.title ? ` — ${c.title}` : ''}`;
-        return `${i + 1}. ${c.claim} — ${(c.sources || []).join(', ')}`;
-      }).join('\n')
-    : 'No citations';
-
-  return {
-    primary_category: primaryCategory,
-    tags_preview: tagsPreview,
-    facts_preview: factsPreview,
-    categories_text: categoriesText,
-    tags_text: tagsText,
-    key_facts_text: keyFactsText,
-    source_citations_text: citationsText,
+  const result = {
+    summary_preview: buildPreview(analysis),
+    _dynamic_sections: [],
   };
+
+  for (const [key, value] of Object.entries(analysis)) {
+    const label = keyToLabel(key);
+    let text = renderValue(value);
+
+    // Cap section text length
+    if (text.length > MAX_SECTION_CHARS) {
+      text = text.substring(0, MAX_SECTION_CHARS) + '\n... (truncated)';
+    }
+
+    const fieldName = `section_${key}`;
+    result[fieldName] = text;
+    result._dynamic_sections.push({
+      field: fieldName,
+      label,
+      display: text.includes('\n') ? 'prose' : 'text',
+    });
+  }
+
+  return result;
 }
 
 async function execute(input, options, tools) {
@@ -259,25 +267,34 @@ async function execute(input, options, tools) {
         max_tokens,
       });
 
-      // Parse JSON response
-      const analysis = parseJsonResponse(response.text);
-
-      // Flatten for display
-      const flat = flattenAnalysis(analysis);
+      // Parse JSON response — fall back to raw text display if parsing fails
+      let analysis;
+      let flat;
+      try {
+        analysis = parseJsonResponse(response.text);
+        flat = flattenAnalysis(analysis);
+      } catch (parseErr) {
+        // LLM returned non-JSON (prose, markdown, etc.) — display as single section
+        logger.warn(`${entity.name}: LLM returned non-JSON, displaying as raw text`);
+        analysis = null;
+        const rawText = response.text || '(empty response)';
+        flat = {
+          summary_preview: rawText.substring(0, 100) + (rawText.length > 100 ? '...' : ''),
+          section_analysis: rawText,
+          _dynamic_sections: [{ field: 'section_analysis', label: 'Analysis', display: 'prose' }],
+        };
+      }
 
       const resultItem = {
         entity_name: entity.name,
         status: 'analyzed',
-        primary_category: flat.primary_category,
-        tags_preview: flat.tags_preview,
-        facts_preview: flat.facts_preview,
+        summary_preview: flat.summary_preview,
         word_count: totalWords,
         model_used: `${ai_provider}/${ai_model}`,
-        // Detail fields
-        categories_text: flat.categories_text,
-        tags_text: flat.tags_text,
-        key_facts_text: flat.key_facts_text,
-        source_citations_text: flat.source_citations_text,
+        // Dynamic section fields (section_categories, section_tags, etc.)
+        ...Object.fromEntries(Object.entries(flat).filter(([k]) => k.startsWith('section_'))),
+        // Section definitions for dynamic detail modal
+        _dynamic_sections: flat._dynamic_sections,
         // Full JSON carried to pool for downstream submodules
         analysis_json: analysis,
       };
@@ -288,7 +305,7 @@ async function execute(input, options, tools) {
         meta: { pages_analyzed: items.length, total_words: totalWords, status: 'success' },
       });
 
-      logger.info(`${entity.name}: analysis complete — ${flat.primary_category}, ${flat.tags_preview}`);
+      logger.info(`${entity.name}: analysis complete — ${flat.summary_preview}`);
       if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
 
     } catch (err) {
@@ -300,16 +317,11 @@ async function execute(input, options, tools) {
         items: [{
           entity_name: entity.name,
           status: 'error',
-          primary_category: '',
-          tags_preview: '',
-          facts_preview: '',
+          summary_preview: '',
           word_count: 0,
           model_used: `${ai_provider}/${ai_model}`,
-          categories_text: '',
-          tags_text: '',
-          key_facts_text: '',
-          source_citations_text: '',
           error: err.message,
+          _dynamic_sections: [{ field: 'error', label: 'Error', display: 'text' }],
           analysis_json: null,
         }],
         meta: { pages_analyzed: 0, status: 'error' },
