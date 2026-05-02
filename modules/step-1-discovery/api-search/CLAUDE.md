@@ -22,12 +22,15 @@
 
 ## Options contract
 
-- `keywords`: string[] -- search terms (search mode: per-keyword API call; feed mode: client-side filter)
+- `search_input`: "keywords" | "entity" | "entity_names" -- where search terms come from
+- `keywords`: string[] -- search terms (only used when search_input="keywords")
 - `exclude_keywords`: string[] -- title substring exclusion filter
 - `max_results`: number -- per-keyword API limit for search mode
 - `providers`: object[] -- provider config objects (presets_enabled: save/name/star in UI)
 - `provider_params`: object -- extra query params keyed by provider ID
 - `requests_per_minute`: number -- global rate limit
+- `entity_production`: boolean -- each approved item becomes its own downstream entity
+- `entity_name_template`: string -- template for produced entity names, e.g. "{title} - {company}"
 
 ## Provider config shape
 

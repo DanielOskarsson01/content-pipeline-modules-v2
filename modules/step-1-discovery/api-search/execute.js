@@ -162,12 +162,13 @@ function createRateLimiter(rpm) {
 async function execute(input, options, tools) {
   const { entities } = input;
   const {
-    keywords = [],
+    keywords: staticKeywords = [],
     exclude_keywords = [],
     max_results = 50,
     providers: providersConfig = [],
     provider_params = {},
-    requests_per_minute = 30
+    requests_per_minute = 30,
+    search_input = 'keywords'
   } = options;
   const { logger, http, progress } = tools;
 
@@ -209,6 +210,23 @@ async function execute(input, options, tools) {
 
   for (let ei = 0; ei < entities.length; ei++) {
     const entity = entities[ei];
+
+    // Resolve keywords based on search_input mode
+    let keywords;
+    if (search_input === 'entity') {
+      const raw = entity.keywords || entity.search_terms || '';
+      keywords = (typeof raw === 'string' ? raw.split(',') : Array.isArray(raw) ? raw : [])
+        .map(k => k.trim())
+        .filter(Boolean);
+      if (keywords.length === 0) {
+        logger.warn(`${entity.name}: search_input="entity" but no keywords found on entity`);
+      }
+    } else if (search_input === 'entity_names') {
+      keywords = entity.name ? [entity.name] : [];
+    } else {
+      keywords = staticKeywords;
+    }
+
     const allItems = new Map(); // externalId -> item
     let totalCalls = 0;
     const errors = [];

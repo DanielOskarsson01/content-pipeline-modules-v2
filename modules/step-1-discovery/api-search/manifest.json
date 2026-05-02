@@ -13,10 +13,18 @@
   "item_key": "url",
   "options": [
     {
+      "name": "search_input",
+      "type": "select",
+      "label": "Search input source",
+      "description": "Where search terms come from. 'keywords': use the keywords option. 'entity': read entity.keywords field (comma-separated or JSON array from CSV). 'entity_names': use entity.name as the search term.",
+      "default": "keywords",
+      "values": ["keywords", "entity", "entity_names"]
+    },
+    {
       "name": "keywords",
       "type": "json",
       "label": "Search keywords",
-      "description": "Search mode: one API call per keyword. Feed mode: client-side filter on title/description.",
+      "description": "Search mode: one API call per keyword. Feed mode: client-side filter on title/description. Only used when search_input='keywords'.",
       "default": ["CMO", "CPO", "CEO"]
     },
     {
@@ -58,15 +66,32 @@
       "default": 30,
       "min": 1,
       "max": 120
+    },
+    {
+      "name": "entity_production",
+      "type": "boolean",
+      "label": "Produce entities from results",
+      "description": "When enabled, each approved item becomes its own entity for downstream steps (each gets scraped/analyzed independently). Handled at approval time by the skeleton.",
+      "default": false
+    },
+    {
+      "name": "entity_name_template",
+      "type": "text",
+      "label": "Entity name template",
+      "description": "How to name produced entities. Use {field} placeholders: {title}, {company}, {source}, {url}. Only used when entity_production is enabled.",
+      "default": "{title}"
     }
   ],
   "options_defaults": {
+    "search_input": "keywords",
     "keywords": ["CMO", "CPO", "CEO"],
     "exclude_keywords": ["intern", "junior", "student"],
     "max_results": 50,
     "providers": [],
     "provider_params": {},
-    "requests_per_minute": 30
+    "requests_per_minute": 30,
+    "entity_production": false,
+    "entity_name_template": "{title}"
   },
   "output_schema": {
     "display_type": "table",
