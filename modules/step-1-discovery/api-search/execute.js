@@ -157,20 +157,65 @@ function createRateLimiter(rpm) {
   };
 }
 
+// ── Option parsers (UI may store JSON fields as strings) ─────────────
+
+function parseJsonOrArray(val) {
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (trimmed.startsWith('[')) {
+      try { return JSON.parse(trimmed); } catch (e) { return []; }
+    }
+    return [];
+  }
+  return [];
+}
+
+function parseJsonOrSplit(val) {
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (trimmed.startsWith('[')) {
+      try { return JSON.parse(trimmed); } catch (e) { /* fall through */ }
+    }
+    // Comma-separated fallback
+    return trimmed.split(',').map(k => k.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function parseJsonOrObj(val) {
+  if (val && typeof val === 'object' && !Array.isArray(val)) return val;
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (trimmed.startsWith('{')) {
+      try { return JSON.parse(trimmed); } catch (e) { return {}; }
+    }
+    return {};
+  }
+  return {};
+}
+
 // ── Main execute ───────────────────────────────────────────────────
 
 async function execute(input, options, tools) {
   const { entities } = input;
   const {
-    keywords: staticKeywords = [],
-    exclude_keywords = [],
+    keywords: rawKeywords = [],
+    exclude_keywords: rawExclude = [],
     max_results = 50,
-    providers: providersConfig = [],
-    provider_params = {},
+    providers: rawProviders = [],
+    provider_params: rawProviderParams = {},
     requests_per_minute = 30,
     search_input = 'keywords'
   } = options;
   const { logger, http, progress } = tools;
+
+  // Parse string inputs (UI may store JSON options as strings)
+  const staticKeywords = parseJsonOrSplit(rawKeywords);
+  const exclude_keywords = parseJsonOrSplit(rawExclude);
+  const providersConfig = parseJsonOrArray(rawProviders);
+  const provider_params = parseJsonOrObj(rawProviderParams);
 
   // Use providers from options, filtering out those with missing auth
   const providers = (Array.isArray(providersConfig) ? providersConfig : [])
