@@ -95,15 +95,13 @@
   },
   "output_schema": {
     "display_type": "table",
-    "columns": {
-      "title": "string",
-      "company": "string",
-      "location": "string",
-      "url": "string",
-      "source": "string",
-      "externalId": "string",
-      "snippet": "string",
-      "postedAt": "string"
-    }
+    "title": "string",
+    "company": "string",
+    "location": "string",
+    "url": "string",
+    "source": "string",
+    "externalId": "string",
+    "snippet": "string",
+    "postedAt": "string"
   }
 }
