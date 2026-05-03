@@ -12,13 +12,21 @@ const path = require('path');
 // ── CSV parser (no dependencies) ──────────────────────────────────
 
 function parseCSV(text) {
-  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  // Strip BOM
+  const clean = text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
+  const lines = clean.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return [];
 
-  const headers = parseLine(lines[0]);
+  // Auto-detect delimiter from header line
+  const headerLine = lines[0];
+  const semicolonCount = (headerLine.match(/;/g) || []).length;
+  const commaCount = (headerLine.match(/,/g) || []).length;
+  const delimiter = semicolonCount > commaCount ? ';' : ',';
+
+  const headers = parseLine(lines[0], delimiter);
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
-    const values = parseLine(lines[i]);
+    const values = parseLine(lines[i], delimiter);
     if (values.length === 0) continue;
     const row = {};
     for (let j = 0; j < headers.length; j++) {
@@ -29,7 +37,7 @@ function parseCSV(text) {
   return rows;
 }
 
-function parseLine(line) {
+function parseLine(line, delimiter) {
   const fields = [];
   let current = '';
   let inQuotes = false;
@@ -43,7 +51,7 @@ function parseLine(line) {
       } else {
         inQuotes = !inQuotes;
       }
-    } else if (ch === ',' && !inQuotes) {
+    } else if (ch === delimiter && !inQuotes) {
       fields.push(current);
       current = '';
     } else {

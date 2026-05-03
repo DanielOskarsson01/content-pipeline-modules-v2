@@ -1,12 +1,16 @@
 {
   "id": "csv-discovery",
   "name": "CSV Discovery",
+  "version": "1.0.0",
   "step": 1,
-  "description": "Import items from CSV files in a local directory. Reads all unprocessed CSVs, maps columns to pipeline item format. Designed for external tools (Cowork, cron scripts) that drop discovery results into a shared folder.",
+  "category": "search",
+  "description": "Import items from CSV files in a local directory. Reads all unprocessed CSVs, maps columns to pipeline item format. Designed for external tools (LinkedIn exports, cron scripts, community lists) that drop CSV files into a shared folder.",
   "cost": "cheap",
+  "sort_order": 2,
   "item_key": "url",
   "data_operation_default": "transform",
-  "requires_columns": [],
+  "depends_on": [],
+  "requires_columns": ["name"],
   "options": [
     {
       "name": "source_dir",
@@ -57,6 +61,20 @@
       "type": "json",
       "default": [],
       "description": "Filter out items whose title contains these terms (case-insensitive)"
+    },
+    {
+      "name": "entity_production",
+      "type": "boolean",
+      "label": "Produce entities from results",
+      "description": "When enabled, each approved item becomes its own entity for downstream steps (each gets scraped/analyzed independently).",
+      "default": false
+    },
+    {
+      "name": "entity_name_template",
+      "type": "text",
+      "label": "Entity name template",
+      "description": "How to name produced entities. Use {field} placeholders: {title}, {company}, {source}, {url}. Only used when entity_production is enabled.",
+      "default": "{title} - {company}"
     }
   ],
   "options_defaults": {
@@ -72,6 +90,19 @@
     },
     "source_label": "linkedin",
     "skip_processed": true,
-    "exclude_keywords": []
+    "exclude_keywords": [],
+    "entity_production": false,
+    "entity_name_template": "{title} - {company}"
+  },
+  "output_schema": {
+    "display_type": "table",
+    "title": "string",
+    "company": "string",
+    "location": "string",
+    "url": "string",
+    "source": "string",
+    "externalId": "string",
+    "snippet": "string",
+    "postedAt": "string"
   }
 }
