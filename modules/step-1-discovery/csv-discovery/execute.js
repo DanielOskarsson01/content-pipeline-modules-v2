@@ -100,7 +100,8 @@ async function execute(input, options, tools) {
   const { entities } = input;
   const {
     source_dir,
-    file_pattern = 'jobs-*.csv',
+    upload_dir,
+    file_pattern = '*.csv',
     column_map = {},
     source_label = 'linkedin',
     skip_processed = true,
@@ -108,9 +109,16 @@ async function execute(input, options, tools) {
   } = options;
   const { logger, progress } = tools;
 
-  // Validate source directory
-  if (!source_dir || !fs.existsSync(source_dir)) {
-    logger.error(`Source directory not found: ${source_dir}`);
+  // Collect directories to scan (source_dir and/or upload_dir)
+  const dirs = [];
+  if (source_dir && fs.existsSync(source_dir)) dirs.push(source_dir);
+  if (upload_dir && fs.existsSync(upload_dir) && upload_dir !== source_dir) dirs.push(upload_dir);
+
+  if (dirs.length === 0) {
+    const msg = source_dir
+      ? `Source directory not found: ${source_dir}`
+      : 'No source_dir or upload_dir configured';
+    logger.error(msg);
     return {
       results: entities.map(e => ({
         entity_name: e.name,
@@ -120,42 +128,48 @@ async function execute(input, options, tools) {
       summary: {
         total_entities: entities.length,
         total_items: 0,
-        description: `Error: source directory not found (${source_dir})`,
-        errors: [`Directory not found: ${source_dir}`]
+        description: `Error: ${msg}`,
+        errors: [msg]
       }
     };
   }
 
-  // Find matching CSV files
-  const allFiles = fs.readdirSync(source_dir);
-  const csvFiles = allFiles
-    .filter(f => globMatch(file_pattern, f))
-    .sort(); // chronological by filename
+  // Gather files from all directories: { dir, filename }[]
+  let totalSkipped = 0;
+  const filesToProcess = [];
+  const processedSets = new Map(); // dir -> Set of processed filenames
 
-  // Filter out already-processed files
-  const processed = skip_processed ? loadProcessedList(source_dir) : new Set();
-  const newFiles = csvFiles.filter(f => !processed.has(f));
+  for (const dir of dirs) {
+    const allFiles = fs.readdirSync(dir);
+    const csvFiles = allFiles.filter(f => globMatch(file_pattern, f)).sort();
+    const processed = skip_processed ? loadProcessedList(dir) : new Set();
+    processedSets.set(dir, processed);
+    const newFiles = csvFiles.filter(f => !processed.has(f));
+    totalSkipped += csvFiles.length - newFiles.length;
+    for (const f of newFiles) filesToProcess.push({ dir, filename: f });
+    logger.info(`${dir}: ${newFiles.length} new file(s) (${csvFiles.length - newFiles.length} already processed)`);
+  }
 
-  if (newFiles.length === 0) {
-    logger.info(`No new CSV files in ${source_dir} (${csvFiles.length} total, all processed)`);
+  if (filesToProcess.length === 0) {
+    logger.info('No new CSV files to process across all directories');
     return {
       results: entities.map(e => ({
         entity_name: e.name,
         items: [],
-        meta: { total_found: 0, files_read: 0, files_skipped: csvFiles.length, errors: 0 }
+        meta: { total_found: 0, files_read: 0, files_skipped: totalSkipped, errors: 0 }
       })),
       summary: {
         total_entities: entities.length,
         total_items: 0,
-        description: csvFiles.length > 0
-          ? `No new files (${csvFiles.length} already processed)`
-          : `No CSV files matching "${file_pattern}" in ${source_dir}`,
+        description: totalSkipped > 0
+          ? `No new files (${totalSkipped} already processed)`
+          : `No CSV files matching "${file_pattern}"`,
         errors: []
       }
     };
   }
 
-  logger.info(`Found ${newFiles.length} new CSV file(s) to process`);
+  logger.info(`Found ${filesToProcess.length} new CSV file(s) to process`);
 
   // Default column map
   const map = {
@@ -174,12 +188,12 @@ async function execute(input, options, tools) {
   let filesRead = 0;
   const errors = [];
 
-  for (let fi = 0; fi < newFiles.length; fi++) {
-    const filename = newFiles[fi];
-    progress.update(fi + 1, newFiles.length, `Reading: ${filename}`);
+  for (let fi = 0; fi < filesToProcess.length; fi++) {
+    const { dir, filename } = filesToProcess[fi];
+    progress.update(fi + 1, filesToProcess.length, `Reading: ${filename}`);
 
     try {
-      const filePath = path.join(source_dir, filename);
+      const filePath = path.join(dir, filename);
       const content = fs.readFileSync(filePath, 'utf-8');
       const rows = parseCSV(content);
 
@@ -223,7 +237,7 @@ async function execute(input, options, tools) {
       }
 
       filesRead++;
-      processed.add(filename);
+      processedSets.get(dir).add(filename);
       logger.info(`${filename}: ${rows.length} rows, ${added} new items (${allItems.size} total)`);
 
       // Save partial results after each file for timeout resilience
@@ -237,12 +251,14 @@ async function execute(input, options, tools) {
     }
   }
 
-  // Save processed list
+  // Save processed lists per directory
   if (skip_processed && filesRead > 0) {
-    try {
-      saveProcessedList(source_dir, processed);
-    } catch (err) {
-      logger.warn(`Could not save .processed file: ${err.message}`);
+    for (const [dir, processed] of processedSets) {
+      try {
+        saveProcessedList(dir, processed);
+      } catch (err) {
+        logger.warn(`Could not save .processed file in ${dir}: ${err.message}`);
+      }
     }
   }
 
@@ -259,7 +275,7 @@ async function execute(input, options, tools) {
     meta: {
       total_found: items.length,
       files_read: filesRead,
-      files_skipped: csvFiles.length - newFiles.length,
+      files_skipped: totalSkipped,
       errors: errors.length
     }
   }));

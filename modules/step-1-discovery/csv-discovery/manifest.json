@@ -13,17 +13,23 @@
   "requires_columns": ["name"],
   "options": [
     {
+      "name": "upload_dir",
+      "type": "file_upload",
+      "label": "Upload CSV/XLSX files",
+      "accept": ".csv,.xlsx,.xls",
+      "description": "Upload files directly. XLSX files are auto-converted to CSV. Processed alongside source_dir files."
+    },
+    {
       "name": "source_dir",
-      "label": "Source directory",
+      "label": "Source directory (optional)",
       "type": "text",
-      "required": true,
-      "description": "Absolute path to folder containing CSV files"
+      "description": "Absolute path to folder containing CSV files. Leave empty if using upload only."
     },
     {
       "name": "file_pattern",
       "label": "File pattern",
       "type": "text",
-      "default": "jobs-*.csv",
+      "default": "*.csv",
       "description": "Glob pattern for CSV filenames to process"
     },
     {
@@ -78,7 +84,7 @@
     }
   ],
   "options_defaults": {
-    "file_pattern": "jobs-*.csv",
+    "file_pattern": "*.csv",
     "column_map": {
       "url": "url",
       "title": "title",
