@@ -5,6 +5,7 @@
   "version": "1.0.0",
   "step": 2,
   "category": "filtering",
+  "sort_order": 3,
   "cost": "medium",
   "data_operation_default": "remove",
 
