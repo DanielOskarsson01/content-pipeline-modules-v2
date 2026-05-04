@@ -532,7 +532,7 @@ module.exports = async function execute(input, options, tools) {
     // --- Score each keyword category ---
     const headResult = scoreHeadTerms(sections, keywords.headTerms, head_term_density_min, head_term_density_max);
     const midTailResult = scoreMidTailTerms(sections, keywords.midTail);
-    const entityResult = scoreEntityTerms(sections, keywords.entities);
+    const entityTermResult = scoreEntityTerms(sections, keywords.entities);
     const negativeResult = check_negatives
       ? scoreNegatives(sections, keywords.negatives)
       : { score: 1, found: [] };
@@ -543,11 +543,11 @@ module.exports = async function execute(input, options, tools) {
     const weights = {
       head: keywords.headTerms.length > 0 ? 0.4 : 0,
       midTail: keywords.midTail.length > 0 ? 0.25 : 0,
-      entities: keywords.entities.length > 0 ? 0.15 : 0,
+      entityTerms: keywords.entities.length > 0 ? 0.15 : 0,
       negatives: (check_negatives && keywords.negatives.length > 0) ? 0.2 : 0,
     };
 
-    const totalWeight = weights.head + weights.midTail + weights.entities + weights.negatives;
+    const totalWeight = weights.head + weights.midTail + weights.entityTerms + weights.negatives;
 
     let keywordScore;
     if (totalWeight === 0) {
@@ -557,7 +557,7 @@ module.exports = async function execute(input, options, tools) {
       keywordScore = (
         (headResult.score * weights.head) +
         (midTailResult.score * weights.midTail) +
-        (entityResult.score * weights.entities) +
+        (entityTermResult.score * weights.entityTerms) +
         (negativeResult.score * weights.negatives)
       ) / totalWeight;
     }
@@ -599,10 +599,10 @@ module.exports = async function execute(input, options, tools) {
 
     // Entity terms
     if (keywords.entities.length > 0) {
-      const entFound = keywords.entities.length - entityResult.missing.length;
-      reportLines.push(`ENTITY TERMS (${entFound}/${keywords.entities.length} found, score: ${(entityResult.score * 100).toFixed(0)}%):`);
-      if (entityResult.missing.length > 0) {
-        reportLines.push(`  Missing: ${entityResult.missing.join(', ')}`);
+      const entFound = keywords.entities.length - entityTermResult.missing.length;
+      reportLines.push(`ENTITY TERMS (${entFound}/${keywords.entities.length} found, score: ${(entityTermResult.score * 100).toFixed(0)}%):`);
+      if (entityTermResult.missing.length > 0) {
+        reportLines.push(`  Missing: ${entityTermResult.missing.join(', ')}`);
       }
       reportLines.push('');
     }
@@ -631,7 +631,7 @@ module.exports = async function execute(input, options, tools) {
     const allMissing = [
       ...headResult.missing,
       ...midTailResult.missing,
-      ...entityResult.missing,
+      ...entityTermResult.missing,
     ];
     const allMisplaced = [...headResult.misplaced];
 
