@@ -42,6 +42,9 @@ api-search (Step 1) -> url-dedup (Step 2) -> scrapers (Step 3) -> ...
 | `providers` | `[]` | Array of provider config objects (see Provider Config below) |
 | `provider_params` | `{}` | Extra query params per provider, keyed by provider ID |
 | `requests_per_minute` | 30 | Global rate limit across all providers |
+| `score_rules` | `[]` | Scoring rules to flag high-signal items. See Scoring below |
+| `entity_production` | `false` | Each approved item becomes its own entity for downstream steps |
+| `entity_name_template` | `"{title}"` | Name template for produced entities. Placeholders: `{title}`, `{company}`, `{source}`, `{url}` |
 
 ## Provider Config
 
@@ -114,6 +117,38 @@ Each provider in the `providers` array is a JSON object:
 - **Fallback array:** `["url", "$remoteok_slug"]` -- tries each path in order, uses first non-empty value
 - **null:** Field is always null for this provider
 
+## Scoring
+
+Score rules flag high-signal items so they appear first in results. Each rule matches a field against patterns and adds points. Items get `_score` (total points), `_signal` (`high` >= 3, `medium` >= 1, `low` = 0), and `_matched_rules` (which rules matched).
+
+```json
+{
+  "score_rules": [
+    {
+      "field": "title",
+      "patterns": ["cmo", "chief marketing officer", "fractional cmo"],
+      "score": 3,
+      "label": "C-level"
+    },
+    {
+      "field": "location",
+      "patterns": ["stockholm", "barcelona", "remote"],
+      "score": 1,
+      "label": "Good-location"
+    }
+  ]
+}
+```
+
+| Rule field | Description |
+|------------|-------------|
+| `field` | Item field to match: `title`, `location`, `company`, etc. |
+| `patterns` | Substring matches (case-insensitive). First match wins per rule. |
+| `score` | Points to add when matched |
+| `label` | Human label for the matched rule |
+
+Results are sorted by `_score` descending (highest signal first). When `score_rules` is empty (default), scoring is completely skipped — no fields added, no sorting.
+
 ## Output Fields
 
 | Field | Description |
@@ -128,6 +163,8 @@ Each provider in the `providers` array is a JSON object:
 | `text_content` | Full description text if > 200 chars |
 | `postedAt` | Publication date from the API |
 | `status` | Always "success" for discovered items |
+| `_score` | Scoring total (only when score_rules configured) |
+| `_signal` | `high`, `medium`, or `low` (only when score_rules configured) |
 
 ## Limitations
 

@@ -80,6 +80,13 @@
       "label": "Entity name template",
       "description": "How to name produced entities. Use {field} placeholders: {title}, {company}, {source}, {url}. Only used when entity_production is enabled.",
       "default": "{title}"
+    },
+    {
+      "name": "score_rules",
+      "type": "json",
+      "label": "Score rules",
+      "description": "Scoring rules to flag high-signal items. Array of {field, patterns, score, label}. Field: item field to match (title, location, company). Patterns: substring matches (case-insensitive). Score: points to add. Items get _score (sum) and _signal (high/medium/low).",
+      "default": []
     }
   ],
   "options_defaults": {
@@ -91,7 +98,8 @@
     "provider_params": {},
     "requests_per_minute": 30,
     "entity_production": false,
-    "entity_name_template": "{title}"
+    "entity_name_template": "{title}",
+    "score_rules": []
   },
   "output_schema": {
     "display_type": "table",
@@ -102,6 +110,8 @@
     "source": "string",
     "externalId": "string",
     "snippet": "string",
-    "postedAt": "string"
+    "postedAt": "string",
+    "_score": "number",
+    "_signal": "string"
   }
 }

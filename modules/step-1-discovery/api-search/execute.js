@@ -157,6 +157,32 @@ function createRateLimiter(rpm) {
   };
 }
 
+// ── Scoring ──────────────────────────────────────────────────────────
+
+function scoreItem(item, rules) {
+  if (!rules || rules.length === 0) return { _score: 0, _signal: 'low', _matched_rules: [] };
+
+  let total = 0;
+  const matched = [];
+
+  for (const rule of rules) {
+    const fieldVal = String(item[rule.field] || '').toLowerCase();
+    if (!fieldVal) continue;
+
+    const patterns = Array.isArray(rule.patterns) ? rule.patterns : [];
+    for (const pattern of patterns) {
+      if (fieldVal.includes(pattern.toLowerCase())) {
+        total += (rule.score || 1);
+        matched.push(rule.label || rule.field);
+        break; // one match per rule is enough
+      }
+    }
+  }
+
+  const signal = total >= 3 ? 'high' : total >= 1 ? 'medium' : 'low';
+  return { _score: total, _signal: signal, _matched_rules: matched };
+}
+
 // ── Option parsers (UI may store JSON fields as strings) ─────────────
 
 function parseJsonOrArray(val) {
@@ -207,7 +233,8 @@ async function execute(input, options, tools) {
     providers: rawProviders = [],
     provider_params: rawProviderParams = {},
     requests_per_minute = 30,
-    search_input = 'keywords'
+    search_input = 'keywords',
+    score_rules: rawScoreRules = []
   } = options;
   const { logger, http, progress } = tools;
 
@@ -216,6 +243,7 @@ async function execute(input, options, tools) {
   const exclude_keywords = parseJsonOrSplit(rawExclude);
   const providersConfig = parseJsonOrArray(rawProviders);
   const provider_params = parseJsonOrObj(rawProviderParams);
+  const scoreRules = parseJsonOrArray(rawScoreRules);
 
   // Use providers from options, filtering out those with missing auth
   const providers = (Array.isArray(providersConfig) ? providersConfig : [])
@@ -316,6 +344,11 @@ async function execute(input, options, tools) {
               continue;
             }
 
+            // Score
+            if (scoreRules.length > 0) {
+              Object.assign(mapped, scoreItem(mapped, scoreRules));
+            }
+
             allItems.set(mapped.externalId, mapped);
             added++;
           }
@@ -360,6 +393,11 @@ async function execute(input, options, tools) {
                   continue;
                 }
 
+                // Score
+                if (scoreRules.length > 0) {
+                  Object.assign(mapped, scoreItem(mapped, scoreRules));
+                }
+
                 allItems.set(mapped.externalId, mapped);
                 added++;
               }
@@ -388,6 +426,9 @@ async function execute(input, options, tools) {
     }
 
     const items = Array.from(allItems.values());
+    if (scoreRules.length > 0) {
+      items.sort((a, b) => (b._score || 0) - (a._score || 0));
+    }
 
     results.push({
       entity_name: entity.name,
@@ -401,7 +442,13 @@ async function execute(input, options, tools) {
       }
     });
 
-    logger.info(`${entity.name}: ${items.length} unique items from ${providers.length} provider(s), ${totalCalls} API calls`);
+    if (scoreRules.length > 0) {
+      const high = items.filter(i => i._signal === 'high').length;
+      const med = items.filter(i => i._signal === 'medium').length;
+      logger.info(`${entity.name}: ${items.length} items — ${high} high-signal, ${med} medium-signal`);
+    } else {
+      logger.info(`${entity.name}: ${items.length} unique items from ${providers.length} provider(s), ${totalCalls} API calls`);
+    }
   }
 
   const totalItems = results.reduce((sum, r) => sum + r.items.length, 0);
