@@ -63,6 +63,21 @@
       "default": 200,
       "min": 10,
       "max": 500
+    },
+    {
+      "name": "metadata_fields",
+      "type": "json",
+      "label": "Item metadata fields",
+      "description": "Extra item fields to include in the LLM prompt alongside the URL. E.g. [\"title\", \"company\", \"location\"]. When empty, only URL slug is sent.",
+      "default": []
+    },
+    {
+      "name": "prompt_context",
+      "type": "textarea",
+      "label": "Classification context",
+      "presets_enabled": true,
+      "description": "Framing for the LLM classifier. Describes what kind of content is being filtered and what the entity represents.",
+      "default": "You are a URL relevance classifier for a company research content pipeline.\nClassify each URL based on its relevance for creating a comprehensive company profile."
     }
   ],
 
@@ -72,7 +87,9 @@
     "keep_criteria": "about pages, team, leadership, partnerships, integrations, products overview, services overview, awards, milestones, company news, investors, careers, pricing, contact, press releases, compliance, regulatory, case studies, interviews, expansion, acquisitions, funding, annual reports",
     "drop_criteria": "seasonal campaigns, single game pages, how-to-play guides, promotional offers, holiday-themed content, affiliate landing pages",
     "confidence_threshold": "balanced",
-    "max_urls_per_prompt": 200
+    "max_urls_per_prompt": 200,
+    "metadata_fields": [],
+    "prompt_context": "You are a URL relevance classifier for a company research content pipeline.\nClassify each URL based on its relevance for creating a comprehensive company profile."
   },
 
   "item_key": "url",

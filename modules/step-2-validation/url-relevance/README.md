@@ -33,8 +33,9 @@ Rather than fetching page content (expensive), this module makes classification 
 - **URL slug** — the path component (e.g., `/about/leadership`)
 - **Link text** — the anchor text from discovery (e.g., "Our Leadership Team")
 - **Source location** — where the link was found (nav, header, footer, body)
+- **Item metadata** (optional) — extra fields like `title`, `company`, `location` from upstream modules, configured via `metadata_fields`
 
-These signals are sent to an LLM in batches (up to 200 URLs per prompt) for classification as KEEP, MAYBE, or DROP. The prompt includes configurable criteria for what constitutes each category, tailored to the content type being produced.
+These signals are sent to an LLM in batches (up to 200 URLs per prompt) for classification as KEEP, MAYBE, or DROP. The prompt includes configurable criteria for what constitutes each category, tailored to the content type being produced. The `prompt_context` option controls the framing — by default it's tuned for company profiles, but can be overridden for job search, news, or any other pipeline type.
 
 ### The Calibration Roadmap
 
@@ -81,6 +82,8 @@ This module implements step 1 — the LLM classifies, the operator reviews and o
 | `drop_criteria` | Individual product pages, seasonal campaigns, single game pages... | Customize to exclude irrelevant content types. Add patterns specific to iGaming (game pages, bonus offers, tournament pages) | Defines what the LLM classifies as DROP. Helps the LLM make clear decisions on borderline cases |
 | `confidence_threshold` | balanced | Use `keep_most` when you'd rather scrape unnecessary pages than miss useful ones. Use `aggressive` when scraping budget is tight | Controls how the LLM handles uncertain URLs: keep_most → KEEP, balanced → MAYBE, aggressive → DROP |
 | `max_urls_per_prompt` | 200 | Lower to 50-100 for better per-URL accuracy; raise to 300-500 for faster/cheaper processing of large pools | Batch size per LLM call. Larger batches = fewer API calls but potentially less attention per URL |
+| `metadata_fields` | `[]` | Set to `["title", "company", "location"]` when items have metadata beyond the URL slug (e.g. from api-search). Empty = URL slug only | Extra item fields included in the LLM prompt. More context = better classification, but more tokens per batch |
+| `prompt_context` | Company profile classifier | Override when classifying for non-company-profile pipelines (job search, news, etc.) | Framing text at the top of the LLM prompt. Tells the model what kind of content is being filtered and what the entity represents |
 
 ## Recipes
 
@@ -115,6 +118,19 @@ keep_criteria: [same as your content type]
 drop_criteria: [same as your content type]
 confidence_threshold: balanced
 max_urls_per_prompt: 100
+```
+
+### Job Search Pipeline
+Classify job postings using item metadata (title, company, location) from api-search:
+```
+ai_model: haiku
+ai_provider: anthropic
+metadata_fields: ["title", "company", "location", "_score", "_signal"]
+prompt_context: "You are a job relevance classifier for a recruitment pipeline.\nClassify each job posting based on its relevance for a senior marketing/leadership professional seeking iGaming industry roles."
+keep_criteria: senior marketing roles, C-level (CMO, CCO, CPO, CGO), VP-level, Director-level, Head of department, iGaming/betting/casino industry, remote positions
+drop_criteria: junior roles, intern positions, developer, engineer, sales, account manager, coordinator, designer, analyst, CRM specialist
+confidence_threshold: aggressive
+max_urls_per_prompt: 200
 ```
 
 ### Budget-Conscious (aggressive filtering)

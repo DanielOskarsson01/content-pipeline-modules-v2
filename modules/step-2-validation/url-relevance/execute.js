@@ -18,8 +18,10 @@ const CONFIDENCE_INSTRUCTIONS = {
 /**
  * Build the classification prompt for a batch of URLs.
  */
-function buildPrompt(entityName, website, urls, options) {
+function buildPrompt(entityName, website, urls, options, metadataFields) {
   const confidenceInstruction = CONFIDENCE_INSTRUCTIONS[options.confidence_threshold] || CONFIDENCE_INSTRUCTIONS.balanced;
+  const promptContext = options.prompt_context ||
+    'You are a URL relevance classifier for a company research content pipeline.\nClassify each URL based on its relevance for creating a comprehensive company profile.';
 
   const urlList = urls.map((item, i) => {
     const urlObj = safeParseUrl(item.url);
@@ -27,28 +29,30 @@ function buildPrompt(entityName, website, urls, options) {
     const parts = [`${i + 1}. ${slug}`];
     if (item.link_text) parts.push(`  link_text: ${item.link_text}`);
     if (item.source_location) parts.push(`  source: ${item.source_location}`);
+    for (const field of metadataFields) {
+      const val = item[field];
+      if (val != null && val !== '') parts.push(`  ${field}: ${val}`);
+    }
     return parts.join('\n');
   }).join('\n');
 
-  return `You are a URL relevance classifier for a company research content pipeline.
+  return `${promptContext}
 
-Company: ${entityName}
+Entity: ${entityName}
 Website: ${website || 'unknown'}
 
-Your task: Classify each URL as KEEP, MAYBE, or DROP based on its relevance for creating a comprehensive company profile.
-
-KEEP criteria (pages likely useful for company profile content):
+KEEP criteria:
 ${options.keep_criteria}
 
-DROP criteria (pages unlikely to be useful):
+DROP criteria:
 ${options.drop_criteria}
 
 ${confidenceInstruction}
 
-URLs to classify:
+Items to classify:
 ${urlList}
 
-Respond with ONLY one line per URL in this exact format:
+Respond with ONLY one line per item in this exact format:
 <number>. <KEEP|MAYBE|DROP>
 
 Example:
@@ -104,7 +108,8 @@ function chunk(array, size) {
 
 async function execute(input, options, tools) {
   const { entities } = input;
-  const { ai_model, ai_provider, max_urls_per_prompt } = options;
+  const { ai_model, ai_provider, max_urls_per_prompt, metadata_fields: rawMetadataFields = [] } = options;
+  const metadataFields = Array.isArray(rawMetadataFields) ? rawMetadataFields : [];
   const { logger, progress, ai } = tools;
 
   const results = [];
@@ -140,7 +145,7 @@ async function execute(input, options, tools) {
           logger.info(`${entity.name}: batch ${b + 1}/${batches.length} (${batch.length} URLs)`);
         }
 
-        const prompt = buildPrompt(entity.name, entity.website, batch, options);
+        const prompt = buildPrompt(entity.name, entity.website, batch, options, metadataFields);
 
         const response = await ai.complete({
           prompt,
