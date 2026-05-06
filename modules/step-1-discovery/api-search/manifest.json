@@ -24,6 +24,7 @@
       "name": "keywords",
       "type": "json",
       "label": "Search keywords",
+      "presets_enabled": true,
       "description": "Search mode: one API call per keyword. Feed mode: client-side filter on title/description. Only used when search_input='keywords'.",
       "default": ["CMO", "CPO", "CEO"]
     },
@@ -31,6 +32,7 @@
       "name": "exclude_keywords",
       "type": "json",
       "label": "Exclude keywords",
+      "presets_enabled": true,
       "description": "Items whose title contains these terms (case-insensitive) are filtered out.",
       "default": ["intern", "junior", "student"]
     },
@@ -85,6 +87,7 @@
       "name": "score_rules",
       "type": "json",
       "label": "Score rules",
+      "presets_enabled": true,
       "description": "Scoring rules to flag high-signal items. Array of {field, patterns, score, label}. Field: item field to match (title, location, company). Patterns: substring matches (case-insensitive). Score: points to add. Items get _score (sum) and _signal (high/medium/low).",
       "default": []
     }
