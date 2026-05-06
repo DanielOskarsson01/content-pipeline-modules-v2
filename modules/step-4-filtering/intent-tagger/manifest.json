@@ -11,7 +11,7 @@
   "depends_on": ["page-scraper"],
   "usage_notes": "Uses LLM to classify pages against your defined intent categories. Edit the intents list to match your content creation goals. Each page gets a single intent label + confidence score. Priority intents are sorted to the top.",
 
-  "requires_columns": [],
+  "requires_columns": ["text_content"],
 
   "options": [
     {

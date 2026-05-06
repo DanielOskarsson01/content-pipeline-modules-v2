@@ -11,7 +11,7 @@
   "depends_on": ["content-writer", "seo-planner"],
   "usage_notes": "Requires content-writer and seo-planner to have completed. Uses a lower temperature than content-writer for conservative editing. Haiku is sufficient for editing passes; sonnet for higher-quality refinements.",
 
-  "requires_columns": [],
+  "requires_columns": ["seo_plan_json"],
   "options": [
     {
       "name": "ai_model",

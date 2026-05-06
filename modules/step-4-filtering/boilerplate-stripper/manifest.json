@@ -11,7 +11,7 @@
   "depends_on": ["page-scraper"],
   "usage_notes": "Works best with 3+ pages per entity for cross-page fingerprinting. Single-page entities still benefit from known-pattern stripping. Increase frequency_threshold toward 1.0 for conservative stripping; decrease toward 0.3 for aggressive stripping.",
 
-  "requires_columns": [],
+  "requires_columns": ["text_content"],
 
   "options": [
     {
@@ -68,6 +68,9 @@
     "stripped_chars": "number",
     "boilerplate_ratio": "number",
     "flagged": "boolean",
+    "downloadable_fields": [
+      { "field": "text_content", "extension": "txt", "label": "Cleaned Text" }
+    ],
     "detail_schema": {
       "header_fields": [
         { "field": "url", "display": "link" },

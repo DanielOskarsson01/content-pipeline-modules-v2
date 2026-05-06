@@ -11,7 +11,7 @@
   "depends_on": ["content-writer", "seo-planner"],
   "usage_notes": "Run after content-writer and seo-planner. Checks keyword placement, density, and negative keyword absence. Works without seo-planner data (returns pass with warning). Pure text analysis -- no API calls.",
 
-  "requires_columns": [],
+  "requires_columns": ["seo_plan_json"],
 
   "options": [
     {

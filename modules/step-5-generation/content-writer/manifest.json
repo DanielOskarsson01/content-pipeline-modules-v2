@@ -14,7 +14,9 @@
 
   "requires_columns": [
     "entity_name",
-    "text_content"
+    "text_content",
+    "analysis_json",
+    "seo_plan_json"
   ],
   "options": [
     {

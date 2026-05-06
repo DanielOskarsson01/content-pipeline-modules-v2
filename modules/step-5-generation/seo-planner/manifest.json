@@ -12,7 +12,8 @@
   "usage_notes": "Requires content-analyzer output for keyword mapping. Haiku is sufficient — keyword distribution is a structured task. Reference docs (format_spec.md) define the fixed article structure.",
 
   "requires_columns": [
-    "entity_name"
+    "entity_name",
+    "analysis_json"
   ],
   "options": [
     {
