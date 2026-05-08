@@ -1,18 +1,51 @@
 /**
  * URL Deduplicator — Step 2 Validation submodule
- * 
+ *
  * Takes URLs from Step 1 working pool (attached as entity.items),
  * normalizes them, removes duplicates across all entities, and
  * returns the deduplicated set.
- * 
+ *
+ * Supports two match strategies:
+ *   - url: normalize and compare URLs (default, fast, same-source)
+ *   - title_company: fuzzy title + exact company match (cross-source dedup)
+ *
  * Data operation: REMOVE (➖) — items marked "duplicate" are removed
  * from the working pool; "unique" items remain.
  */
+
+// ── Fuzzy matching helpers ──────────────────────────────────────────
+
+function diceCoefficient(a, b) {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  if (a.length < 2 || b.length < 2) return 0;
+
+  const bigramsA = new Set();
+  for (let i = 0; i < a.length - 1; i++) bigramsA.add(a.slice(i, i + 2));
+
+  const bigramsB = new Set();
+  for (let i = 0; i < b.length - 1; i++) bigramsB.add(b.slice(i, i + 2));
+
+  let intersection = 0;
+  for (const bg of bigramsA) {
+    if (bigramsB.has(bg)) intersection++;
+  }
+
+  return (2 * intersection) / (bigramsA.size + bigramsB.size);
+}
+
+function stripSeniorityPrefix(title) {
+  return title.replace(/^(senior|junior|lead|principal|staff|chief|head of|director of|vp of|vice president of)\s+/i, '');
+}
+
+// ── Main ────────────────────────────────────────────────────────────
 
 async function execute(input, options, tools) {
   const { entities } = input;
   const { logger } = tools;
   const {
+    match_strategy = 'url',
+    fuzzy_threshold = 0.85,
     normalize_www,
     normalize_trailing_slash,
     strip_query_params,
@@ -20,7 +53,7 @@ async function execute(input, options, tools) {
     case_insensitive
   } = options;
 
-  // Flatten all items across entities, keeping entity association.
+  // Flatten all items across entities, keeping entity association and display fields.
   // Supports two input formats:
   //   1. Grouped: [{ name, items: [{ url, ... }] }]  — from previous step re-grouping
   //   2. Flat:    [{ url, ... }]                       — from CSV upload or direct input
@@ -29,7 +62,6 @@ async function execute(input, options, tools) {
 
   for (const entity of entities) {
     if (entity.items && entity.items.length > 0) {
-      // Grouped format: entity has name + items array
       for (const item of entity.items) {
         if (!item.url) {
           logger.warn(`Skipping item in ${entity.name}: no url field`);
@@ -41,7 +73,6 @@ async function execute(input, options, tools) {
         });
       }
     } else if (entity.url) {
-      // Flat format: entity IS the item (from CSV upload or flat pool)
       allItems.push({
         ...entity,
         entity_name: entity.entity_name || entity.name || 'unknown'
@@ -51,58 +82,85 @@ async function execute(input, options, tools) {
     }
   }
 
-  logger.info(`Processing ${allItems.length} URLs for deduplication`);
+  logger.info(`Processing ${allItems.length} items for deduplication (strategy: ${match_strategy})`);
 
-  // Normalize and deduplicate
-  const seen = new Map(); // normalized → index into allItems of first occurrence
   const results = [];
   let duplicateCount = 0;
 
-  for (let i = 0; i < allItems.length; i++) {
-    const item = allItems[i];
-    const normalized = normalizeUrl(item.url, {
-      normalize_www,
-      normalize_trailing_slash,
-      strip_query_params,
-      strip_fragments,
-      case_insensitive
-    });
+  if (match_strategy === 'title_company') {
+    // ── Fuzzy title + exact company matching ──────────────────────
+    const companyMap = new Map(); // company_lower -> [{ title_normalized, index }]
 
-    if (seen.has(normalized)) {
-      // This is a duplicate — reference the first occurrence
-      const firstItem = allItems[seen.get(normalized)];
-      results.push({
-        url: item.url,
-        original_url: item.url,
-        duplicate_of: firstItem.url,
-        status: "duplicate",
-        entity_name: item.entity_name
+    for (let i = 0; i < allItems.length; i++) {
+      const item = allItems[i];
+      const company = (item.company || '').toLowerCase().trim();
+      const titleRaw = (item.title || '').trim();
+      const titleNormalized = stripSeniorityPrefix(titleRaw).toLowerCase();
+
+      let isDuplicate = false;
+      let duplicateOfItem = null;
+
+      // Only fuzzy match if both title and company exist
+      if (company && titleNormalized) {
+        if (companyMap.has(company)) {
+          for (const existing of companyMap.get(company)) {
+            if (diceCoefficient(titleNormalized, existing.title_normalized) >= fuzzy_threshold) {
+              isDuplicate = true;
+              duplicateOfItem = allItems[existing.index];
+              break;
+            }
+          }
+        }
+      }
+
+      if (isDuplicate) {
+        results.push(buildResult(item, 'duplicate', duplicateOfItem.url));
+        duplicateCount++;
+      } else {
+        // Register as first occurrence
+        if (company && titleNormalized) {
+          if (!companyMap.has(company)) companyMap.set(company, []);
+          companyMap.get(company).push({ title_normalized: titleNormalized, index: i });
+        }
+        results.push(buildResult(item, 'unique', null));
+      }
+    }
+  } else {
+    // ── URL normalization matching (default) ──────────────────────
+    const seen = new Map(); // normalized URL -> index
+
+    for (let i = 0; i < allItems.length; i++) {
+      const item = allItems[i];
+      const normalized = normalizeUrl(item.url, {
+        normalize_www,
+        normalize_trailing_slash,
+        strip_query_params,
+        strip_fragments,
+        case_insensitive
       });
-      duplicateCount++;
-    } else {
-      // First occurrence — unique
-      seen.set(normalized, i);
-      results.push({
-        url: item.url,
-        original_url: item.url,
-        duplicate_of: null,
-        status: "unique",
-        entity_name: item.entity_name
-      });
+
+      if (seen.has(normalized)) {
+        const firstItem = allItems[seen.get(normalized)];
+        results.push(buildResult(item, 'duplicate', firstItem.url));
+        duplicateCount++;
+      } else {
+        seen.set(normalized, i);
+        results.push(buildResult(item, 'unique', null));
+      }
     }
   }
 
   const uniqueCount = allItems.length - duplicateCount;
   logger.info(`Dedup complete: ${uniqueCount} unique, ${duplicateCount} duplicates`);
 
-  // Sort results: duplicates first, then unique — so they're immediately visible
+  // Sort: duplicates first for visibility
   results.sort((a, b) => {
     if (a.status === "duplicate" && b.status !== "duplicate") return -1;
     if (a.status !== "duplicate" && b.status === "duplicate") return 1;
     return 0;
   });
 
-  // Group results by entity for the expected output format
+  // Group results by entity
   for (const result of results) {
     if (!byEntity.has(result.entity_name)) {
       byEntity.set(result.entity_name, []);
@@ -126,10 +184,9 @@ async function execute(input, options, tools) {
   }
 
   const description = duplicateCount > 0
-    ? `Found ${duplicateCount} duplicates. ${uniqueCount} unique of ${allItems.length} total`
-    : `${allItems.length} URLs — no duplicates found`;
+    ? `Found ${duplicateCount} duplicates. ${uniqueCount} unique of ${allItems.length} total (${match_strategy})`
+    : `${allItems.length} items — no duplicates found (${match_strategy})`;
 
-  // Push final results for partial-save on timeout/abort
   if (tools._partialItems) tools._partialItems.push(...results);
 
   return {
@@ -146,42 +203,53 @@ async function execute(input, options, tools) {
 }
 
 /**
+ * Build a result object, carrying through display fields from the source item
+ */
+function buildResult(item, status, duplicateOf) {
+  return {
+    url: item.url,
+    original_url: item.url,
+    title: item.title || null,
+    company: item.company || null,
+    location: item.location || null,
+    source: item.source || null,
+    duplicate_of: duplicateOf,
+    status,
+    entity_name: item.entity_name
+  };
+}
+
+/**
  * Normalize a URL for comparison based on options
  */
 function normalizeUrl(url, opts) {
   try {
     let parsed = new URL(url.startsWith("http") ? url : `https://${url}`);
 
-    // Strip fragments
     if (opts.strip_fragments) {
       parsed.hash = "";
     }
 
-    // Strip query params
     if (opts.strip_query_params) {
       parsed.search = "";
     }
 
     let result = parsed.toString();
 
-    // Normalize www
     if (opts.normalize_www) {
       result = result.replace("://www.", "://");
     }
 
-    // Normalize trailing slash
     if (opts.normalize_trailing_slash) {
       result = result.replace(/\/+$/, "");
     }
 
-    // Case insensitive
     if (opts.case_insensitive) {
       result = result.toLowerCase();
     }
 
     return result;
   } catch {
-    // If URL parsing fails, just do basic string normalization
     let result = url;
     if (opts.case_insensitive) result = result.toLowerCase();
     if (opts.normalize_trailing_slash) result = result.replace(/\/+$/, "");

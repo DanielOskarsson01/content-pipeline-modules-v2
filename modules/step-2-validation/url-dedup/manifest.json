@@ -1,8 +1,8 @@
 {
   "id": "url-dedup",
   "name": "URL Deduplicator",
-  "description": "Remove duplicate URLs across all entities in a single pass. Normalizes www/non-www, trailing slashes, case, query parameters (?utm_source, ?ref), and URL fragments (#section) before comparing. First occurrence wins — duplicates are flagged with a reference to the original.",
-  "version": "1.0.0",
+  "description": "Remove duplicate URLs across all entities in a single pass. Supports URL normalization (default) or fuzzy title+company matching for cross-source dedup. First occurrence wins — duplicates are flagged with a reference to the original.",
+  "version": "1.1.0",
   "step": 2,
   "category": "filtering",
   "sort_order": 1,
@@ -10,11 +10,28 @@
   "data_operation_default": "remove",
 
   "depends_on": [],
-  "usage_notes": "Run first in Step 2. Removes duplicates before expensive operations. All defaults are safe — disable normalize_www only if www and non-www versions serve different content.",
+  "usage_notes": "Run first in Step 2. Removes duplicates before expensive operations. Use 'url' match strategy (default) for same-source dedup. Use 'title_company' for cross-source dedup where the same job appears on multiple boards with different URLs.",
 
   "requires_columns": ["url"],
 
   "options": [
+    {
+      "name": "match_strategy",
+      "type": "select",
+      "label": "Match strategy",
+      "description": "How to detect duplicates. 'url': normalize and compare URLs (fast, same-source). 'title_company': fuzzy title match + exact company match (cross-source dedup).",
+      "default": "url",
+      "values": ["url", "title_company"]
+    },
+    {
+      "name": "fuzzy_threshold",
+      "type": "number",
+      "label": "Fuzzy match threshold",
+      "description": "Dice coefficient threshold for title similarity (0.0-1.0). Only used with title_company strategy. Higher = stricter matching.",
+      "default": 0.85,
+      "min": 0.5,
+      "max": 1.0
+    },
     {
       "name": "normalize_www",
       "type": "boolean",
@@ -53,6 +70,8 @@
   ],
 
   "options_defaults": {
+    "match_strategy": "url",
+    "fuzzy_threshold": 0.85,
     "normalize_www": true,
     "normalize_trailing_slash": true,
     "strip_query_params": true,
@@ -66,6 +85,10 @@
     "display_type": "table",
     "selectable": true,
     "flagged_when": { "status": ["duplicate"] },
+    "title": "string",
+    "company": "string",
+    "location": "string",
+    "source": "string",
     "url": "string (required)",
     "original_url": "string",
     "duplicate_of": "string",

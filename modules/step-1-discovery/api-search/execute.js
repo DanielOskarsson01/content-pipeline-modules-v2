@@ -137,6 +137,14 @@ function buildRequestUrl(provider, keyword, maxResults, extraParams) {
   return qs ? `${provider.url}?${qs}` : provider.url;
 }
 
+function getProviderHeaders(provider) {
+  if (provider.auth && provider.auth.type === 'bearer') {
+    const envVal = process.env[provider.auth.env_var];
+    if (envVal) return { 'Authorization': `Bearer ${envVal}` };
+  }
+  return {};
+}
+
 function createRateLimiter(rpm) {
   if (!rpm || rpm <= 0) return () => Promise.resolve();
   const minIntervalMs = Math.ceil(60000 / rpm);
@@ -249,8 +257,8 @@ async function execute(input, options, tools) {
   const providers = (Array.isArray(providersConfig) ? providersConfig : [])
     .filter(p => {
       if (!p || !p.id) return false;
-      // Validate auth
-      if (p.auth && p.auth.type === 'query_param' && p.auth.env_var) {
+      // Validate auth (query_param and bearer both require env var)
+      if (p.auth && p.auth.env_var && (p.auth.type === 'query_param' || p.auth.type === 'bearer')) {
         if (!process.env[p.auth.env_var]) {
           logger.warn(`Provider "${p.id}" skipped: missing env var ${p.auth.env_var}`);
           return false;
@@ -315,7 +323,7 @@ async function execute(input, options, tools) {
 
           const url = buildRequestUrl(provider, null, max_results, extraParams);
           logger.info(`${provider.id}: GET ${url}`);
-          const res = await http.get(url, { timeout: 15000 });
+          const res = await http.get(url, { timeout: 15000, headers: getProviderHeaders(provider) });
           totalCalls++;
 
           if (res.status !== 200) {
@@ -369,7 +377,7 @@ async function execute(input, options, tools) {
             try {
               await rateLimiter();
               const url = buildRequestUrl(provider, keyword, max_results, extraParams);
-              const res = await http.get(url, { timeout: 15000 });
+              const res = await http.get(url, { timeout: 15000, headers: getProviderHeaders(provider) });
               totalCalls++;
 
               if (res.status !== 200) {
