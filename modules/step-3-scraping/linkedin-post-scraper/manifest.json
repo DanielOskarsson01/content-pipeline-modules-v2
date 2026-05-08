@@ -1,0 +1,108 @@
+{
+  "id": "linkedin-post-scraper",
+  "name": "LinkedIn Post Scraper",
+  "description": "Fetch recent LinkedIn posts for entity-linked profiles via the LinkedIn Profile API's Voyager GraphQL endpoint. Scrapes post text, engagement metrics, hashtags, mentions, and post type. Uses the same authenticated Chrome session as linkedin-profile-scraper.",
+  "version": "1.0.0",
+  "step": 3,
+  "category": "linkedin",
+  "cost": "medium",
+  "data_operation_default": "add",
+  "sort_order": 5,
+
+  "depends_on": [],
+  "usage_notes": "Requires the Profile API (localhost:3847) with an active LinkedIn session. Default mode reads LinkedIn slugs from entity linkedin/linkedin_url field. Set source to 'profile_scraper' to read from linkedin-profile-scraper output instead (requires running that module first). Rate limited to avoid LinkedIn detection.",
+
+  "requires_columns": [],
+
+  "options": [
+    {
+      "name": "posts_per_profile",
+      "type": "number",
+      "label": "Posts per profile",
+      "description": "Number of recent posts to fetch per LinkedIn profile.",
+      "default": 10,
+      "min": 1,
+      "max": 25
+    },
+    {
+      "name": "requests_per_hour",
+      "type": "number",
+      "label": "Requests per hour",
+      "description": "Rate limit for Voyager API calls. Keep conservative (15-30) to avoid detection.",
+      "default": 20,
+      "min": 5,
+      "max": 60
+    },
+    {
+      "name": "min_word_count",
+      "type": "number",
+      "label": "Min post word count",
+      "description": "Skip posts with fewer words than this (filters image-only or link-only posts).",
+      "default": 10,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "name": "source",
+      "type": "select",
+      "label": "Profile source",
+      "description": "Where to find LinkedIn slugs: 'profile_scraper' reads from linkedin-profile-scraper output, 'entity_field' reads from entity linkedin/linkedin_url field.",
+      "options": ["profile_scraper", "entity_field"],
+      "default": "entity_field"
+    }
+  ],
+
+  "options_defaults": {
+    "posts_per_profile": 10,
+    "requests_per_hour": 20,
+    "min_word_count": 10,
+    "source": "entity_field"
+  },
+
+  "item_key": "post_id",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": true,
+    "post_id": "string (required)",
+    "linkedin_slug": "string",
+    "author_name": "string",
+    "posted_at": "string",
+    "post_type": "string",
+    "text": "string",
+    "text_preview": "string",
+    "word_count": "number",
+    "reactions_count": "number",
+    "comments_count": "number",
+    "reshares_count": "number",
+    "engagement_total": "number",
+    "hashtags": "array",
+    "mentions": "array",
+    "is_reshare": "boolean",
+    "original_author_slug": "string",
+    "status": "string",
+    "error": "string",
+    "source_type": "string",
+    "found_via": "string",
+    "flagged_when": { "status": ["error"] },
+    "downloadable_fields": [
+      { "field": "text", "extension": "txt", "label": "Post Text" }
+    ],
+    "detail_schema": {
+      "header_fields": [
+        "post_id",
+        { "field": "status", "display": "badge" },
+        "author_name",
+        "post_type",
+        "posted_at",
+        "word_count",
+        "engagement_total",
+        "reactions_count",
+        "comments_count"
+      ],
+      "sections": [
+        { "field": "text", "label": "Post Content", "display": "prose" }
+      ]
+    }
+  }
+}
