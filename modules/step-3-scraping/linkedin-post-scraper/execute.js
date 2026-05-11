@@ -166,7 +166,7 @@ async function fetchPosts(slug, count, tools, logger) {
     `${PROFILE_API_URL}/api/posts/${slug}?count=${count}`,
     {
       headers: { 'x-api-key': PROFILE_API_KEY },
-      timeout: 30000,
+      timeout: 60000,
     }
   );
   const body = typeof response.body === 'string' ? JSON.parse(response.body) : response.body;
