@@ -1,8 +1,8 @@
 {
   "id": "linkedin-post-scraper",
   "name": "LinkedIn Post Scraper",
-  "description": "Fetch recent LinkedIn posts for entity-linked profiles via the LinkedIn Profile API's Voyager GraphQL endpoint. Scrapes post text, engagement metrics, hashtags, mentions, and post type. Uses the same authenticated Chrome session as linkedin-profile-scraper.",
-  "version": "1.0.0",
+  "description": "Fetch recent LinkedIn posts for entity-linked profiles via the LinkedIn Profile API's Voyager GraphQL endpoint. Modes: posts (default) scrapes post text, engagement metrics, hashtags, mentions, and post type. post_engagers extends posts with who commented and reacted (names, slugs, text, reaction types). Uses the same authenticated Chrome session as linkedin-profile-scraper.",
+  "version": "1.1.0",
   "step": 3,
   "category": "linkedin",
   "cost": "medium",
@@ -16,6 +16,14 @@
 
   "options": [
     {
+      "name": "mode",
+      "type": "select",
+      "label": "Scraping mode",
+      "description": "posts = fetch post text and engagement counts. post_engagers = fetch posts then fan out to get who commented and reacted on each post.",
+      "options": ["posts", "post_engagers"],
+      "default": "posts"
+    },
+    {
       "name": "posts_per_profile",
       "type": "number",
       "label": "Posts per profile",
@@ -25,10 +33,19 @@
       "max": 25
     },
     {
+      "name": "engagers_per_post",
+      "type": "number",
+      "label": "Engagers per post",
+      "description": "Max commenters and reactors to fetch per post (post_engagers mode only). Each post costs 2 extra API calls.",
+      "default": 50,
+      "min": 10,
+      "max": 100
+    },
+    {
       "name": "requests_per_hour",
       "type": "number",
       "label": "Requests per hour",
-      "description": "Rate limit for Voyager API calls. Keep conservative (15-30) to avoid detection.",
+      "description": "Rate limit for Voyager API calls. Keep conservative (15-30) to avoid detection. In post_engagers mode each post needs 2 extra calls.",
       "default": 20,
       "min": 5,
       "max": 60
@@ -53,7 +70,9 @@
   ],
 
   "options_defaults": {
+    "mode": "posts",
     "posts_per_profile": 10,
+    "engagers_per_post": 50,
     "requests_per_hour": 20,
     "min_word_count": 10,
     "source": "entity_field"
@@ -82,6 +101,7 @@
     "original_author_slug": "string",
     "status": "string",
     "error": "string",
+    "engagers": "object (post_engagers mode only)",
     "source_type": "string",
     "found_via": "string",
     "flagged_when": { "status": ["error"] },
