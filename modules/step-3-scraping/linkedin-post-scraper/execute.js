@@ -7,9 +7,12 @@
  *     structured post data with engagement metrics, hashtags, mentions.
  *
  *   post_engagers — Fetches posts first, then fans out per post to get
- *     commenters (with text) and reactors (with type) via the Profile API's
- *     /api/post-comments and /api/post-reactions endpoints. Outputs a superset
- *     of posts mode with an engagers object on each item.
+ *     commenters (name, slug, headline, comment text) via the Profile API's
+ *     /api/post-comments endpoint (DOM scraping). Reaction and reshare counts
+ *     are included from the Voyager feed but individual reactor/resharer
+ *     identities are unavailable (LinkedIn removed the reactions list modal
+ *     in the May 2026 SDUI migration). Outputs a superset of posts mode
+ *     with an engagers object on each item.
  *
  * Delegates all LinkedIn communication to the Profile API (localhost:3847).
  */
@@ -32,6 +35,10 @@ async function execute(input, options, tools) {
     min_word_count = 10,
     source = 'entity_field',
   } = options;
+
+  if (mode === 'feed_posts') {
+    return executeFeedPosts(entities, { posts_per_feed: posts_per_profile, requests_per_hour, min_word_count, source }, tools);
+  }
 
   if (mode === 'post_engagers') {
     return executePostEngagers(entities, { posts_per_profile, engagers_per_post, requests_per_hour, min_word_count, source }, tools);
@@ -404,8 +411,9 @@ async function executePostEngagers(entities, opts, tools) {
   let aborted = false;
   const errors = [];
 
-  // Each profile: fetch posts, then fan out engagers per post
-  const callBudgetPerProfile = 1 + posts_per_profile * 2;
+  // Each profile: fetch posts, then fan out to get comments per post
+  // Reactions are counts-only (LinkedIn removed reactor list modal May 2026) — we use counts from Voyager feed
+  const callBudgetPerProfile = 1 + posts_per_profile; // 1 posts call + 1 comments call per post
   logger.info(`${profiles.length} profiles, ~${callBudgetPerProfile} API calls each (mode: post_engagers, rate: ${requests_per_hour}/hr)`);
 
   for (let pi = 0; pi < profiles.length; pi++) {
@@ -473,17 +481,17 @@ async function executePostEngagers(entities, opts, tools) {
       }
 
       try {
-        // Comments (1 API call)
+        // Comments (1 API call — navigates Chrome to post page, scrapes DOM)
         await rateLimiter();
         const commentsData = await fetchComments(post.post_id, engagers_per_post, tools, logger);
 
-        // Reactions (1 API call)
-        await rateLimiter();
-        const reactionsData = await fetchReactions(post.post_id, engagers_per_post, tools, logger);
+        // Reactions: use counts from Voyager feed (already in post object).
+        // Individual reactor identities unavailable — LinkedIn removed the
+        // reactions list modal in the May 2026 SDUI migration.
 
         // Build engagers object
         postItem.engagers = buildEngagersObject(
-          commentsData, reactionsData, post
+          commentsData, post
         );
         postItem.found_via = 'linkedin_post_engager_scraper';
         allResults.push(postItem);
@@ -491,7 +499,7 @@ async function executePostEngagers(entities, opts, tools) {
         consecutiveFailures = 0;
 
         const ec = postItem.engagers.completeness;
-        logger.info(`  ${post.post_id}: ${ec.comments_returned} commenters, ${ec.reactions_returned} reactors`);
+        logger.info(`  ${post.post_id}: ${ec.comments_returned} commenters, ${ec.reactions_total} reactions (count only)`);
 
         if (tools._partialItems) {
           tools._partialItems.push(postItem);
@@ -504,7 +512,7 @@ async function executePostEngagers(entities, opts, tools) {
         postItem.status = 'error';
         postItem.error = err.message;
         postItem.found_via = 'linkedin_post_engager_scraper';
-        postItem.engagers = { commenters: [], reactors: [], resharers: [], completeness: { comments_returned: 0, comments_total: post.comments_count || 0, comments_truncated: false, reactions_returned: 0, reactions_total: post.reactions_count || 0, reactions_truncated: false, reshares_returned: 0, reshares_total: post.reshares_count || 0, reshares_available: false, reshares_note: 'LinkedIn Voyager has no list-resharers endpoint' } };
+        postItem.engagers = { commenters: [], reactors: [], resharers: [], completeness: { comments_returned: 0, comments_total: post.comments_count || 0, comments_truncated: false, reactions_returned: 0, reactions_total: post.reactions_count || 0, reactions_available: false, reactions_note: 'LinkedIn removed reactions list modal (SDUI migration May 2026)', reshares_returned: 0, reshares_total: post.reshares_count || 0, reshares_available: false, reshares_note: 'LinkedIn Voyager has no list-resharers endpoint' } };
         allResults.push(postItem);
 
         if (consecutiveFailures >= 3) {
@@ -556,23 +564,7 @@ async function fetchComments(activityId, count, tools, logger) {
   return body;
 }
 
-async function fetchReactions(activityId, count, tools, logger) {
-  logger.info(`  Fetching reactions: ${activityId} (max: ${count})`);
-  const response = await tools.http.get(
-    `${PROFILE_API_URL}/api/post-reactions/${activityId}?count=${count}`,
-    {
-      headers: { 'x-api-key': PROFILE_API_KEY },
-      timeout: 60000,
-    }
-  );
-  const body = typeof response.body === 'string' ? JSON.parse(response.body) : response.body;
-  if (response.status >= 400 || body.error) {
-    throw new Error(body.error || `Reactions API returned HTTP ${response.status}`);
-  }
-  return body;
-}
-
-function buildEngagersObject(commentsData, reactionsData, originalPost) {
+function buildEngagersObject(commentsData, originalPost) {
   const commenters = (commentsData.comments || []).map(c => ({
     slug: c.slug || null,
     name: c.name || 'LinkedIn Member',
@@ -582,33 +574,300 @@ function buildEngagersObject(commentsData, reactionsData, originalPost) {
     likes: c.likes || 0,
   }));
 
-  const reactors = (reactionsData.reactions || []).map(r => ({
-    slug: r.slug || null,
-    name: r.name || 'LinkedIn Member',
-    headline: r.headline || '',
-    reaction_type: r.reaction_type || 'LIKE',
-  }));
-
   const commentsTotal = originalPost.comments_count || 0;
   const reactionsTotal = originalPost.reactions_count || 0;
   const resharesTotal = originalPost.reshares_count || 0;
 
   return {
     commenters,
-    reactors,
+    reactors: [],
     resharers: [],
     completeness: {
       comments_returned: commenters.length,
       comments_total: commentsTotal,
       comments_truncated: commenters.length < commentsTotal,
-      reactions_returned: reactors.length,
+      reactions_returned: 0,
       reactions_total: reactionsTotal,
-      reactions_truncated: reactors.length < reactionsTotal,
+      reactions_available: false,
+      reactions_note: 'LinkedIn removed reactions list modal (SDUI migration May 2026)',
       reshares_returned: 0,
       reshares_total: resharesTotal,
       reshares_available: false,
       reshares_note: 'LinkedIn Voyager has no list-resharers endpoint',
     },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// feed_posts mode — DOM scraping for company pages and group feeds
+// ---------------------------------------------------------------------------
+
+async function executeFeedPosts(entities, opts, tools) {
+  const { logger, progress } = tools;
+  const { posts_per_feed, requests_per_hour, min_word_count, source } = opts;
+
+  const targets = collectFeedTargets(entities, source, logger);
+
+  if (targets.length === 0) {
+    return {
+      results: [],
+      summary: {
+        total_entities: entities.length,
+        total_items: 0,
+        mode: 'feed_posts',
+        description: 'No LinkedIn feed targets found in input',
+        errors: [],
+      },
+    };
+  }
+
+  const sessionValid = await checkApiHealth(tools, logger);
+  if (!sessionValid) {
+    logger.error('LinkedIn Profile API unavailable — cannot fetch feed posts');
+    return {
+      results: targets.map(t => ({
+        entity_name: t.entity_name,
+        items: [feedErrorItem(t, 'LinkedIn Profile API unavailable')],
+        meta: { feeds: 0, posts: 0, errors: 1 },
+      })),
+      summary: {
+        total_entities: entities.length,
+        total_items: 0,
+        mode: 'feed_posts',
+        description: 'API unavailable — 0 posts scraped',
+        errors: ['LinkedIn Profile API unavailable'],
+      },
+    };
+  }
+
+  logger.info(`${targets.length} feed targets (${posts_per_feed} posts each, rate: ${requests_per_hour}/hr, mode: feed_posts)`);
+
+  const allResults = [];
+  let totalPosts = 0;
+  let totalErrors = 0;
+  let consecutiveFailures = 0;
+  let aborted = false;
+  const rateLimiter = createRateLimiter(requests_per_hour);
+  const errors = [];
+
+  for (let i = 0; i < targets.length; i++) {
+    const target = targets[i];
+    progress.update(i + 1, targets.length, `Feed: ${target.type}/${target.slug}`);
+
+    if (aborted) {
+      allResults.push(feedErrorItem(target, 'Aborted (circuit breaker)'));
+      totalErrors++;
+      errors.push(`${target.slug}: circuit breaker`);
+      continue;
+    }
+
+    await rateLimiter();
+
+    try {
+      const data = await fetchFeedPosts(target.type, target.slug, posts_per_feed, tools, logger);
+      const posts = (data.posts || [])
+        .filter(p => {
+          const wc = (p.post_text || '').split(/\s+/).filter(Boolean).length;
+          return wc >= min_word_count;
+        })
+        .map((p, idx) => formatFeedPostItem(p, target, idx));
+
+      if (posts.length === 0) {
+        logger.warn(`${target.type}/${target.slug}: no posts with >= ${min_word_count} words`);
+      } else {
+        logger.info(`${target.type}/${target.slug}: ${posts.length} posts`);
+      }
+
+      allResults.push(...posts);
+      totalPosts += posts.length;
+      consecutiveFailures = 0;
+
+      if (tools._partialItems) {
+        tools._partialItems.push(...posts);
+      }
+    } catch (err) {
+      logger.warn(`Feed posts failed for ${target.type}/${target.slug}: ${err.message}`);
+      consecutiveFailures++;
+      totalErrors++;
+      errors.push(`${target.slug}: ${err.message}`);
+      allResults.push(feedErrorItem(target, err.message));
+
+      if (consecutiveFailures >= 3) {
+        logger.error(`Circuit breaker: 3 consecutive failures — aborting remaining ${targets.length - i - 1} feeds`);
+        aborted = true;
+      }
+    }
+  }
+
+  const entityResults = groupByEntity(allResults);
+  const descParts = [`${totalPosts} posts from ${targets.length} feeds`];
+  if (totalErrors > 0) descParts.push(`${totalErrors} feed errors`);
+  if (aborted) descParts.push('circuit breaker triggered');
+
+  return {
+    results: entityResults,
+    summary: {
+      total_entities: entities.length,
+      total_items: totalPosts,
+      mode: 'feed_posts',
+      feeds_scraped: targets.length - totalErrors,
+      feeds_failed: totalErrors,
+      aborted,
+      description: descParts.join(' — '),
+      errors,
+    },
+  };
+}
+
+function collectFeedTargets(entities, source, logger) {
+  const targets = [];
+  const seen = new Set();
+
+  for (const entity of entities) {
+    const url = entity.linkedin || entity.linkedin_url;
+    if (!url) {
+      logger.warn(`${entity.name}: no linkedin field, skipping`);
+      continue;
+    }
+
+    let type = null;
+    let slug = null;
+
+    // Match company page URLs
+    const companyMatch = url.match(/\/company\/([^/?#]+)/);
+    if (companyMatch) {
+      type = 'company';
+      slug = companyMatch[1];
+    }
+
+    // Match group URLs
+    if (!type) {
+      const groupMatch = url.match(/\/groups\/([^/?#]+)/);
+      if (groupMatch) {
+        type = 'group';
+        slug = groupMatch[1];
+      }
+    }
+
+    // Match personal profile URLs (fallback)
+    if (!type) {
+      const profileMatch = url.match(/\/in\/([^/?#]+)/);
+      if (profileMatch) {
+        type = 'profile';
+        slug = profileMatch[1];
+      }
+    }
+
+    // Bare slug with explicit type hint in entity
+    if (!type && entity.feed_type) {
+      const VALID_TYPES = ['company', 'group', 'profile'];
+      if (!VALID_TYPES.includes(entity.feed_type)) {
+        logger.warn(`${entity.name}: invalid feed_type "${entity.feed_type}", skipping`);
+        continue;
+      }
+      type = entity.feed_type;
+      slug = url.replace(/^https?:\/\/[^/]+/, '').replace(/\//g, '').trim() || url;
+    }
+
+    if (!type || !slug) {
+      logger.warn(`${entity.name}: could not determine feed type from URL "${url}", skipping`);
+      continue;
+    }
+
+    const key = `${type}:${slug}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    targets.push({ entity_name: entity.name, type, slug });
+  }
+
+  return targets;
+}
+
+async function fetchFeedPosts(type, slug, count, tools, logger) {
+  logger.info(`Fetching feed posts: ${type}/${slug} (count: ${count})`);
+  const response = await tools.http.get(
+    `${PROFILE_API_URL}/api/feed-posts/${type}/${slug}?count=${count}`,
+    {
+      headers: { 'x-api-key': PROFILE_API_KEY },
+      timeout: 120000, // DOM scraping with scrolling takes longer
+    }
+  );
+  const body = typeof response.body === 'string' ? JSON.parse(response.body) : response.body;
+  if (response.status >= 400 || body.error) {
+    throw new Error(body.error || `Feed posts API returned HTTP ${response.status}`);
+  }
+  return body;
+}
+
+function feedErrorItem(target, message) {
+  return {
+    post_id: `error-${target.type}-${target.slug}`,
+    entity_name: target.entity_name,
+    linkedin_slug: target.slug,
+    source_type: target.type,
+    source_slug: target.slug,
+    author_name: target.slug,
+    posted_at: null,
+    post_type: 'unknown',
+    text: '',
+    text_preview: '',
+    word_count: 0,
+    reactions_count: 0,
+    comments_count: 0,
+    reshares_count: 0,
+    engagement_total: 0,
+    hashtags: [],
+    mentions: [],
+    mentioned_companies: [],
+    is_reshare: false,
+    original_author_slug: null,
+    status: 'error',
+    error: message,
+    found_via: 'linkedin_feed_scraper',
+  };
+}
+
+function formatFeedPostItem(post, target, index) {
+  const text = post.post_text || '';
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  const textPreview = text.substring(0, 200);
+
+  // Field names unified with posts/post_engagers modes so the skeleton's
+  // ContentRenderer, detail_schema, and downloadable_fields work consistently.
+  return {
+    post_id: post.post_id || `unknown-${target.slug}-${index}`,
+    post_url: post.post_url || null,
+    entity_name: target.entity_name,
+    linkedin_slug: target.slug,
+    source_type: target.type,
+    source_slug: target.slug,
+    author_name: post.author_name || target.slug,
+    author_slug: post.author_slug || null,
+    posted_at: post.posted_at || null,
+    posted_at_activity: post.posted_at_activity || null,
+    post_type: post.post_format || 'unknown',
+    has_image: post.has_image || false,
+    has_video: post.has_video || false,
+    has_document: post.has_document || false,
+    has_poll: post.has_poll || false,
+    text: text,
+    text_preview: textPreview + (text.length > 200 ? '...' : ''),
+    word_count: wordCount,
+    reactions_count: post.reactions_total || 0,
+    reaction_types_visible: post.reaction_types_visible || [],
+    comments_count: post.comments_count || 0,
+    reshares_count: post.reposts_count || 0,
+    engagement_total: (post.reactions_total || 0) + (post.comments_count || 0) + (post.reposts_count || 0),
+    hashtags: post.hashtags || [],
+    mentions: post.mentioned_people || [],
+    mentioned_companies: post.mentioned_companies || [],
+    shared_article_url: post.shared_article_url || null,
+    shared_article_title: post.shared_article_title || null,
+    is_reshare: false,
+    original_author_slug: null,
+    status: 'success',
+    error: null,
+    found_via: 'linkedin_feed_scraper',
   };
 }
 

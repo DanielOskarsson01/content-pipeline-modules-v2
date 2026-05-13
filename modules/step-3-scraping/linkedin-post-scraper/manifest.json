@@ -1,8 +1,8 @@
 {
   "id": "linkedin-post-scraper",
   "name": "LinkedIn Post Scraper",
-  "description": "Fetch recent LinkedIn posts for entity-linked profiles via the LinkedIn Profile API's Voyager GraphQL endpoint. Modes: posts (default) scrapes post text, engagement metrics, hashtags, mentions, and post type. post_engagers extends posts with who commented and reacted (names, slugs, text, reaction types). Uses the same authenticated Chrome session as linkedin-profile-scraper.",
-  "version": "1.1.0",
+  "description": "Fetch recent LinkedIn posts via the Profile API. Modes: posts (default, Voyager) scrapes personal profile posts. post_engagers extends posts with commenter data. feed_posts (DOM scraping) scrapes company pages, group feeds, or personal activity feeds — works where Voyager returns 403. Uses the same authenticated Chrome session as linkedin-profile-scraper.",
+  "version": "1.2.0",
   "step": 3,
   "category": "linkedin",
   "cost": "medium",
@@ -19,24 +19,24 @@
       "name": "mode",
       "type": "select",
       "label": "Scraping mode",
-      "description": "posts = fetch post text and engagement counts. post_engagers = fetch posts then fan out to get who commented and reacted on each post.",
-      "options": ["posts", "post_engagers"],
+      "description": "posts = personal profile posts via Voyager. post_engagers = posts + commenter data. feed_posts = company page / group / profile feed via DOM scraping (works where Voyager returns 403).",
+      "options": ["posts", "post_engagers", "feed_posts"],
       "default": "posts"
     },
     {
       "name": "posts_per_profile",
       "type": "number",
       "label": "Posts per profile",
-      "description": "Number of recent posts to fetch per LinkedIn profile.",
+      "description": "Number of recent posts to fetch per profile/feed. Voyager modes (posts, post_engagers) cap at 25. feed_posts mode supports up to 200 (DOM scraping).",
       "default": 10,
       "min": 1,
-      "max": 25
+      "max": 200
     },
     {
       "name": "engagers_per_post",
       "type": "number",
       "label": "Engagers per post",
-      "description": "Max commenters and reactors to fetch per post (post_engagers mode only). Each post costs 2 extra API calls.",
+      "description": "Max commenters to fetch per post (post_engagers mode only). Each post costs 1 extra API call.",
       "default": 50,
       "min": 10,
       "max": 100
@@ -45,7 +45,7 @@
       "name": "requests_per_hour",
       "type": "number",
       "label": "Requests per hour",
-      "description": "Rate limit for Voyager API calls. Keep conservative (15-30) to avoid detection. In post_engagers mode each post needs 2 extra calls.",
+      "description": "Rate limit for API calls. Keep conservative (15-30) to avoid detection. In feed_posts mode each feed target costs 1 call (DOM scraping takes 30-120s per call).",
       "default": 20,
       "min": 5,
       "max": 60
@@ -63,7 +63,7 @@
       "name": "source",
       "type": "select",
       "label": "Profile source",
-      "description": "Where to find LinkedIn slugs: 'profile_scraper' reads from linkedin-profile-scraper output, 'entity_field' reads from entity linkedin/linkedin_url field.",
+      "description": "Where to find LinkedIn URLs: 'entity_field' reads from entity linkedin/linkedin_url field (supports /company/, /groups/, and /in/ URLs). 'profile_scraper' reads from linkedin-profile-scraper output (posts/post_engagers modes only).",
       "options": ["profile_scraper", "entity_field"],
       "default": "entity_field"
     }

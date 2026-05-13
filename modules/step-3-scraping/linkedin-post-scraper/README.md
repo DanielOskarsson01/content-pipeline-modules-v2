@@ -1,9 +1,9 @@
 ## LinkedIn Post Scraper
 
-> Fetch recent LinkedIn posts for entity-linked profiles via the LinkedIn Profile API's Voyager GraphQL endpoint. Scrapes post text, engagement metrics, hashtags, mentions, and post type.
+> Fetch recent LinkedIn posts via the Profile API. Three modes: `posts` (Voyager, personal profiles), `post_engagers` (Voyager + commenter data), `feed_posts` (DOM scraping for company pages, groups, and personal feeds).
 
 **Module ID:** `linkedin-post-scraper` | **Step:** 3 (Scraping) | **Category:** linkedin | **Cost:** medium
-**Version:** 1.0.0 | **Data Operation:** add (+)
+**Version:** 1.2.0 | **Data Operation:** add (+)
 
 ---
 
@@ -67,7 +67,17 @@ Same as linkedin-profile-scraper:
 - Posts are mostly image-heavy (short captions) -- lower `min_word_count` to 0-5
 - You need deep topic analysis -- raise `posts_per_profile` to 20-25
 
-**Note:** This module works with **personal profiles only** (e.g. `/in/danieloskarsson`). Company pages return 403 from the Voyager posts endpoint.
+**Note:** `posts` and `post_engagers` modes work with **personal profiles only** (`/in/` URLs). Company pages return 403 from Voyager. Use `feed_posts` mode for company pages and groups — it uses DOM scraping instead.
+
+### feed_posts Mode (v1.2.0)
+
+Scrapes posts from company pages, group feeds, or personal activity feeds using DOM scraping via CDP. Does **not** use Voyager, so it works where Voyager returns 403.
+
+- Entity `linkedin`/`linkedin_url` accepts `/company/`, `/groups/`, and `/in/` URLs
+- Auto-detects feed type from the URL
+- Each feed costs 1 API call but takes 30-120s (Chrome scrolls to load posts)
+- Supports up to 200 posts per feed
+- Output includes: post text, engagement counts, reaction type icons, post format, shared article info, hashtags, author info
 
 ---
 
@@ -112,6 +122,19 @@ requests_per_hour: 30
 min_word_count: 0
 source: entity_field
 ```
+
+### Company Page / Group Feed (News Index)
+For scraping B2B iGaming publication feeds (the News-Section engagement analysis):
+```
+mode: feed_posts
+posts_per_profile: 100
+requests_per_hour: 20
+min_word_count: 5
+source: entity_field
+```
+Entity linkedin fields should be company page or group URLs like:
+- `https://www.linkedin.com/company/nextdotio/`
+- `https://www.linkedin.com/groups/12345678/`
 
 ### From Profile Scraper Output
 When using linkedin-profile-scraper output as the slug source:
@@ -176,8 +199,10 @@ source: profile_scraper
 
 ## Limitations
 
-- **Personal profiles only** -- company page posts return 403 from LinkedIn's Voyager API
-- **No fallback API** -- unlike linkedin-profile-scraper, there is no paid fallback when Voyager fails
+- **posts/post_engagers: personal profiles only** -- company page posts return 403 from Voyager. Use `feed_posts` mode for company/group feeds.
+- **feed_posts: slower** -- DOM scraping takes 30-120s per feed (vs ~2-5s for Voyager). Budget accordingly.
+- **feed_posts: reaction breakdown limited** -- DOM shows which reaction types are present but not per-type counts. Total reaction count is accurate.
+- **No fallback API** -- unlike linkedin-profile-scraper, there is no paid fallback when scraping fails
 - **Rate limited by design** -- sequential, one profile at a time with enforced delays
 - **Post count varies** -- LinkedIn may return fewer posts than requested for some profiles
 - **Voyager queryId rotation** -- LinkedIn periodically rotates the GraphQL queryId. When posts return 404/400, use the discovery script on Hetzner to find the new queryId (see Profile API README)
