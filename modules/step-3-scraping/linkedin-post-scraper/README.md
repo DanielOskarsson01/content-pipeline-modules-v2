@@ -69,6 +69,16 @@ Same as linkedin-profile-scraper:
 
 **Note:** `posts` and `post_engagers` modes work with **personal profiles only** (`/in/` URLs). Company pages return 403 from Voyager. Use `feed_posts` mode for company pages and groups — it uses DOM scraping instead.
 
+### post_engagers Mode (v1.1.0)
+
+Extends `posts` mode by fanning out to fetch commenter data for each post. For every post fetched, makes 1 additional API call to get commenters via `GET /api/post-comments/:activityId`.
+
+- Posts are sorted by `engagement_total` descending before fan-out — the most-engaged posts get processed first
+- Each post gets an `engagers` object with `commenters[]`, `reactors[]` (empty), `resharers[]` (empty), and `completeness` metadata
+- **Reactors unavailable:** LinkedIn removed the reactions list modal (SDUI migration, May 2026). Reaction counts are still available from the feed response, but individual reactor identities are permanently unavailable.
+- **Resharers unavailable:** LinkedIn Voyager has no list-resharers endpoint
+- API cost: 1 call per profile (posts) + 1 call per post (comments) = `1 + posts_per_profile` calls per profile
+
 ### feed_posts Mode (v1.2.0)
 
 Scrapes posts from company pages, group feeds, or personal activity feeds using DOM scraping via CDP. Does **not** use Voyager, so it works where Voyager returns 403.
@@ -85,10 +95,12 @@ Scrapes posts from company pages, group feeds, or personal activity feeds using 
 
 | Option | Default | When to Change | What It Does |
 |--------|---------|----------------|--------------|
-| `posts_per_profile` | 10 | Raise to 15-25 for deeper analysis; lower to 3-5 for quick sampling | Number of recent posts to fetch per profile. API max is 25 |
+| `mode` | `posts` | Use `post_engagers` when you need commenter data; use `feed_posts` for company pages or groups | Scraping mode: `posts` (Voyager), `post_engagers` (Voyager + commenters), `feed_posts` (DOM scraping) |
+| `posts_per_profile` | 10 | Raise to 15-25 for deeper analysis; lower to 3-5 for quick sampling. feed_posts supports up to 200 | Number of recent posts to fetch per profile/feed. Voyager modes cap at 25, feed_posts at 200 |
+| `engagers_per_post` | 50 | Lower for faster runs; raise to 100 for thorough commenter capture | Max commenters to fetch per post (post_engagers mode only). Each post costs 1 extra API call |
 | `requests_per_hour` | 20 | Lower to 10-15 for safety; raise to 30-40 for faster throughput (riskier) | Minimum time between API calls. 20/hr = ~3 min between profiles |
 | `min_word_count` | 10 | Set to 0 to include image-only posts; raise to 25+ for text-heavy posts only | Skip posts with fewer words (filters link shares, image posts with short captions) |
-| `source` | `entity_field` | Switch to `profile_scraper` if entities don't have linkedin fields but linkedin-profile-scraper has already run | Where to find LinkedIn slugs. `entity_field` reads entity.linkedin/linkedin_url. `profile_scraper` reads from pool items |
+| `source` | `entity_field` | Switch to `profile_scraper` if entities don't have linkedin fields but linkedin-profile-scraper has already run | Where to find LinkedIn slugs. `entity_field` reads entity.linkedin/linkedin_url. `profile_scraper` reads from pool items (posts/post_engagers only) |
 
 **Most impactful option:** `posts_per_profile` -- at 10 posts x 20 profiles = 200 items. At 25 posts x 20 profiles = 500 items. More posts = richer data but longer runtime.
 
@@ -122,6 +134,18 @@ requests_per_hour: 30
 min_word_count: 0
 source: entity_field
 ```
+
+### Post Engagers (Influencer Analysis)
+For mapping who engages with key influencers' posts:
+```
+mode: post_engagers
+posts_per_profile: 5
+engagers_per_post: 50
+requests_per_hour: 20
+min_word_count: 0
+source: entity_field
+```
+**Note:** Each profile costs `1 + posts_per_profile` API calls. With 5 posts × 20 profiles = 120 calls (~6 hours at 20/hr).
 
 ### Company Page / Group Feed (News Index)
 For scraping B2B iGaming publication feeds (the News-Section engagement analysis):
@@ -173,6 +197,9 @@ source: profile_scraper
 - `mentions` -- array of mentioned profile slugs
 - `is_reshare` -- whether this is a repost of someone else's content
 - `original_author_slug` -- if reshare, the original author's slug
+- `source_type` -- how this post was scraped: `voyager` (posts/post_engagers modes) or `dom` (feed_posts mode)
+- `found_via` -- slug/identifier of the profile or feed that produced this post
+- `engagers` -- (post_engagers mode only) object with `commenters[]`, `reactors[]`, `resharers[]`, and `completeness` metadata. Each commenter has `slug`, `name`, `headline`, `comment_text`, `commented_at`, `likes`
 - `status` -- `success` or `error`
 - `error` -- error message if status is error, null otherwise
 
@@ -188,12 +215,26 @@ source: profile_scraper
 
 **Free.** Uses the authenticated Chrome session via the Profile API -- no paid API calls. Only cost is compute time (~2-5 seconds per profile for the API call).
 
-**Throughput:**
+**Throughput by mode:**
+
+*posts mode* (1 API call per profile):
 | Rate | Profiles/Hour | 20 Profiles | 50 Profiles |
 |------|---------------|-------------|-------------|
 | 10/hr (conservative) | 10 | ~2 hours | ~5 hours |
 | 20/hr (default) | 20 | ~1 hour | ~2.5 hours |
 | 30/hr (fast) | 30 | ~40 min | ~1.7 hours |
+
+*post_engagers mode* (1 + posts_per_profile calls per profile):
+| Posts/Profile | 20 Profiles @ 20/hr | 50 Profiles @ 20/hr |
+|---------------|---------------------|---------------------|
+| 5 posts | ~6 hours (120 calls) | ~15 hours (300 calls) |
+| 10 posts | ~11 hours (220 calls) | ~27.5 hours (550 calls) |
+
+*feed_posts mode* (1 call per feed, but 30-120s per call):
+| Feeds | Time @ 20/hr |
+|-------|-------------|
+| 10 feeds | ~30 min - 1 hour (dominated by DOM scraping time) |
+| 20 feeds | ~1-2 hours |
 
 ---
 
