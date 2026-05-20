@@ -48,7 +48,8 @@ function findQaItems(items) {
     item.keyword_score !== undefined ||
     item.citation_score !== undefined ||
     item.hallucination_score !== undefined ||
-    item.meta_title_ok !== undefined
+    item.meta_title_ok !== undefined ||
+    item.structural_score !== undefined
   );
 }
 
@@ -70,6 +71,7 @@ function aggregateQaResults(qaItems) {
     meta: 'missing',
     citation: 'missing',
     hallucination: 'missing',
+    structural: 'missing',
   };
 
   for (const item of qaItems) {
@@ -92,6 +94,11 @@ function aggregateQaResults(qaItems) {
     if (item.hallucination_score !== undefined) {
       summary.hallucination = item.qa_pass ? 'pass' : 'fail';
     }
+
+    // Structural compliance checker
+    if (item.structural_score !== undefined) {
+      summary.structural = item.qa_pass ? 'pass' : 'fail';
+    }
   }
 
   return summary;
@@ -107,6 +114,7 @@ function formatQaSummary(summary) {
     meta: 'Meta Compliance',
     citation: 'Citation Coverage',
     hallucination: 'Hallucination Detection',
+    structural: 'Structural Compliance',
   };
 
   for (const [key, label] of Object.entries(labels)) {
@@ -292,6 +300,7 @@ async function execute(input, options, tools) {
     if (summary.meta === 'fail') failedChecks.push('meta_compliance');
     if (summary.citation === 'fail') failedChecks.push('citation_coverage');
     if (summary.hallucination === 'fail') failedChecks.push('hallucination');
+    if (summary.structural === 'fail') failedChecks.push('structural');
 
     const logFn = decision === 'approve' ? 'info' : 'warn';
     logger[logFn](
@@ -316,6 +325,7 @@ async function execute(input, options, tools) {
           citation: summary.citation,
           hallucination: summary.hallucination,
           meta: summary.meta,
+          structural: summary.structural,
         },
         failure_reason: routeResult.failure_reason || null,
         config_overrides: {},
@@ -329,6 +339,7 @@ async function execute(input, options, tools) {
         qa_meta: summary.meta,
         qa_citation: summary.citation,
         qa_hallucination: summary.hallucination,
+        qa_structural: summary.structural,
       },
     };
     results.push(entityResult);

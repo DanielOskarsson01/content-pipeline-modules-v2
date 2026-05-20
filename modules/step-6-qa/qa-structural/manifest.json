@@ -1,0 +1,105 @@
+{
+  "id": "qa-structural",
+  "name": "Structural Compliance Checker",
+  "description": "Check format spec adherence: heading hierarchy, section count, FAQ presence, word count per section, and total word count. Pure structural checks, no LLM needed.",
+  "version": "1.0.0",
+  "step": 6,
+  "category": "qa",
+  "cost": "cheap",
+  "data_operation_default": "add",
+
+  "depends_on": ["content-writer"],
+  "usage_notes": "Run after content-writer. Checks markdown structure against configurable thresholds. Pure text analysis -- no API calls.",
+
+  "requires_columns": ["content_markdown"],
+
+  "options": [
+    {
+      "name": "min_sections",
+      "type": "number",
+      "label": "Minimum sections",
+      "description": "Minimum number of H2 sections required in the content.",
+      "default": 5,
+      "min": 1,
+      "max": 20
+    },
+    {
+      "name": "require_faq",
+      "type": "boolean",
+      "label": "Require FAQ section",
+      "description": "Fail if no FAQ or 'Frequently Asked Questions' section heading is found.",
+      "default": true
+    },
+    {
+      "name": "min_words_per_section",
+      "type": "number",
+      "label": "Min words per section",
+      "description": "Minimum word count for each H2 section. Sections below this are flagged.",
+      "default": 100,
+      "min": 20,
+      "max": 500
+    },
+    {
+      "name": "min_total_words",
+      "type": "number",
+      "label": "Min total words",
+      "description": "Minimum total word count for the entire content.",
+      "default": 1500,
+      "min": 500,
+      "max": 10000
+    },
+    {
+      "name": "required_heading_levels",
+      "type": "text",
+      "label": "Required heading levels",
+      "description": "Comma-separated heading levels that must appear (e.g. 'h1,h2'). Content missing any of these levels fails.",
+      "default": "h1,h2"
+    },
+    {
+      "name": "pass_threshold",
+      "type": "number",
+      "label": "Pass threshold",
+      "description": "Fraction of structural checks that must pass for qa_pass to be true. 1.0 means all checks must pass.",
+      "default": 0.8,
+      "min": 0.5,
+      "max": 1.0
+    }
+  ],
+
+  "options_defaults": {
+    "min_sections": 5,
+    "require_faq": true,
+    "min_words_per_section": 100,
+    "min_total_words": 1500,
+    "required_heading_levels": "h1,h2",
+    "pass_threshold": 0.8
+  },
+
+  "item_key": "entity_name",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": false,
+    "entity_name": "string (required)",
+    "qa_pass": "boolean",
+    "structural_score": "number (0-1)",
+    "total_words": "number",
+    "section_count": "number",
+    "has_faq": "boolean",
+    "violations": "string",
+    "flagged_when": { "qa_pass": ["false"] },
+    "detail_schema": {
+      "header_fields": [
+        "entity_name",
+        { "field": "qa_pass", "display": "badge" },
+        "structural_score",
+        "total_words",
+        "section_count"
+      ],
+      "sections": [
+        { "field": "violations", "label": "Violations", "display": "prose" },
+        { "field": "section_report", "label": "Section Report", "display": "prose" }
+      ]
+    }
+  }
+}

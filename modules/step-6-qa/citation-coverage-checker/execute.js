@@ -225,6 +225,7 @@ async function execute(input, options, tools) {
     pass_threshold = 0.7,
     verify_urls = false,
     require_factual_citations = true,
+    require_at_least_one_citation = true,
   } = options;
 
   logger.info(
@@ -283,7 +284,7 @@ async function execute(input, options, tools) {
     const sourceCount = sourceMap.size;
 
     // --- Edge case: content has no citations at all ---
-    if (citationCount === 0) {
+    if (citationCount === 0 && require_at_least_one_citation) {
       logger.warn(`${entity.name}: content has zero inline citations -- automatic fail`);
       results.push({
         entity_name: entity.name,

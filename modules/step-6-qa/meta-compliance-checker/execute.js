@@ -131,6 +131,7 @@ async function execute(input, options, tools) {
   const { logger, progress } = tools;
   const {
     title_max_length = 60,
+    title_min_length = 30,
     description_min_length = 150,
     description_max_length = 160,
     require_keyword_in_title = true,
@@ -285,8 +286,8 @@ async function execute(input, options, tools) {
 
     // --- Check 2: Meta title too short (warning-level, still counts as check) ---
     checksTotal++;
-    if (metaTitle.length > 0 && metaTitle.length < 30) {
-      violations.push(`Title too short: ${metaTitle.length} chars (recommend >= 30 for SEO value)`);
+    if (metaTitle.length > 0 && metaTitle.length < title_min_length) {
+      violations.push(`Title too short: ${metaTitle.length} chars (recommend >= ${title_min_length} for SEO value)`);
     } else if (metaTitle.length === 0) {
       violations.push('Title is empty');
     } else {

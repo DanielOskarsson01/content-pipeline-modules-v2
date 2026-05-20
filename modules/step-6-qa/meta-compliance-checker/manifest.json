@@ -56,6 +56,15 @@
       "default": true
     },
     {
+      "name": "title_min_length",
+      "type": "number",
+      "label": "Min meta title length",
+      "description": "Minimum characters for meta title. Below this triggers a check failure.",
+      "default": 30,
+      "min": 10,
+      "max": 60
+    },
+    {
       "name": "pass_threshold",
       "type": "number",
       "label": "Pass threshold",
@@ -68,6 +77,7 @@
 
   "options_defaults": {
     "title_max_length": 60,
+    "title_min_length": 30,
     "description_min_length": 150,
     "description_max_length": 160,
     "require_keyword_in_title": true,

@@ -36,13 +36,21 @@
       "label": "Require citations on factual claims",
       "description": "Flag sentences containing numbers, dates, statistics, or company-specific claims that lack an inline citation.",
       "default": true
+    },
+    {
+      "name": "require_at_least_one_citation",
+      "type": "boolean",
+      "label": "Require at least one citation",
+      "description": "When true, content with zero [#n] citations fails regardless of pass_threshold.",
+      "default": true
     }
   ],
 
   "options_defaults": {
     "pass_threshold": 0.7,
     "verify_urls": false,
-    "require_factual_citations": true
+    "require_factual_citations": true,
+    "require_at_least_one_citation": true
   },
 
   "item_key": "entity_name",
