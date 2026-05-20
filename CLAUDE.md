@@ -206,3 +206,58 @@ Entry types: decision | progress | blocker | idea
 - None — pipeline working E2E. Ready for multi-entity production runs.
 
 **Updated by:** session-closer agent
+
+### Session: 2026-04-29 to 2026-05-03 — csv-discovery, api-search fixes, partial timeout resilience
+**Accomplished:**
+- Added csv-discovery submodule for external tool integration (CSV import from local directory)
+- Changed url-relevance cost from cheap to medium
+- Added job_description mode to linkedin-profile-scraper
+- Detected Cloudflare challenge pages in sitemap-parser browser fallback
+- Refactored linkedin-profile-scraper to use Profile API instead of direct CDP
+- Added _partialItems timeout resilience to all 27 remaining submodules
+- Made seo-planner dependency optional in content-writer (v1.4.0)
+- Made api-search and content-analyzer fully template-generic
+- Added search_input mode and entity_production toggle to api-search
+- Fixed api-search 0 results: parse string-typed options from UI
+- Fixed csv-discovery: add missing manifest fields and semicolon support
+- Fixed api-search empty rows: flatten output_schema columns
+- Added upload_dir support and XLSX-ready defaults to csv-discovery
+- Added sort_order to Step 2 validation manifests for correct execution sequence
+
+**Commits:** 14 commits (Apr 29 – May 4)
+
+**Updated by:** CTO audit catchup (2026-05-21)
+
+### Session: 2026-05-05 to 2026-05-06 — Selective field loading + api-search enhancements
+**Accomplished:**
+- Fixed keyword-sufficiency-checker SyntaxError: const entityResult redeclaration
+- Added configurable score_rules to api-search for high-signal item flagging
+- Added metadata_fields and prompt_context options to url-relevance
+- Declared requires_columns for selective field enrichment (all modules)
+- Updated api-search manifest (presets_enabled) and rewrote READMEs
+
+**Commits:** 5 commits (May 5-6)
+
+**Updated by:** CTO audit catchup (2026-05-21)
+
+### Session: 2026-05-08 to 2026-05-14 — LinkedIn post scraper + api-search auth
+**Accomplished:**
+- Added linkedin-post-scraper submodule and bumped browser-scraper concurrency
+- Added bearer auth to api-search and fuzzy dedup to url-dedup
+- Increased post-scraper fetch timeout from 30s to 60s
+- Added post_engagers mode to linkedin-post-scraper
+- Added feed_posts mode to linkedin-post-scraper (v1.2.0)
+- Updated linkedin-post-scraper README with post_engagers and feed_posts details
+
+**Commits:** 6 commits (May 8-14)
+
+**Updated by:** CTO audit catchup (2026-05-21)
+
+### Session: 2026-05-20 — Phase 3: QA tuning + structural checker + loop-router fix
+**Accomplished:**
+- Phase 3: QA manifest tuning, structural checker, loop-router integration
+- Fixed loop-router findSourcePages: detect source pages by url + word_count
+
+**Commits:** 2 commits (May 20)
+
+**Updated by:** CTO audit catchup (2026-05-21)
