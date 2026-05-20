@@ -54,10 +54,14 @@ function findQaItems(items) {
 }
 
 /**
- * Find source page items (from Step 3 scrapers) by checking for text_content.
+ * Find source page items (from Step 3 scrapers).
+ * Pool items may have text_content (inline), _blob_ref (external storage),
+ * or just url + word_count (when full text is stripped during pooling).
  */
 function findSourcePages(items) {
-  return (items || []).filter(item => item.text_content || item._blob_ref);
+  return (items || []).filter(item =>
+    item.text_content || item._blob_ref || (item.url && item.word_count > 0)
+  );
 }
 
 /**
