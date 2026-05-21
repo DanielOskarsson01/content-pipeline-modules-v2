@@ -283,3 +283,46 @@ Entry types: decision | progress | blocker | idea
 - Modules repo 2 commits ahead of origin — need push
 
 **Updated by:** session-closer agent
+
+### Session: 2026-05-22 — SEO planner pipeline-agnostic defaults + real-questions FAQ + haiku models
+**Accomplished:**
+- Made seo-planner manifest fully pipeline-agnostic: removed all OnlyiGaming/iGaming/B2B hardcoding from default prompt and research_queries — platform context now belongs in reference docs/templates, not module defaults
+- Updated seo-planner third research query to ask for 8-12 real search queries people actually type, explicitly flagged as verbatim FAQ source
+- Updated seo-planner FAQs prompt instruction: "Use the real questions from the keyword research as the basis — actual search queries people type"
+- Updated seo-planner meta title rule: generic "Lead with entity name and primary value proposition" (was hardcoded `{Company} — {Primary USP} | OnlyiGaming`)
+- Set content-writer and job-analyzer default model to haiku for testing (was sonnet)
+- Fixed job-analyzer option description to match new haiku default (was "sonnet recommended for quality")
+- Parallel fix in project-command-center: H1 placement rule tightened — now says "Rewrite the H1 to naturally include the primary keyword" not "Place if not already there"
+- Keyword research Perplexity query restructured: REAL QUESTIONS as item 1 (8-12 actual search queries), keywords/intent/competitive landscape after
+- SEO edit prompt updated: Common Questions section replaced with Perplexity's real operator questions verbatim
+- Fixed Keywords step visual indicator bug in ReviewArticles.tsx: was always green (not_started = index 0 in STATUS_ORDER); now uses `kwResearchDone` prop based on actual `kwResearch` file presence
+- Code review caught 2 issues (Keywords indicator bug + job-analyzer description mismatch) — both fixed before commit
+- Committed: modules repo commit 11dc1bc (pushed), command-center commit 6e9df39 (local only — no remote configured)
+
+**Decisions:**
+- Pipeline-agnostic module defaults: OnlyiGaming-specific prompts belong in presets/reference docs per template run, not in module defaults
+- Perplexity determines the actual questions: real search queries replace AI-invented FAQ questions in the Common Questions section
+- H1 must be rewritten (not just checked): primary keyword should always be in H1, rewrite title naturally to include it
+- Keywords pipeline step visual uses kwResearch file presence (not status index) to determine done/current/pending state
+- Haiku as default for all LLM modules during testing phase; operators switch to sonnet for production
+
+**Blockers/Questions:**
+- project-command-center has no git remote — commits are local only, need remote configured to deploy
+- seo-planner README.md not updated this session despite manifest changes (rule 7: update README when modifying submodule)
+
+**Updated by:** session-closer agent
+
+### Session: 2026-05-22 — Phase 3 planning + skeleton RPC fix
+**Accomplished:**
+- No modules repo changes this session — work was in skeleton repo (SQL migration)
+- Phase 3 planning completed: discovered multi-card infrastructure already built; identified RPC bug as the primary blocker
+- Next session picks up at Batch 1: add model_select option to 4 QA manifests (hallucination-detector, citation-coverage-checker, keyword-sufficiency-checker, meta-compliance-checker)
+
+**Decisions:**
+- Phase 3 QA submodule work (model_select, threshold tuning) held until Batch 1 start next session
+
+**Blockers/Questions:**
+- Batch 1 (model_select on 4 QA manifests): verify each execute.js uses options.model before adding manifest option — some may hardcode model name
+- Batch 4 (phase3-cards-routing-rules.sql): needs production run to configure company_profile template cards
+
+**Updated by:** session-closer agent
