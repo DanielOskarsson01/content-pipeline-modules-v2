@@ -326,3 +326,23 @@ Entry types: decision | progress | blocker | idea
 - Batch 4 (phase3-cards-routing-rules.sql): needs production run to configure company_profile template cards
 
 **Updated by:** session-closer agent
+
+### Session: 2026-05-22 — Phase 3 blocking bugs fixed in skeleton repo
+**Accomplished:**
+- No modules repo changes — all fixes were in content-pipeline-v2 (skeleton repo), commit 52540ae pushed
+- Diagnosed Bug 1 (empty result pane in auto-execute): previous session misidentified root cause as `submodule_runs.output_data` being NULL; actual cause is per-entity UI reads from `entity_submodule_runs` via the polling endpoint's `entities` array — so Bug 1 is a symptom of Bug 2
+- Root-caused Bug 2: stale `entity_stage_pool` rows from previous partial manual runs cause auto-execute to silently drop entities not in the pool (filteredPools.length > 0 branch used stale rows unconditionally)
+- Fixed Bug 2 in `server/routes/submoduleRuns.js` execute endpoint: added defensive entity merge — when pool exists but inputData has additional entities, missing ones are upserted into entity_stage_pool before bulk entity_submodule_runs insert; guard excludes loop passes
+- Fixed failed_count always being 0 in `server/workers/batchWorker.js`: added `failed_count: failed + zombies.length` to the submodule_runs update (previously this field was never written)
+- Traced full per-entity execution flow: execute endpoint → BullMQ FlowProducer → stageWorker → batchWorker → approve endpoint → step approve; confirmed entity_stage_pool as authoritative state carrier across steps
+
+**Decisions:**
+- Bug 1 is not independent: fixing Bug 2 (entity rows created for all entities) automatically fixes Bug 1 (result pane populated); no separate UI fix needed
+- Defensive merge guarded with `!isLoopPass`: loop passes intentionally filter to 'pending' subset, merging all inputData entities would break that behavior
+- `upsert` with `ignoreDuplicates: true` used for merge: safe re-run if execute is called twice — no duplicate rows created
+
+**Blockers/Questions:**
+- Validation re-run needed: fresh auto-execute test on a clean project (not "test2" which has stale pool state) to confirm all entities appear in entity_submodule_runs and result pane shows correctly
+- Remaining Phase 3 batches still pending: Batch 1 (model_select on 4 QA manifests), Batch 4 (phase3-cards-routing-rules.sql production run), then 50-entity E2E test
+
+**Updated by:** session-closer agent
