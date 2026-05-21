@@ -261,3 +261,25 @@ Entry types: decision | progress | blocker | idea
 **Commits:** 2 commits (May 20)
 
 **Updated by:** CTO audit catchup (2026-05-21)
+
+### Session: 2026-05-21 11:46 — SEO planner v2.0.0: Perplexity keyword research
+**Accomplished:**
+- SEO planner upgraded to v2.0.0 with keyword research pre-step via Perplexity Sonar API
+- Added 4 new functions: buildEntityContext, parseResearchQueries, runKeywordResearch (parallel via Promise.allSettled), synthesizeResearch
+- Added 3 new manifest options: keyword_research (boolean), search_provider (select), research_queries (textarea with {entity_name}/{entity_context} placeholders)
+- Updated buildPrompt() with {keyword_research} placeholder and 3-tier fallback (research → keyword-summary.md → empty notice)
+- Prompt template updated: {doc:keyword-summary.md} → {keyword_research}
+- README.md updated with v2.0.0 changelog, new options docs, architecture diagram
+- Pipeline-agnostic design: works for company profiles, review articles, news, bios — user controls queries per run
+
+**Decisions:**
+- Pipeline-agnostic over mode detection: user-editable research_queries textarea replaces hardcoded company/category modes
+- Keep search_provider option from day one: stable manifest schema for future Gemini/Ahrefs/Semrush providers
+- Parallel queries via Promise.allSettled: 3-4x latency improvement, partial failure tolerance
+- CTO review approved with all blocking issues resolved (parallel queries, fallback mechanism, synthesis format)
+
+**Blockers/Questions:**
+- Needs PERPLEXITY_API_KEY in skeleton .env before testing
+- Modules repo 2 commits ahead of origin — need push
+
+**Updated by:** session-closer agent

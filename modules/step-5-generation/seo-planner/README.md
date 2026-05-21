@@ -1,9 +1,9 @@
 # SEO Planner
 
-> Keyword distribution planner. Maps target keywords to predefined article sections, generates meta tags and FAQs.
+> Keyword distribution planner with web-researched keyword data. Maps target keywords to predefined article sections, generates meta tags and FAQs.
 
-**Module ID:** `seo-planner` | **Step:** 5 (Generation) | **Category:** planning | **Cost:** medium
-**Version:** 1.3.0 | **Data Operation:** add (➕)
+**Module ID:** `seo-planner` | **Step:** 5 (Generation) | **Category:** planning | **Cost:** expensive
+**Version:** 2.0.0 | **Data Operation:** add (➕)
 
 ---
 
@@ -30,6 +30,20 @@ content-analyzer (＝) -> seo-planner (➕) -> content-writer (➕)
 It uses the **add (➕)** data operation - it chains from the working pool, finding content-analyzer output by the `source_submodule` field, and adds its own output alongside. After approval, the pool contains both analysis items and SEO plan items, distinguished by `source_submodule`.
 
 This is the cheapest step in the chain. The input is just the analysis JSON (a few KB), not the full scraped text (50KB+). This makes it safe to re-run multiple times while iterating on keyword strategy without significant cost.
+
+### v2.0.0: Keyword Research Pre-Step via Perplexity Sonar
+
+v2.0.0 adds a web research step that runs **before** the SEO planning LLM call. Instead of relying on general LLM knowledge to select keywords, the module now:
+
+1. Runs 1–5 configurable search queries via the Perplexity Sonar API
+2. Synthesizes the results into a structured keyword research block
+3. Injects that block into the planning prompt as `{keyword_research}`
+
+This replaces manually uploaded `keyword-summary.md` reference docs and eliminates the need for expensive tools like Ahrefs. The planning LLM now works from actual search data rather than guessing.
+
+The three default queries cover: primary search demand, top-ranking competitor articles, and People Also Ask signals. All queries support `{entity_name}` and `{entity_context}` placeholders.
+
+**Cost note:** Perplexity Sonar API charges per request (~$0.005 each). Three queries per entity = ~$0.015/entity. At 100 entities, that's $1.50 for keyword research. Toggle `keyword_research: false` to skip for batches where cost matters.
 
 ### v1.3.0: Keyword Distribution Only
 
@@ -86,32 +100,51 @@ Other useful reference docs: format_spec.md (defines the fixed section structure
 
 | Option | Default | When to Change | Impact |
 |--------|---------|----------------|--------|
-| `prompt` | (SEO planning template) | Customize when you need different keyword strategies or industry-specific SEO patterns | The full LLM instruction. Uses `{entity_content}` for analysis JSON and `{doc:filename}` for reference docs |
-| `reference_docs` | (none) | Upload keyword packs, format spec, tone guide. Keyword packs are most impactful here | Selected docs injected into prompt at `{doc:filename}` placeholders |
-| `ai_model` | haiku | Haiku for quick planning iterations. Sonnet for production. Opus rarely needed for planning | Planning is less sensitive to model quality than analysis or writing |
+| `keyword_research` | true | Set false to skip web research and reduce cost/latency | When true, runs Perplexity Sonar queries before the planning LLM call |
+| `search_provider` | perplexity | Only `perplexity` supported in v2.0.0 | Controls which search API is used for keyword research |
+| `research_queries` | (3 default queries) | Customize for specific industries, pipelines, or entity types | One query per line. Supports `{entity_name}` and `{entity_context}` placeholders. ≤5 queries recommended |
+| `prompt` | (SEO planning template) | Customize when you need different keyword strategies or industry-specific SEO patterns | The full LLM instruction. Uses `{entity_content}` for analysis JSON, `{keyword_research}` for research results, and `{doc:filename}` for reference docs |
+| `reference_docs` | (none) | Upload format spec, tone guide, or supplemental keyword data | Selected docs injected into prompt at `{doc:filename}` placeholders |
+| `ai_model` | haiku | Haiku for quick planning iterations. Sonnet for production | Planning is less sensitive to model quality than analysis or writing |
 | `ai_provider` | anthropic | Switch for model comparison | Which API to call |
 
 ## Recipes
 
-### Standard SEO Plan
-Balanced for typical company profiles:
+### Standard SEO Plan (v2.0.0 default)
+Web-researched keywords + AI planning:
 ```
+keyword_research: true
+search_provider: perplexity
 ai_model: haiku
-reference_docs: [keyword-summary.md, tone_guide.md, format_spec.md]
+reference_docs: [tone_guide.md, format_spec.md]
+```
+Keyword packs (`keyword-summary.md`) are no longer needed — Perplexity replaces them.
+
+### High-Quality Plan
+More capable model + web research:
+```
+keyword_research: true
+ai_model: sonnet
+reference_docs: [tone_guide.md, format_spec.md]
 ```
 
-### Quick Brief for Human Writers
-Generate keywords + meta for handoff:
+### Fast/Cheap Plan (no web research)
+Skip Perplexity for batch processing where cost matters:
 ```
+keyword_research: false
 ai_model: haiku
 reference_docs: [keyword-summary.md, format_spec.md]
 ```
+Upload a `keyword-summary.md` to compensate when `keyword_research` is off.
 
-### High-Quality Plan
-Maximum keyword research quality:
+### Custom Research Queries
+For review article pipelines (category-level research):
 ```
-ai_model: sonnet
-reference_docs: [keyword-summary.md, tone_guide.md, format_spec.md]
+keyword_research: true
+research_queries:
+  What do iGaming operators search when comparing {entity_name} providers?
+  What keywords do top-ranking {entity_context} comparison articles target?
+  People Also Ask questions for '{entity_name}' in iGaming?
 ```
 
 ## Expected Output
@@ -216,9 +249,10 @@ reference_docs: [keyword-summary.md, tone_guide.md, format_spec.md]
 
 ## Limitations & Edge Cases
 
-- **No real keyword data** - The LLM selects keywords based on general SEO knowledge, not actual search volume data. Keyword packs as reference docs partially solve this, but the module doesn't query Google Search Console or Ahrefs
+- **No search volume data** - Perplexity Sonar returns qualitative keyword research (PAA questions, competitor coverage) but not numeric search volume or competition scores. For volume data, supplement with an Ahrefs/SEMrush reference doc
+- **Research query failures don't fail the module** - Individual query failures are caught and logged. If all queries fail, the module falls back to `keyword-summary.md` (if uploaded) or proceeds with no keyword data. Check logs if results look generic
+- **≤5 queries recommended** - More queries are allowed but multiply cost linearly. The module logs a warning if >5 queries are configured
 - **Meta length validation is soft** - The module warns about meta title/description lengths but doesn't force compliance. Some LLMs consistently produce titles slightly over 60 characters
-- **FAQ quality varies** - Without keyword pack context, FAQs may be generic. With keyword pack, they're more targeted but still may not match actual search queries
 - **Language-specific SEO** - Default prompt assumes English SEO conventions. Other languages have different title length norms, keyword patterns, and FAQ structures
 - **No duplicate keyword detection** - If multiple companies in the same run target the same keywords, the planner doesn't coordinate. Each entity is planned independently
 
@@ -234,7 +268,7 @@ The user can re-run seo-planner with different settings (different keyword pack)
 
 - **Step:** 5 (Generation)
 - **Category:** planning
-- **Cost:** medium
+- **Cost:** expensive (30 min timeout — includes Perplexity research calls + planning LLM call per entity)
 - **Data operation:** add (➕) - chains from working pool, finds content-analyzer items by source_submodule
 - **Requires:** `entity_name` in input items; `analysis_json` from content-analyzer
 - **Input:** Content-analyzer output from working pool (found via `source_submodule === 'content-analyzer'`)
@@ -243,5 +277,5 @@ The user can re-run seo-planner with different settings (different keyword pack)
 - **Selectable:** true - operators approve/reject entire entity SEO plan
 - **Detail view:** `detail_schema` with header (entity_name, status as badge, primary_keyword, faq_count) and sections (keywords_text, keyword_distribution_text as prose, meta_text, faqs_text as prose, tone_notes, warnings, error)
 - **Error handling:** Missing analysis input, LLM failures, JSON parse errors handled per-entity. Entities without content-analyzer items get clear error: "No content-analyzer output found. Run content-analyzer first."
-- **Dependencies:** `tools.ai` (LLM calls), `tools.logger`, `tools.progress`
+- **Dependencies:** `tools.ai` (LLM calls + Perplexity Sonar for keyword research), `tools.logger`, `tools.progress`
 - **Files:** `manifest.json`, `execute.js`

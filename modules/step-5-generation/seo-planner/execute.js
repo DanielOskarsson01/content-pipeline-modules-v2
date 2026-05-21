@@ -4,8 +4,9 @@
  * Takes content-analyzer output and generates an SEO keyword distribution plan:
  * target keywords mapped to predefined sections, meta title/description, and FAQs.
  *
- * v1.3.0: Keyword distribution only — does NOT define article structure
- * (structure is fixed in format_spec.md).
+ * v2.0.0: Adds keyword research pre-step via Perplexity Sonar (or other search providers).
+ * Researches actual keywords from the web before the LLM creates the plan.
+ * Pipeline-agnostic — works for company profiles, review articles, news, bios, etc.
  *
  * Data operation: ADD (+) — adds SEO plan alongside analysis.
  * Requires content-analyzer to have run first (finds items via source_submodule).
@@ -14,10 +15,16 @@
 /**
  * Replace prompt placeholders with actual content.
  * - {entity_content} → analysis JSON
+ * - {keyword_research} → keyword research results (or fallback to keyword-summary.md)
  * - {doc:filename} → reference doc content
  */
-function buildPrompt(promptTemplate, entityContent, referenceDocs) {
+function buildPrompt(promptTemplate, entityContent, referenceDocs, keywordResearchText) {
   let prompt = promptTemplate.replace(/\{entity_content\}/g, entityContent);
+
+  // Replace {keyword_research} — research results, or fallback to keyword-summary.md, or empty notice
+  const keywordFallback = (referenceDocs && referenceDocs['keyword-summary.md']) || '';
+  const keywordData = keywordResearchText || keywordFallback || 'No keyword research data available.';
+  prompt = prompt.replace(/\{keyword_research\}/g, keywordData);
 
   // Replace {doc:filename} placeholders
   if (referenceDocs && typeof referenceDocs === 'object') {
@@ -220,9 +227,94 @@ function flattenPlan(plan) {
   };
 }
 
+/**
+ * Extract a short context string from the analysis for research query interpolation.
+ * Tries common fields across pipeline types (company profiles, categories, etc.).
+ */
+function buildEntityContext(entity, analyzerItem) {
+  const analysis = analyzerItem.analysis_json || analyzerItem;
+  const parts = [];
+  if (analysis.primary_category) parts.push(analysis.primary_category);
+  else if (analysis.categories?.length) parts.push(analysis.categories[0].name || analysis.categories[0]);
+  if (analysis.industry) parts.push(analysis.industry);
+  if (analysis.description) parts.push(analysis.description.slice(0, 100));
+  return parts.join(' — ') || entity.name;
+}
+
+/**
+ * Parse research_queries textarea into interpolated query strings.
+ * One query per line, with {entity_name} and {entity_context} placeholders.
+ */
+function parseResearchQueries(template, entityName, entityContext) {
+  return template
+    .split('\n')
+    .map(q => q.trim())
+    .filter(q => q.length > 0)
+    .map(q => q
+      .replace(/\{entity_name\}/g, entityName)
+      .replace(/\{entity_context\}/g, entityContext)
+    );
+}
+
+/**
+ * Run keyword research queries in parallel via the search provider.
+ * Uses Promise.allSettled so partial failures don't kill the entire step.
+ */
+async function runKeywordResearch(queries, tools, searchProvider, logger, entityName) {
+  if (queries.length > 5) {
+    logger.warn(`${entityName}: ${queries.length} research queries configured (recommended: ≤5). Consider reducing to control costs.`);
+  }
+
+  logger.info(`${entityName}: running ${queries.length} research queries via ${searchProvider}`);
+
+  const promises = queries.map((query, idx) => {
+    logger.info(`${entityName}: research query ${idx + 1}/${queries.length}: ${query.slice(0, 80)}...`);
+    return tools.ai.complete({
+      prompt: query,
+      model: 'sonar',
+      provider: searchProvider,
+      temperature: 0.1,
+      max_tokens: 2048,
+    }).then(response => ({
+      query,
+      response_text: response.text,
+      citations: response.citations || [],
+    }));
+  });
+
+  const settled = await Promise.allSettled(promises);
+  const results = [];
+  for (let i = 0; i < settled.length; i++) {
+    if (settled[i].status === 'fulfilled') {
+      results.push(settled[i].value);
+    } else {
+      logger.warn(`${entityName}: research query ${i + 1} failed — ${settled[i].reason?.message}`);
+    }
+  }
+  return results;
+}
+
+/**
+ * Format research results into structured markdown for the planning LLM.
+ */
+function synthesizeResearch(results, searchProvider) {
+  if (results.length === 0) return '';
+
+  const sections = results.map((r) => {
+    const citations = r.citations.length > 0
+      ? `\nSources: ${r.citations.slice(0, 5).join(', ')}`
+      : '';
+    return `### Query: ${r.query}\n\n${r.response_text}${citations}`;
+  });
+
+  const totalCitations = results.reduce((s, r) => s + r.citations.length, 0);
+  return `## Keyword Research (${searchProvider}, ${results.length} queries, ${totalCitations} sources)\n\n${sections.join('\n\n---\n\n')}`;
+}
+
 async function execute(input, options, tools) {
   const { entities } = input;
-  const { ai_model, ai_provider, prompt: promptTemplate, reference_docs, temperature, max_tokens } = options;
+  const { ai_model, ai_provider, prompt: promptTemplate, reference_docs, temperature, max_tokens,
+          keyword_research, search_provider, research_queries } = options;
   const { logger, progress, ai } = tools;
 
   const results = [];
@@ -266,6 +358,25 @@ async function execute(input, options, tools) {
     }
 
     try {
+      // Keyword research pre-step
+      let keywordResearchText = '';
+      if (keyword_research && research_queries) {
+        try {
+          const entityContext = buildEntityContext(entity, analyzerItem);
+          const queries = parseResearchQueries(research_queries, entity.name, entityContext);
+
+          if (queries.length > 0) {
+            progress.update(i + 1, entities.length, `Researching keywords for ${entity.name || 'entity'}`);
+            const researchResults = await runKeywordResearch(queries, tools, search_provider, logger, entity.name);
+            keywordResearchText = synthesizeResearch(researchResults, search_provider);
+            logger.info(`${entity.name}: keyword research complete — ${researchResults.length}/${queries.length} queries succeeded`);
+          }
+        } catch (err) {
+          logger.warn(`${entity.name}: keyword research failed (${err.message}), using fallback`);
+        }
+        progress.update(i + 1, entities.length, `Planning SEO for ${entity.name || 'entity'}`);
+      }
+
       logger.info(`${entity.name}: generating SEO plan from analyzer output with ${ai_provider}/${ai_model}`);
 
       // Use analysis_json as entity content
@@ -273,7 +384,7 @@ async function execute(input, options, tools) {
         ? JSON.stringify(analyzerItem.analysis_json, null, 2)
         : JSON.stringify(analyzerItem, null, 2);
 
-      const prompt = buildPrompt(promptTemplate, analysisContent, reference_docs);
+      const prompt = buildPrompt(promptTemplate, analysisContent, reference_docs, keywordResearchText);
 
       const response = await ai.complete({
         prompt,
