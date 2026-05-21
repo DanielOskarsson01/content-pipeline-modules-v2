@@ -16,8 +16,8 @@
       "name": "ai_model",
       "type": "text",
       "label": "AI model",
-      "description": "Model for analysis (sonnet recommended for quality, haiku for speed).",
-      "default": "sonnet"
+      "description": "Model for analysis (haiku for speed/testing, sonnet for production quality).",
+      "default": "haiku"
     },
     {
       "name": "cv_source_dir",
@@ -37,7 +37,7 @@
     }
   ],
   "options_defaults": {
-    "ai_model": "sonnet",
+    "ai_model": "haiku",
     "cv_source_dir": "/Users/danieloskarsson/Library/CloudStorage/Dropbox/Projects/JobSearch/CVs",
     "temperature": 0.2
   },
