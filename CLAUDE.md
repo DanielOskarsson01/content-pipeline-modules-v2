@@ -85,6 +85,45 @@ When uncertain whether a decision is strategic or tactical, surface to the user 
 
 ---
 
+## Architectural commitments
+
+### Small generic modules, not specialized ones
+
+Content type variation is handled via configuration (cards, prompts, reference docs) of a small number of flexible generic modules. Specialized modules per content type are an anti-pattern.
+
+When a workflow needs different behavior:
+1. First: can this be a card of an existing module?
+2. Second: can this be template/configuration of an existing module?
+3. Last: only if behavior is genuinely different, create a new module
+
+The module catalog should stay small as the content type catalog grows.
+
+### Step boundary discipline
+
+Each step has a specific concern. Modules belong to one step's concern. Modules spanning step boundaries get refactored or replaced.
+
+- **Step 0** — Project setup and user input: project name/description, template selection, entity definition, seed inputs (CSV uploads, manual URL entry, descriptions). Produces structured input that Step 1 submodules consume.
+- **Step 1** — Discovery: produce URLs/items into the pool
+- **Step 2** — URL processing: filter, dedup, canonicalize
+- **Step 3** — Scraping: produce content from URLs
+- **Step 4** — Cleanup: transform/filter scraped content
+- **Step 5** — Generation: produce format-agnostic content (markdown, JSON, structured fields)
+- **Step 6** — QA: verify produced content
+- **Step 7** — Routing: decide retry/proceed
+- **Step 8** — Bundle: format content for delivery (DOCX, PDF, HTML via templates)
+- **Step 9** — Distribution setup: configure send/save (staged but not executed)
+- **Step 10** — Human review: publication gate (human decides publish/save/skip)
+
+Step 10 is the publication gate. Steps 0-9 are automated; Step 10 is a human decision.
+
+### Pipeline architecture is ID-based composition
+
+The current 11-step structure is current scaffolding, not fundamental architecture. The real architecture is ID-based submodule composition: the execution engine runs submodules in sequences determined by templates (current), routing decisions (multi-card retries), or user composition (future drag-and-drop).
+
+Validation and contract rules should be position-agnostic — based on what a module does/needs, not where it sits. Step numbers are guidance for current organization, not architectural constraints.
+
+---
+
 ## Folder Pattern
 
 ```
@@ -426,3 +465,21 @@ Entry types: decision | progress | blocker | idea
 - None — Task 3 of the empty-pool-bug-fix plan can proceed against the now-37-module active set.
 
 **Updated by:** CTO agent (manual session entry)
+
+### Session: 2026-05-23 — Satellite prompts + dashboard stubs (project-command-center)
+
+**Accomplished:**
+- No modules repo changes this session — all work was in project-command-center
+- Completed satellite prompt system in `project-command-center/server/reviewArticlesRoutes.ts`: `detectSatelliteClass()` + `interpolateTemplate()` functions added, generic satellite branch replaced with class-based dispatch (7 classes from `satellite-prompt-templates.md`)
+- Installed macOS LaunchAgent so project-command-center auto-starts at login
+- Created `CLAUDE.md` stubs for `OnlyiGaming/linkedin/` and `OnlyiGaming/tags/` so they appear as project cards in the dashboard
+
+**Decisions:**
+- No GitHub remote needed for project-command-center — fully local tool, Dropbox provides backup
+- Satellite class detection: slug patterns take precedence over title patterns; `niche-review` is the catch-all default
+
+**Blockers/Questions:**
+- Phase 3 batches still pending: Batch 1 (model_select on 4 QA manifests), Batch 4 (phase3-cards-routing-rules.sql), 50-entity E2E test
+- seo-planner README.md not updated (rule 7 carry-forward from last session)
+
+**Updated by:** session-closer agent
