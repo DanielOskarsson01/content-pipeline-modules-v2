@@ -7,7 +7,8 @@
   "category": "scraping",
   "cost": "expensive",
   "data_operation_default": "transform",
-  "pool_precondition": "requires_items",  "sort_order": 3,
+  "pool_precondition": "requires_items",
+  "sort_order": 3,
 
   "depends_on": ["browser-scraper"],
   "usage_notes": "Run after browser-scraper. Only re-scrapes pages that failed all previous scrapers. Requires SCRAPFLY_KEY environment variable. Each request costs ~30 ScrapFly credits (ASP + JS rendering). Monitor credit usage in ScrapFly dashboard.",

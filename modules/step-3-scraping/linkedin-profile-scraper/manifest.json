@@ -7,7 +7,8 @@
   "category": "linkedin",
   "cost": "expensive",
   "data_operation_default": "add",
-  "pool_precondition": "requires_items",  "sort_order": 4,
+  "pool_precondition": "requires_items",
+  "sort_order": 4,
 
   "usage_notes": "Requires the LinkedIn Profile API running on localhost:3847 (PM2: profile-api), with Chrome authenticated to LinkedIn. Optional: SCRAPELINKEDIN_API_KEY for fallback. Rate-limited to ~20 profiles/hour by default.",
 
