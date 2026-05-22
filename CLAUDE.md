@@ -410,3 +410,19 @@ Entry types: decision | progress | blocker | idea
 - Remaining Phase 3 batches still pending: Batch 1 (model_select on 4 QA manifests), Batch 4 (phase3-cards-routing-rules.sql production run), then 50-entity E2E test
 
 **Updated by:** session-closer agent
+
+### Session: 2026-05-23 — Architectural principle clarified + cv-generator/job-analyzer archived
+**Accomplished:**
+- Archived `cv-generator` and `job-analyzer` (commit `792945d`) — moved from `modules/step-5-generation/` to `modules/_archive/`. Excluded from manifest loader scan via the `^step-\d+-` regex. Active module count: 39 → 37.
+- Added `BACKLOG.md` item 2 — "Content-analyzer + content-writer flexibility for multi-content-type support" — captures the work that makes the archived modules permanently disposable.
+- Updated `modules/_archive/README.md` to reflect the corrected framing (specialized-per-content-type is the OLD approach being replaced, not dormant code awaiting revival).
+
+**Decisions:**
+- **Architectural principle (binding):** The pipeline does NOT have specialized submodules per content type. Content type variation is handled via configuration (cards: prompts, reference docs, analysis dimensions) of a small number of flexible generic modules. Specialized modules (cv-generator, job-analyzer) represent the old approach being actively replaced. This principle informs Phase 4+ decisions: new content types ship as cards of existing modules, not as new modules. Module catalog stays small as the content-type catalog grows.
+- **Step boundary discipline (binding):** Step 5 (Generation) produces format-agnostic content — markdown, JSON, structured fields. Step 8 (Bundle) handles output format — DOCX, PDF, HTML via templates. Modules that violate this boundary (`cv-generator` did both Step 5 writing AND Step 8 DOCX file production) get refactored or replaced.
+- Archive (not delete) chosen because permanent removal happens when the BACKLOG item 2 flexibility work matures — not now. Keeping the folders in version control means anyone who finds a stray reference or import can trace it back to the old approach.
+
+**Blockers/Questions:**
+- None — Task 3 of the empty-pool-bug-fix plan can proceed against the now-37-module active set.
+
+**Updated by:** CTO agent (manual session entry)
