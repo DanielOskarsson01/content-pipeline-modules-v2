@@ -7,7 +7,7 @@
   "category": "linkedin",
   "cost": "medium",
   "data_operation_default": "add",
-  "sort_order": 5,
+  "pool_precondition": "requires_items",  "sort_order": 5,
 
   "depends_on": [],
   "usage_notes": "Requires the Profile API (localhost:3847) with an active LinkedIn session. Default mode reads LinkedIn slugs from entity linkedin/linkedin_url field. Set source to 'profile_scraper' to read from linkedin-profile-scraper output instead (requires running that module first). Rate limited to avoid LinkedIn detection.",

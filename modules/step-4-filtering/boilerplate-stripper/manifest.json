@@ -7,7 +7,7 @@
   "category": "filtering",
   "cost": "cheap",
   "data_operation_default": "transform",
-
+  "pool_precondition": "requires_items",
   "depends_on": ["page-scraper"],
   "usage_notes": "Works best with 3+ pages per entity for cross-page fingerprinting. Single-page entities still benefit from known-pattern stripping. Increase frequency_threshold toward 1.0 for conservative stripping; decrease toward 0.3 for aggressive stripping.",
 

@@ -7,7 +7,7 @@
   "category": "qa",
   "cost": "cheap",
   "data_operation_default": "add",
-
+  "pool_precondition": "requires_items",
   "depends_on": ["content-writer"],
   "usage_notes": "Run after content-writer. Checks markdown structure against configurable thresholds. Pure text analysis -- no API calls.",
 

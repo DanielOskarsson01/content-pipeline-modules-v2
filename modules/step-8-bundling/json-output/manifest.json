@@ -7,7 +7,7 @@
   "category": "data",
   "cost": "cheap",
   "data_operation_default": "add",
-
+  "pool_precondition": "requires_items",
   "depends_on": ["content-analyzer", "seo-planner", "content-writer"],
   "usage_notes": "Use 'strapi' format for CMS import, 'flat' for data analysis. Disable include_markdown if you only need structured data without article text.",
 

@@ -8,7 +8,7 @@
   "sort_order": 3,
   "cost": "medium",
   "data_operation_default": "remove",
-
+  "pool_precondition": "requires_items",
   "depends_on": ["url-dedup", "url-canonicalizer"],
   "usage_notes": "Run after url-dedup and url-canonicalizer. Use exclude_patterns to remove known junk paths (/wp-admin/, /cart/, /login/). check_status_codes sends HEAD requests and retries 403/429/503 with headless browser for bot-protected sites.",
 

@@ -7,7 +7,7 @@
   "category": "website",
   "cost": "cheap",
   "data_operation_default": "add",
-
+  "pool_precondition": "empty_ok",
   "depends_on": [],
   "usage_notes": "Run early in Step 1 to seed the URL pool with common high-value pages. Complements sitemap-parser and page-links -- catches important pages that may not appear in sitemaps or navigation.",
 

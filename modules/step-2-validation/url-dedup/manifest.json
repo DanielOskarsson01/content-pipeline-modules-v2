@@ -8,7 +8,7 @@
   "sort_order": 1,
   "cost": "cheap",
   "data_operation_default": "remove",
-
+  "pool_precondition": "requires_items",
   "depends_on": [],
   "usage_notes": "Run first in Step 2. Removes duplicates before expensive operations. Use 'url' match strategy (default) for same-source dedup. Use 'title_company' for cross-source dedup where the same job appears on multiple boards with different URLs.",
 

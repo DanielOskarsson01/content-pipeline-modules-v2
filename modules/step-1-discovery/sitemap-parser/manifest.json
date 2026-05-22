@@ -7,7 +7,7 @@
   "category": "website",
   "cost": "medium",
   "data_operation_default": "transform",
-  "sort_order": 1,
+  "pool_precondition": "empty_ok",  "sort_order": 1,
 
   "depends_on": [],
   "usage_notes": "Always run first — cheapest and fastest discovery method. Most well-structured sites have XML sitemaps. Returns the most URLs with the least cost. Automatically retries with headless browser for bot-protected sites (403/429/503).",

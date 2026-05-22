@@ -7,7 +7,7 @@
   "category": "formatting",
   "cost": "cheap",
   "data_operation_default": "add",
-
+  "pool_precondition": "requires_items",
   "depends_on": ["content-writer"],
   "usage_notes": "Use strip_markers heading style for clean output. Footnotes citation format is best for readability. Enable frontmatter for CMS import workflows.",
 

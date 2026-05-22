@@ -7,7 +7,7 @@
   "category": "qa",
   "cost": "cheap",
   "data_operation_default": "add",
-
+  "pool_precondition": "requires_items",
   "depends_on": ["content-writer", "seo-planner"],
   "usage_notes": "Run after content-writer and seo-planner. Checks keyword placement, density, and negative keyword absence. Works without seo-planner data (returns pass with warning). Pure text analysis -- no API calls.",
 

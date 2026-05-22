@@ -9,7 +9,7 @@
   "sort_order": 2,
   "item_key": "url",
   "data_operation_default": "transform",
-  "depends_on": [],
+  "pool_precondition": "empty_ok",  "depends_on": [],
   "requires_columns": ["name"],
   "options": [
     {

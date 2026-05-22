@@ -8,7 +8,7 @@
   "sort_order": 2,
   "cost": "cheap",
   "data_operation_default": "transform",
-
+  "pool_precondition": "requires_items",
   "depends_on": ["url-dedup"],
   "usage_notes": "Run after url-dedup and before url-filter. Makes one HEAD request per URL to detect redirects. URLs that redirect are replaced with their final destination. Dead URLs (timeout, DNS failure) are kept unchanged — url-filter handles liveness checks.",
 

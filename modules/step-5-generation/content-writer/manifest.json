@@ -7,7 +7,7 @@
   "category": "generation",
   "cost": "expensive",
   "data_operation_default": "add",
-
+  "pool_precondition": "requires_items",
   "depends_on": ["content-analyzer"],
   "optional_depends_on": ["seo-planner"],
   "usage_notes": "Requires content-analyzer. seo-planner is optional — if absent, writer warns and proceeds without SEO plan section. Use sonnet for production-quality content; haiku produces acceptable drafts. Increase max_source_chars for entities with extensive source material.",
