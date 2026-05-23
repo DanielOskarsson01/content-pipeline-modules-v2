@@ -6,7 +6,7 @@
   "step": 1,
   "category": "news",
   "cost": "cheap",
-  "data_operation_default": "transform",
+  "data_operation_default": "add",
   "pool_precondition": "empty_ok",
   "depends_on": [],
   "usage_notes": "Discovers RSS/Atom feed URLs, not page content. Useful for news-focused entities. Results feed into later steps as URLs.",

@@ -6,7 +6,7 @@
   "step": 1,
   "category": "website",
   "cost": "medium",
-  "data_operation_default": "transform",
+  "data_operation_default": "add",
   "pool_precondition": "empty_ok",
   "sort_order": 1,
 
