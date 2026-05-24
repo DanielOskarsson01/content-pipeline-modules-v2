@@ -17,7 +17,37 @@ This repo contains pluggable submodules for the Content Creation Tool. Each subm
 9. **Run `/code-review` before every commit.** Spawn a review agent to check the diff for regressions, unintended side effects, scope creep, and breaking changes. Do NOT commit until the review passes. If the review finds issues, fix them first.
 10. **Modules doing network I/O or LLM calls MUST push to `tools._partialItems`.** The skeleton saves `_partialItems` on timeout/abort so partial results aren't lost. After each successful page fetch, API call, or batch of LLM results, push the items: `if (tools._partialItems) tools._partialItems.push(...items);`. Without this, a timeout destroys all progress.
 11. **Set `cost` correctly in manifest.json.** Discovery/scraping modules with network I/O: use `"medium"` (5 min) or `"expensive"` (30 min). LLM-heavy modules: use `"expensive"`. Pure data transforms with no I/O: use `"cheap"` (2 min). A too-tight timeout causes avoidable failures.
-12. **`data_operation_default` for Steps 5-10 MUST be `"add"`, never `"transform"`.** Steps 5-10 use `item_key: "entity_name"` — `transform` replaces ALL items for an entity, destroying upstream data from other submodules. Only Steps 1-4 (which use `item_key: "url"`) are safe with `transform`.
+12. **Every manifest MUST declare BOTH `data_operation_default` AND `pool_precondition`. They are orthogonal — one describes what the module produces; the other describes what it requires. No defaults — the manifest loader (`content-pipeline-v2/server/services/moduleLoader.js`) refuses to start the server if either field is missing or invalid.**
+
+    `data_operation_default` — what this module does to the pool:
+
+    | Op | What it does | Example modules |
+    |----|-------------|-----------------|
+    | `add` | Adds net-new items to the pool. Upsert by composite `(itemKey, source_submodule)` — replaces this module's own prior output, preserves other modules' items. | sitemap-parser, page-links, browser-crawler, content-analyzer, content-writer, seo-planner, all Step 8 outputs |
+    | `transform` | Modifies items already in the pool — only updates items whose key (or `original_url`) is already present. **Cannot inject net-new keys** (this is the post-`390e768` strict contract; net-new items belong in `add`). | url-canonicalizer, intent-tagger, boilerplate-stripper |
+    | `remove` | Filters items out of the pool — keeps only items whose key matches an approved item. Merges enriched fields from approved items into the kept items. | url-dedup, url-filter, url-relevance, content-filter |
+
+    `pool_precondition` — what the module requires to be true about the pool before it can execute:
+
+    | Precondition | Meaning | Runtime behavior on violation |
+    |--------------|---------|------------------------------|
+    | `empty_ok` | Module works against an empty or populated pool. Discovery/seed modules that produce from external sources. | Always executes. |
+    | `requires_items` | Module needs items in the pool for this entity. | Per-entity check before BullMQ enqueue. If pool is empty for an entity, that entity gets `entity_submodule_runs.status = 'skipped_no_input'` (NOT `'failed'`). Other entities with non-empty pools proceed normally. Auto-execute's failure threshold excludes skipped rows. |
+
+    The two fields are **orthogonal** but not all combinations are sensible:
+
+    - `add` + `empty_ok` — discovery/seed (Step 1: sitemap-parser, page-links, etc.)
+    - `add` + `requires_items` — enrichment (Step 3 scrapers add scraped content; Step 5 modules add analysis/SEO/draft on top of scraped content)
+    - `transform` + `requires_items` — refinement (Step 2/4 canonicalizers, taggers, strippers)
+    - `remove` + `requires_items` — filtering (Step 2 dedup/filter/relevance, Step 4 content-filter)
+    - `transform` + `empty_ok` — **suspicious.** transform by definition needs items to modify; loader does not block this combination, but the runtime check skips the module on empty pools regardless.
+    - `remove` + `empty_ok` — **suspicious** for the same reason.
+
+    **Legacy guidance (module-specific, not architectural):** Modules where `item_key` is `entity_name` (typically Steps 5-10) MUST use `add`. With `entity_name` as the key, `transform` would replace ALL items for an entity, destroying upstream data from other submodules.
+
+    **When unsure:** `add` + `empty_ok` is the safest "first wave" combination. `add` + `requires_items` is the safest "enrichment" combination. Reach for `transform` or `remove` only when you specifically need their semantics.
+
+    For broader architectural principles (small generic modules, step boundary discipline, ID-based composition), see the **Architectural commitments** section below.
 
 ---
 
