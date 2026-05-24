@@ -513,3 +513,38 @@ Entry types: decision | progress | blocker | idea
 - seo-planner README.md not updated (rule 7 carry-forward from last session)
 
 **Updated by:** session-closer agent
+
+### Session: 2026-05-24 — Empty-pool-fix executed (Tasks 1-11) + forensic finding on external deploy
+
+**Accomplished:**
+- Executed Tasks 1-11 of `docs/superpowers/plans/2026-05-22-empty-pool-bug-fix.md` via subagent-driven development. Final state: 37 active modules (cv-generator + job-analyzer archived), every active manifest declares `pool_precondition` (`empty_ok` for 8 Step 1 discovery modules; `requires_items` for the other 29 modules); skeleton has the pure `applyDataOperation` function with 23 unit tests, runtime precondition check before BullMQ enqueue, `skipped_no_input` status semantics in auto-execute threshold, and fail-closed manifest loader validation.
+- Discovered mid-deploy-prep that **production was already at this session's Task 8 output even though no deploy had been initiated from this session.** Forensic investigation followed (documented below).
+- Tasks 1-11 commits in modules repo: `cabec02` (audit script), `792945d` (archive cv-generator/job-analyzer), `672da18` (architectural principle docs), `2ff0833` + `bc19ff3` (pool_precondition added + formatting fix), `e1c1a11` (Step 1 transform→add), `ddd6858` (rule 12 rewrite), `d39a530` (BACKLOG item 3).
+- Tasks 1-11 commits in skeleton repo: `62ba730` (skipped_no_input status), `4407a77` (extract applyDataOperation), `e2ae80d` (runtime precondition check), `c1087cb` (manifest loader fail-closed), `abeb8ac` (pre-deploy script), `c2c8e2d` (plan docs).
+- Documented architectural reframe: `data_operation` (what the module produces) and `pool_precondition` (what the module requires) are orthogonal. Decoupled from step-position numbers — multi-card routing and future drag-and-drop can compose modules in any sequence; the runtime check uses the manifest's declared precondition regardless of position.
+- Confirmed `_archive/` excluded from manifest loader scan by the regex `^step-\d+-` filter (`moduleLoader.js:101`). Archive folder houses orphaned modules from the old "specialized per content type" approach being phased out.
+
+**Forensic investigation — external deploy without session tracking:**
+
+1. **Discovery:** Mid-Task-12 verification revealed production file mtimes at 2026-05-24 11:47 UTC for skeleton paths (e.g., `applyDataOperation.js`, not present in any commit before today). The deploy was NOT initiated from this session — at 11:47 UTC this session had committed through `c1087cb` (10:14 CEST = 08:14 UTC) but had not run `./deploy.sh`.
+2. **Investigation methods used (reusable for future sessions):**
+   - **SHA fingerprint check** (workaround for missing `.git` on Hetzner — deploy is rsync, not git pull, per the PROJECT_STATUS.md correction earlier today): `shasum` comparison between local HEAD and `/opt/content-pipeline-v2/server/lib/applyDataOperation.js`, `moduleLoader.js`, and a sample `manifest.json` returned **byte-identical hashes**. Confirmed prod ≡ local HEAD at the file level.
+   - **PM2 uptime vs file mtime analysis**: pipeline-api + stage-worker uptime 29.3m (restarted 20:21 UTC); batch-worker uptime 568m (restarted ~11:22 UTC). batch-worker restarted ~25 min BEFORE the 11:47 UTC file deploy, so it was running stale code while the other two workers had picked up the new code 8.5h later.
+   - **Commit author verification**: every commit since 2026-05-21 carries `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`. Tasks 1-11 implementation commits are all from THIS session (verified by subagent-reported SHAs). The Workflow Patterns (`a318d02`/`ec0e5b1`) and Architectural Commitments (`7120c35`/`ee91642`) sections were authored by a separate Claude session earlier (2026-05-22 evening / 2026-05-23 early morning). No code-work overlap between sessions.
+   - **Traffic check during split-brain window**: zero `submodule_runs` rows in the 11:47 UTC → 20:21 UTC interval, zero today total. Pipeline has been idle. No `skipped_no_input` rows in production. No code paths exercised on either old or new behavior.
+3. **Conclusion:** External deploy occurred (almost certainly Daniel running `./deploy.sh` in another terminal, or another Claude session triggering it). Files match local HEAD exactly. No production state corruption from the split-brain because no traffic happened during the split-brain window. batch-worker still on old code at time of investigation but has not been called.
+4. **Process gap surfaced:** **deploys can happen outside execution sessions** when the user runs `deploy.sh` from another terminal or another Claude session triggers it. The execution session may not know production has been updated. Future sessions should **verify production state at start of work, not assume it matches the local repository state.** Specifically:
+   - SHA fingerprint comparison (`shasum`) is the workaround for missing `.git` on Hetzner.
+   - PM2 uptime vs file mtime detects stale-worker situations after a deploy that didn't restart all workers cleanly.
+   - DB query for recent `submodule_runs` confirms whether any traffic exercised the affected paths during ambiguity.
+
+**Decisions:**
+- **Production deploy still proceeds via the planned Task 12 (pre-deploy script + `deploy.sh`)** even though code is mostly already deployed. Reasoning: pre-deploy tags create a clean rollback point on the current state; `deploy.sh` is idempotent on already-matching files (rsync no-op); `pm2 restart` aligns all 3 workers (closes the batch-worker stale-code gap); pushes the 4 newer doc/tooling commits (`ddd6858`, `abeb8ac`, `c2c8e2d`, `d39a530`) that landed after the external deploy at 11:47 UTC.
+- **No corrective action needed for the split-brain.** Zero traffic during the window means no production data is corrupted or inconsistent. PM2 restart resolves the worker state cleanly.
+- **Verify-before-assume becomes the operational discipline.** Future sessions start with: shasum check on critical files, PM2 uptime read, recent traffic query. Three commands, ~30 seconds. Avoids the "assumed state vs actual state" trap that surfaced this session.
+
+**Blockers/Questions:**
+- Task 12 (pre-deploy + deploy.sh) pending — user approved "deploy" path
+- Task 13 (5-entity Phase 3 validation) pending — will be the first real traffic through the new code on production; watch for `skipped_no_input` rows (expected: 0 for healthy entities), batch-worker handling new status correctly, threshold logic excluding skipped rows from the denominator.
+
+**Updated by:** CTO agent (manual session entry — forensic deploy-finding documentation)
