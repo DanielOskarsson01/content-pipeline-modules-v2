@@ -11,6 +11,9 @@ Tasks not yet scheduled for implementation.
 | 1 | Second LinkedIn account support in linkedin-post-scraper and profile-api | — | 2026-05-22 |
 | 2 | Content-analyzer + content-writer flexibility for multi-content-type support | Medium-high (active) | 2026-05-23 |
 | 3 | Loader fail-closed behavior when MODULES_PATH unset (skeleton repo) | Low | 2026-05-24 |
+| 4 | Local client build broken — Rollup darwin-arm64 optional-dep bug (skeleton repo) | Medium | 2026-05-25 |
+| 5 | Docs/tooling commits not deployed to production (skeleton + modules) | Low | 2026-05-25 |
+| 6 | `deploy.sh` hardcodes client build as prerequisite for any deploy (skeleton repo) | Low-medium | 2026-05-25 |
 
 ---
 
@@ -104,3 +107,101 @@ Same fail-closed pattern as the per-manifest validation. Server refuses to start
 ### Not blocking
 
 Production deploy script (`deploy.sh`) sets `MODULES_PATH` correctly. The fail-open behavior only bites in test/dev contexts where someone invokes the loader without the env var. Low actual production risk, but worth a small fix for principled consistency.
+
+---
+
+## Item 4 — Local client build broken (Rollup darwin-arm64 optional-dep bug)
+
+**Added:** 2026-05-25
+**Priority:** Medium (blocks `deploy.sh` standard path)
+**Touches:** `content-pipeline-v2/client/`
+
+### Issue
+
+`./deploy.sh` fails at step 1 (`vite build`) because Rollup cannot find `@rollup/rollup-darwin-arm64`:
+
+```
+Error: Cannot find module @rollup/rollup-darwin-arm64. npm has a bug
+related to optional dependencies. Please try `npm i` again after removing
+both package-lock.json and node_modules directory.
+```
+
+This is a known npm bug ([npm/cli#4828](https://github.com/npm/cli/issues/4828)) where platform-specific optional dependencies don't always get installed correctly. Worked around on 2026-05-25 by deploying server-only via `ssh hetzner 'pm2 restart all'` (production code already at HEAD; no client changes in that PR).
+
+### Fix
+
+```bash
+cd /Users/danieloskarsson/Library/CloudStorage/Dropbox/Projects/OnlyiGaming/content-pipeline-v2/client
+rm -rf node_modules package-lock.json
+npm install
+```
+
+Mechanical but invasive (full reinstall). Verify the build works after:
+
+```bash
+npm run build
+```
+
+### Blocks
+
+Future deploys that include client changes. `deploy.sh` will fail at step 1 until this is fixed. See also Item 6 (deploy.sh hardcodes client build).
+
+---
+
+## Item 5 — Docs/tooling commits not deployed to production
+
+**Added:** 2026-05-25
+**Priority:** Low (no runtime impact)
+**Touches:** `content-pipeline-v2/` + `content-pipeline-modules-v2/`
+
+### State
+
+The following commits exist locally + on origin but are NOT on Hetzner's filesystem at `/opt/content-pipeline-v2/` and `/opt/content-pipeline-modules-v2/`:
+
+| Repo | Commit | Description |
+|------|--------|-------------|
+| skeleton | `abeb8ac` | tooling: pre-deploy script with rollback recipe |
+| skeleton | `c2c8e2d` | docs: commit empty-pool-fix plan + superseded discover plan |
+| modules | `ddd6858` | docs: rule 12 — orthogonal data_operation + pool_precondition |
+| modules | `d39a530` | docs: BACKLOG item 3 — loader fail-closed when MODULES_PATH unset |
+| modules | `7b34b45` | docs: session log — empty-pool-fix executed + external-deploy forensic |
+
+### Why deferred
+
+These are documentation and tooling files. No runtime impact. Path B of Task 12 (just `pm2 restart all`) didn't rsync them. They'll naturally make it to production on the next deploy when client build is fixed (see Item 4).
+
+### Not blocking
+
+Production code is at local HEAD. The docs/tooling absence on prod only matters for:
+- Future operators reading docs from the Hetzner filesystem (unlikely — docs are usually read via git locally)
+- Running `pre-deploy-empty-pool-fix.sh` from prod (also unlikely — it lives in skeleton/scripts/ which is a deploy-time artifact)
+
+---
+
+## Item 6 — `deploy.sh` hardcodes client build as prerequisite for any deploy
+
+**Added:** 2026-05-25
+**Priority:** Low-medium (process improvement)
+**Touches:** `content-pipeline-v2/deploy.sh`
+
+### Issue
+
+`deploy.sh` step 1 unconditionally builds the React client. If the client build fails (e.g., the Rollup bug from Item 4), the entire deploy aborts — even when the change is server-only.
+
+### Proposed fix
+
+Split into two scripts or add a flag:
+
+**Option A — split scripts:**
+- `deploy-server.sh` — rsync server/ + `pm2 restart`. No client touch.
+- `deploy-client.sh` — build + rsync client/dist/. No PM2 restart needed.
+- `deploy.sh` — calls both (current behavior).
+
+**Option B — add flag:**
+- `./deploy.sh --skip-client` to skip step 1 when only server changes need deploying.
+
+Either option lets server hotfixes ship without a working client build. Pairs naturally with Item 4 — until rollup is fixed, server-only deploys still work.
+
+### Not blocking
+
+Workaround documented (Path B from 2026-05-25 deploy: `ssh hetzner 'pm2 restart all'` after a rsync-less code match check). But papering over the deploy.sh limitation by hand is a recurring tax until this is fixed.
