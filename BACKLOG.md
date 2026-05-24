@@ -10,6 +10,7 @@ Tasks not yet scheduled for implementation.
 |---|------|----------|-------|
 | 1 | Second LinkedIn account support in linkedin-post-scraper and profile-api | — | 2026-05-22 |
 | 2 | Content-analyzer + content-writer flexibility for multi-content-type support | Medium-high (active) | 2026-05-23 |
+| 3 | Loader fail-closed behavior when MODULES_PATH unset (skeleton repo) | Low | 2026-05-24 |
 
 ---
 
@@ -60,3 +61,46 @@ Modules that violate this boundary get refactored or replaced.
 - **`cv-generator`** did both Step 5 (writing) AND Step 8 (DOCX bundling) work — violates step boundaries.
 - **`job-analyzer`** is comparison/fit analysis — should become a `content-analyzer` card when the comparison dimension is configurable.
 - Both get **permanently deleted from `modules/_archive/`** when this flexibility work matures.
+
+---
+
+## Item 3 — Loader fail-closed behavior when MODULES_PATH unset (skeleton repo)
+
+**Added:** 2026-05-24
+**Priority:** Low (rarely happens in practice, but principled fix)
+**Touches:** `content-pipeline-v2/server/services/moduleLoader.js`
+
+### Issue
+
+The manifest loader's behavior when the `MODULES_PATH` env var is not set is itself a **fail-open path** — it silently returns OK without loading any modules:
+
+```js
+// server/services/moduleLoader.js lines 86-90
+const modulesPath = process.env.MODULES_PATH;
+if (!modulesPath) {
+  console.warn('[moduleLoader] MODULES_PATH not set — no submodules loaded');
+  return;
+}
+```
+
+This contradicts the fail-closed principle established in Task 8 of the empty-pool bug fix (where every manifest must declare `pool_precondition` or startup fails). It also creates a verification trap: tests that import the loader without setting `MODULES_PATH` will report "OK" without actually validating anything — caught during this PR (2026-05-24) and re-run with the var set to get the real verification.
+
+### Proposed fix
+
+Throw at startup if `MODULES_PATH` is not set when `loadModules()` is invoked. A clear error message guides operators to the missing env var:
+
+```js
+if (!modulesPath) {
+  throw new Error(
+    '[moduleLoader] MODULES_PATH env var is required but not set. ' +
+    'Point it at the parent directory of the modules folder ' +
+    '(e.g. /opt/content-pipeline-modules-v2).'
+  );
+}
+```
+
+Same fail-closed pattern as the per-manifest validation. Server refuses to start without proper module path configuration; operator has to fix the config to bring it up.
+
+### Not blocking
+
+Production deploy script (`deploy.sh`) sets `MODULES_PATH` correctly. The fail-open behavior only bites in test/dev contexts where someone invokes the loader without the env var. Low actual production risk, but worth a small fix for principled consistency.
