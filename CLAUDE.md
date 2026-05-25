@@ -548,3 +548,34 @@ Entry types: decision | progress | blocker | idea
 - Task 13 (5-entity Phase 3 validation) pending — will be the first real traffic through the new code on production; watch for `skipped_no_input` rows (expected: 0 for healthy entities), batch-worker handling new status correctly, threshold logic excluding skipped rows from the denominator.
 
 **Updated by:** CTO agent (manual session entry — forensic deploy-finding documentation)
+
+### Session: 2026-05-25 — Empty-pool fix CLOSED OUT + 3 Phase 3 architectural findings filed
+
+**Status:** Empty-pool fix VALIDATED and complete. Three orthogonal Phase 3 architectural issues surfaced via the smoke test, all filed as BACKLOG items 7-9 for follow-up sessions.
+
+**Empty-pool fix closeout:**
+- ✅ Smoke test on `0e16676a-d368-4155-9f62-fcade4f4e6ef` (Pronet Gaming + Wazdan, "30 april" template) — Pronet Gaming's clean flow through Steps 1-7 validates the fix (480 → 214 → ... items at every step, no skipped_no_input rows, output produced).
+- ✅ Mechanism on correct code path — Gemini Pro/Flash verified that `autoExecutor.js:553,577` calls `executeRouter.post('/run')` for all submodules; the Task 7 precondition check lives in the architecturally correct location.
+- ✅ Production deployed and stable — all 3 PM2 workers restarted on new code (`pm2 restart all` via Path B after `deploy.sh` was blocked by Rollup darwin-arm64 bug, captured as BACKLOG #4).
+- ✅ Pre-deploy rollback tags in place: `pre-empty-pool-fix-2026-05-24` on both repos.
+- ✅ All implementation commits pushed (Tasks 1-12 done; Task 13a smoke test passed for Pronet, surfaced bugs for Wazdan that are unrelated to this PR).
+
+**Smoke test surfaced three pre-existing Phase 3 architectural issues** (all filed as BACKLOG items, separate scope, not introduced by this PR):
+
+1. **BACKLOG #7 (High, blocks Phase 3 validation)** — `routingHandler.js` cascade-deletes entity_submodule_runs + submodule_runs on routing decisions. Contradicts the `loop_iteration` schema column's intent. Also has cross-entity collateral damage, no transaction wrapper around the RPC, and pool restoration fails for `target_step=0`. Caught when Wazdan's 2 QA failures (citation + hallucination) triggered routing to Step 1, deletion fired, RPC failed, Wazdan ended in partial-delete state with `terminal_state='flagged'`.
+
+2. **BACKLOG #8 (Medium)** — Step 8 bundle outputs don't propagate quality signals. `wazdan.md` and `pronet-gaming.md` are format-indistinguishable despite Wazdan being flagged terminal. Each Step 8 module needs to read `entity_run_meta` and add `terminal_state` / `last_qa_scores` / `needs_review` to its output frontmatter/metadata.
+
+3. **BACKLOG #9 (Medium)** — Step 9 distribution gate doesn't exist in the `30 april` template (stage `status='skipped'`). The architectural intent — Step 9 gates flagged content from auto-publication, Step 10 surfaces for human review — is not implemented. Currently mitigated by absence of any auto-distribution, but becomes critical the moment distribution automation comes online.
+
+**Decisions during closeout:**
+- The empty-pool work and the Phase 3 routing bugs are decoupled in scope; mixing them in one PR would conflate validation. Items 7-9 are filed separately for fresh-session work.
+- No further investigation or implementation this session. Pre-deploy tags remain in place. Production is in known-good state for the empty-pool fix and pre-existing-broken state for Phase 3 routing (no regression from this PR's deploy).
+- Forensic process gains documented in this CLAUDE.md (earlier session entry): SHA fingerprint verification when no `.git` on Hetzner, PM2 uptime vs file mtime for stale worker detection, second-model verification (Gemini) for diagnosis disagreement, "verify-before-assume" operational discipline going forward.
+
+**Blockers/Questions:**
+- Next session priority: BACKLOG #7 (cascade-delete fix). Phase 3 multi-card validation is blocked until this is addressed.
+- Subsequent sessions: BACKLOG #8 (quality propagation), BACKLOG #9 (distribution gate). These can run in parallel once #7 is resolved.
+- This session does NOT recommend a remediation design — those should be planned in fresh sessions with the full architectural picture per BACKLOG items.
+
+**Updated by:** CTO agent (manual session entry — closeout summary after smoke-test findings + second-model verification)
