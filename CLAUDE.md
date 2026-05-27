@@ -579,3 +579,40 @@ Entry types: decision | progress | blocker | idea
 - This session does NOT recommend a remediation design — those should be planned in fresh sessions with the full architectural picture per BACKLOG items.
 
 **Updated by:** CTO agent (manual session entry — closeout summary after smoke-test findings + second-model verification)
+
+### Session: 2026-05-26 — PHASE_3B spec located + validated; halted before adoption
+
+**Status:** Spec discovery and validation only. No code changes. No adoption decision (deferred to fresh session). No implementation plan drafted.
+
+**Accomplished:**
+- Started brainstorming a fix for BACKLOG #7 (routing cascade-delete bug). Before brainstorming progressed beyond clarifying questions, user prompted to check for prior architectural decisions.
+- Located [`Content-Pipeline/specs/PHASE_3B_PER_ENTITY_INSTRUCTIONS_SPEC.md`](../Content-Pipeline/specs/PHASE_3B_PER_ENTITY_INSTRUCTIONS_SPEC.md) — 1088 lines, dated 2026-04-30, status "REVIEWED v4 — pending final sign-off."
+- Read the spec end-to-end. Validated against production state and against today's empty-pool-fix changes.
+- Confirmed the spec resolves all four BACKLOG #7 issues with explicit section-by-section mapping (§3.1 card_instructions, §3.5 history preserved permanently, §5.2/5.3 atomic RPCs, no pool restoration in design).
+- Confirmed ZERO of the spec's schema changes, new code files (`executionPlanUtils.js`, `cardInstructions.js`), or new Supabase RPCs exist in production.
+- Identified critical chronology: cascade-delete code in routingHandler.js (commit `f2dd7b9`, 2026-04-22) PREDATES the spec (2026-04-30) by 8 days. The spec was written as the intended replacement; migration was never scheduled despite 4 review rounds.
+- Identified 4 implementation gaps the plan needs to address (snapshot fallback, getConsumedRoundsForRun frequency, template migration path, index migration safety) — documented in modules-repo BACKLOG #7 "Validation 2026-05-26" section.
+- Updated PHASE_3B spec header status: "REVIEWED v4 — validated 2026-05-26, awaiting adoption decision."
+- Added BACKLOG #10: process pattern for pending-spec tracking to prevent indefinite "pending sign-off" state and implementation drift.
+
+**Decisions:**
+- **Do not adopt the spec in this session.** Adoption belongs to a fresh session with current judgment. Validation only; decision deferred.
+- **Do not draft implementation plan.** Plan requires adoption decision first. Current session ends at validation handoff.
+- **Treat the spec as implementer-ready when adopted** — 1088 lines covering concept → data structure → API → schema → callers → constraints → design decisions → 9-step implementation order. No blockers identified during validation read.
+- **Spec discoverability gap is a recurring risk** — captured as BACKLOG #10. The pattern (spec written, reviewed, then sits in "pending" while implementation drifts) is likely to recur across other `PHASE_*_SPEC.md` files in `Content-Pipeline/specs/`.
+
+**Discoverability gap surfaced today:**
+- 1088-line spec sat in `Content-Pipeline/specs/` from 2026-04-30 through 2026-05-26 (~26 days)
+- During that window, the cascade-delete code stayed in production and Phase 3 multi-card UI work continued without referencing the spec
+- The cascade-delete bug surfaced 2026-05-25 during empty-pool-fix smoke testing — required ~50% re-derivation of design decisions the spec already documented
+- Today's brainstorming session was about to redo the same design from scratch before the user prompted to check for prior decisions
+
+**Process finding (captured as BACKLOG #10):**
+Architectural specs in "pending sign-off" state need active tracking to either adoption or rejection. Indefinite pending state creates silent implementation drift — no error, no warning, no broken test, just two parallel realities. Proposed approaches: pre-commit hook warning when modifying code in pending-spec areas; quarterly pending-spec review; spec status surfaced in PROJECT_STATUS.md; status-suffix filename convention.
+
+**Blockers/Questions:**
+- Adoption decision on PHASE_3B v4 — fresh session priority. Likely yes given validation confirms it resolves all four BACKLOG #7 issues, but the decision belongs outside this session.
+- If adopted: implementation plan needs to address 4 gaps (see BACKLOG #7 "Validation 2026-05-26" section).
+- Other `PHASE_*_SPEC.md` files in `Content-Pipeline/specs/` should be reviewed for similar "pending → drift" risk (BACKLOG #10 starting point).
+
+**Updated by:** CTO agent (manual session entry — spec validation, no implementation)

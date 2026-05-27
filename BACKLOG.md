@@ -14,9 +14,10 @@ Tasks not yet scheduled for implementation.
 | 4 | Local client build broken — Rollup darwin-arm64 optional-dep bug (skeleton repo) | Medium | 2026-05-25 |
 | 5 | Docs/tooling commits not deployed to production (skeleton + modules) | Low | 2026-05-25 |
 | 6 | `deploy.sh` hardcodes client build as prerequisite for any deploy (skeleton repo) | Low-medium | 2026-05-25 |
-| 7 | **Phase 3 routing cascade-delete is wrong by design** (skeleton repo) | **High — blocks Phase 3 validation** | 2026-05-25 |
+| 7 | **Phase 3 routing cascade-delete is wrong by design** (skeleton repo) — **spec validated 2026-05-26, awaiting adoption decision** | **High — blocks Phase 3 validation** | 2026-05-25 |
 | 8 | Quality signals don't propagate to Step 8 output (modules repo) | Medium | 2026-05-25 |
 | 9 | Step 9 distribution gate doesn't exist in current template (skeleton + template config) | Medium | 2026-05-25 |
+| 10 | Pending-spec tracking: prevent indefinite "pending sign-off" state and implementation drift | Low-medium (process) | 2026-05-26 |
 
 ---
 
@@ -259,6 +260,51 @@ The `entity_submodule_runs` table has a `loop_iteration` column (production-veri
 
 Phase 3 validation cannot proceed safely until this is fixed. Any multi-entity run where some entities have QA failures will hit this bug.
 
+### Validation 2026-05-26 — PHASE_3B spec located and validated
+
+**Reference:** [`Content-Pipeline/specs/PHASE_3B_PER_ENTITY_INSTRUCTIONS_SPEC.md`](../../Content-Pipeline/specs/PHASE_3B_PER_ENTITY_INSTRUCTIONS_SPEC.md) — 1088 lines, dated 2026-04-30, status updated to "REVIEWED v4 — validated 2026-05-26, awaiting adoption decision."
+
+**The spec resolves all four issues listed above** (one-to-one mapping verified):
+- **Cascade-delete itself** → §3.1 `entity_run_meta.card_instructions JSONB` append-only array; §3.5 explicit "Never clear. History preserved permanently for analytics."
+- **Cross-entity collateral damage** → eliminated by design (instructions live per-entity on `entity_run_meta`)
+- **No transaction wrapper** → §5.2 / §5.3 atomic RPCs using `SELECT ... FOR UPDATE` row-level locking + JSONB concatenation
+- **`target_step=0` pool restoration fails** → eliminated; new model has no pool restoration (entities flow through pipeline from earliest target step, submodules check pending instructions and branch — pool accumulates naturally per V5 §225-229)
+
+**Implementation history:** The cascade-delete code in `routingHandler.js` was written on **2026-04-22** (commits `f2dd7b9`, `e2f8682`, `a23c1ae`, then `21ab357` and `c4e9819` later). The spec was written **2026-04-30** — 8 days AFTER the broken implementation. **The spec is the intended replacement** for the Phase 2 cascade-delete approach, but the migration work was never scheduled despite 4 review rounds.
+
+**Current production state vs spec:** ZERO of the spec's schema changes exist:
+- `entity_run_meta.card_instructions JSONB` — not in prod
+- `submodule_runs.card_id TEXT` + new partial unique index — not in prod
+- `entity_submodule_runs.card_id TEXT` + rebuilt unique index — not in prod
+- `run_submodule_config.card_id TEXT` — not in prod
+- `pipeline_runs.execution_plan_snapshot JSONB` — not in prod
+- 3 new RPCs (`append_card_instruction`, `mark_card_instruction_consumed`, `mark_card_instruction_skipped`) — not on production Supabase
+- 5 QA manifest `qa_outputs` updates — not deployed
+
+ZERO of the spec's new code files exist: `server/services/executionPlanUtils.js` and `server/services/cardInstructions.js` — neither file present.
+
+### Four implementation gaps to address during planning (not spec rework)
+
+1. **Snapshot fallback for legacy runs** — §6.5 says `pipeline_runs.execution_plan_snapshot` is populated when auto-execute starts. NULL is possible for runs that existed before this column was added. Plan needs explicit fallback strategy (e.g., fall back to live template, log deprecation).
+2. **`getConsumedRoundsForRun` call frequency** — §5.5 documents as batched (1 query per run). Implementation should call ONCE per routing event and cache the result for the duration of that event; not once per entity. Plan should make this explicit.
+3. **Migration path for templates with old `cards` format** — the `30 april` template already has `cards: {pse-v2, writer-v2, ...}` (string keys, not UUID). Spec expects `card_definitions: {<UUID>: {...}}`. Plan needs migration approach: ad-hoc script, auto-convert on first load, or manual migration required before spec rollout.
+4. **Index migration safety** — index rebuilds on `submodule_runs` and `entity_submodule_runs` require DROP then CREATE. Concurrent writes during the window could create duplicates. Plan should use `CREATE INDEX CONCURRENTLY` where possible OR a brief maintenance window with `pm2 stop pipeline-api`.
+
+### Adoption status
+
+- ✅ Spec located and read end-to-end (1088 lines)
+- ✅ Spec validated against current production state
+- ✅ Spec confirmed to resolve all four BACKLOG #7 issues
+- ✅ Implementation gaps identified for plan to address
+- ⏸ **Adoption decision deferred to fresh session** — current session is closing out, decision requires fresh judgment
+- ⏸ Implementation plan not drafted (waits on adoption decision)
+
+### Compatibility check
+
+- ✅ Empty-pool fix (shipped 2026-05-25): orthogonal, no conflicts. Spec's `pool_precondition` does not interact with `card_instructions`.
+- ❌ BACKLOG #8 (Step 8 quality propagation): not addressed by spec, separate concern
+- ❌ BACKLOG #9 (Step 9 distribution gate): not addressed by spec, separate concern
+
 ---
 
 ## Item 8 — Quality signals don't propagate to Step 8 output
@@ -344,3 +390,40 @@ Becomes high-severity the moment any auto-distribution is wired up without this 
 ### Couples to Item 8
 
 Step 9 needs the quality signals from `entity_run_meta` (which it can read directly) OR from Step 8 output metadata (which requires Item 8). Decision: gate from `entity_run_meta` directly for Phase 1 of Item 9 (no Item 8 dependency); Item 8 still useful for human inspection of artifacts on disk.
+
+---
+
+## Item 10 — Pending-spec tracking: prevent indefinite "pending sign-off" state and implementation drift
+
+**Added:** 2026-05-26
+**Priority:** Low-medium (process improvement)
+**Touches:** Process / tooling (CLAUDE.md rules, possibly a pre-commit hook or quarterly review cadence)
+
+### Issue
+
+PHASE_3B_PER_ENTITY_INSTRUCTIONS_SPEC.md sat in "REVIEWED v4 — pending final sign-off" state from 2026-04-30 until 2026-05-26 (~26 days). During that window:
+
+- The cascade-delete code in `routingHandler.js` (written 2026-04-22, 8 days before the spec) remained in production unchanged
+- The spec — written specifically as the intended replacement — was never adopted or implemented
+- The implementation drifted further from the spec (Phase 3 multi-card UI work, escalation gates, template config) without referencing the spec as the source of truth
+- The cascade-delete bug surfaced during 2026-05-25 empty-pool-fix smoke testing, requiring investigation that re-derived ~50% of what the spec already said
+
+**Discovery gap:** The spec was a 1088-line file in `Content-Pipeline/specs/` that no active work referenced. Brainstorming session today started designing a replacement architecture from scratch before the user prompted "check for prior decisions" — at which point the spec was located in ~30 seconds.
+
+### Risk pattern
+
+Architectural specs in "pending sign-off" state can persist indefinitely while implementations drift. The drift is silent — no error, no warning, no broken test. Just two parallel realities: the spec describing the right architecture, and the code doing something else.
+
+### Proposed approaches
+
+1. **Pre-commit hook**: when modifying code in areas with a known pending spec, warn (not block) and require the operator to either reference the spec in the commit message or explicitly mark "diverges-from-spec: [reason]". Implementation: small shell hook that grep's a `SPEC_OWNERSHIP.md` mapping file.
+
+2. **Quarterly pending-spec review**: standing recurring task to enumerate all specs in `Content-Pipeline/specs/` with `Status:` containing "pending" or "draft", review each for adoption/rejection/update. Calendar-based, not code-based.
+
+3. **Spec status badge in PROJECT_STATUS.md**: surface pending specs at the project status level (currently they live in a folder no one reads). Make them part of the "active state" snapshot.
+
+4. **Naming convention**: rename `PHASE_*_SPEC.md` files to include status suffix (`_DRAFT`, `_PENDING_ADOPTION`, `_ADOPTED`, `_SUPERSEDED`). Filesystem listing immediately surfaces status.
+
+### Not blocking
+
+This is a process improvement, not a code bug. Lowest priority of items 7-10. Worth keeping on the list because the underlying pattern (pending specs creating drift) is likely to recur — multiple `PHASE_*_SPEC.md` files exist in the specs folder; some may also be pending. Worth one focused review pass to enumerate the inventory.
