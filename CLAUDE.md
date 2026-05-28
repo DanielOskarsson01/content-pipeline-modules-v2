@@ -51,6 +51,14 @@ This repo contains pluggable submodules for the Content Creation Tool. Each subm
 
 ---
 
+## See also — process discipline (skeleton repo CLAUDE.md)
+
+Planning, plan review, validation, and progress-reporting discipline live in the skeleton repo: `content-pipeline-v2/CLAUDE.md` → **"🛡 Process discipline — failure modes we've hit"** (patterns A–F). That section governs how architectural work is planned and reviewed across both repos; the module-authoring **Rules 1–12** above govern what an individual submodule must look like. Both apply when a planning task touches a submodule.
+
+If you're about to start a bug fix, architectural change, or any plan that affects pool/routing/schema/multi-step coordination, **read patterns A–F before drafting.** They are not optional reading — each one is in there because it has already failed in this codebase.
+
+---
+
 ## Workflow patterns
 
 ### 1. Subagent-driven vs inline execution
