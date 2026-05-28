@@ -53,9 +53,11 @@ This repo contains pluggable submodules for the Content Creation Tool. Each subm
 
 ## See also — process discipline (skeleton repo CLAUDE.md)
 
-Planning, plan review, validation, and progress-reporting discipline live in the skeleton repo: `content-pipeline-v2/CLAUDE.md` → **"🛡 Process discipline — failure modes we've hit"** (patterns A–F). That section governs how architectural work is planned and reviewed across both repos; the module-authoring **Rules 1–12** above govern what an individual submodule must look like. Both apply when a planning task touches a submodule.
+Planning, plan review, validation, and progress-reporting discipline live in the skeleton repo: `content-pipeline-v2/CLAUDE.md` → **"🛡 Process discipline — failure modes we've hit"** (patterns A–H). That section governs how architectural work is planned and reviewed across both repos; the module-authoring **Rules 1–12** above govern what an individual submodule must look like. Both apply when a planning task touches a submodule.
 
-If you're about to start a bug fix, architectural change, or any plan that affects pool/routing/schema/multi-step coordination, **read patterns A–F before drafting.** They are not optional reading — each one is in there because it has already failed in this codebase.
+If you're about to start a bug fix, architectural change, or any plan that affects pool/routing/schema/multi-step coordination, **read patterns A–H before drafting.** They are not optional reading — each one is in there because it has already failed in this codebase.
+
+**Patterns G and H (added 2026-05-29) cover planning-session drift specifically.** A–F catch failures inside individual tasks; G (reviewer engagement at scope moments) and H (current-state verification before citing plan files) catch strategic-level drift — pivots based on stale uploads, scope changes without reviewer engagement, multi-hour sessions that quietly drift from the original direction. If you're about to make a strategic pivot, change scope, or cite a planning document, G and H apply BEFORE you act.
 
 ---
 
