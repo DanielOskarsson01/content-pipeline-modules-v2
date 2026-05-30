@@ -18,6 +18,7 @@ Tasks not yet scheduled for implementation.
 | 8 | Quality signals don't propagate to Step 8 output (modules repo) | Medium | 2026-05-25 |
 | 9 | Step 9 distribution gate doesn't exist in current template (skeleton + template config) | Medium | 2026-05-25 |
 | 10 | Pending-spec tracking: prevent indefinite "pending sign-off" state and implementation drift | Low-medium (process) | 2026-05-26 |
+| 11 | Template card definitions cleanup — aspirational vs functional v2 cards in 30-april template | Medium (Sub-plan 1 day-1 task) | 2026-05-29 |
 
 ---
 
@@ -427,3 +428,47 @@ Architectural specs in "pending sign-off" state can persist indefinitely while i
 ### Not blocking
 
 This is a process improvement, not a code bug. Lowest priority of items 7-10. Worth keeping on the list because the underlying pattern (pending specs creating drift) is likely to recur — multiple `PHASE_*_SPEC.md` files exist in the specs folder; some may also be pending. Worth one focused review pass to enumerate the inventory.
+
+---
+
+## Item 11 — Template card definitions cleanup: aspirational vs functional v2 cards
+
+**Added 2026-05-29** during Sub-plan 1 pre-flight (V5 Phase 3 architecture plan v5 / file `~/.claude/plans/noble-wandering-graham.md`).
+
+### Discovery
+
+30-april template (`templates.id = 3442873e-921d-4c97-9f0f-39395c676b35`) has 4 card definitions in `execution_plan.cards` JSONB:
+- `pse-v2` (Step 1, submodule_id=browser-crawler, options: depth=3, max_pages=30, follow_external=true)
+- `writer-v2` (Step 5, submodule_id=content-writer, options: temperature=0.2, require_citations=true, system_prompt_suffix with citation enforcement)
+- `seo-writer-v2` (Step 5, submodule_id=tone-seo-editor, options: temperature=0.3, keyword_emphasis=aggressive)
+- `scraper-deluxe-v2` (Step 3, submodule_id=browser-scraper, options: use_unlocker=true, timeout=30000)
+
+Plus 5 `routing_rules` referencing these card names.
+
+Plus `escalation_rules` for steps 2 and 4 (different shape than V5 Phase 3 plan v5 specifies).
+
+### The problem
+
+**Card definitions can be added to template JSONB without the Multi-Card Pattern mechanism existing.** These cards are aspirational planning notes from prior planning conversations — they describe what the cards SHOULD eventually do, not what they currently do. The Multi-Card Pattern code that would actually CONSUME these definitions does not exist.
+
+The current legacy cascade-delete code (`routingHandler.js:42-81`) reads `executionPlan?.cards` and routes against the string-keyed names, but the routing produces broken behavior (cascade-delete bug + pool restoration bug + cross-entity collateral damage per BACKLOG #7). It's not "cards work" — it's "buggy legacy code reads config and routes incorrectly."
+
+This creates a discoverability hazard during Sub-plan 1 implementation: someone reading the template might assume these cards are functional Phase 3 work that's "already done," and miss that Sub-plan 1 is BUILDING the mechanism that makes them functional.
+
+### Cleanup task (Sub-plan 1 day-1)
+
+When Sub-plan 1 starts, the implementer must:
+1. **Inventory all card definitions in 30-april template.** Document each card's current state: aspirational placeholder vs starting reference for Phase 3 design.
+2. **Decide retention per card:**
+   - Keep as starting reference for sub-plan 4 design work (e.g., writer-v2's citation prompt is a useful starting point).
+   - Delete if too speculative or contradicts plan v5 scope (e.g., scraper-deluxe-v2 references deferred-to-Phase-4+ work; keep as note but mark `_status: "deferred_phase4"` to prevent activation).
+3. **Distinguish from FUNCTIONAL cards once Sub-plan 1 ships.** After Multi-Card Pattern code lands, post-Sub-plan-1 cards exist in `card_definitions` (UUID-keyed) and ARE consumed by code. Pre-Sub-plan-1 `cards` (string-keyed) are migrated to `card_definitions` only if validated as part of sub-plan 4 design work.
+4. **Add `_status` or `_source` annotation to each card definition** during cleanup so future readers immediately see whether a card is functional vs planning-note. Example: `"_status": "planning_note_2026-05-29"` or `"_status": "validated_sub-plan-4"`.
+
+### Why backlog (not blocker)
+
+Sub-plan 1 will encounter these as deliverable (d) discrepancies and surface them naturally. The cleanup task itself is small (~1-2 hours at sub-plan 1 day 1) but matters for prevention of future false-discovery cycles. Same pattern likely applies to other templates that may have similar planning-note artifacts.
+
+### Process implication
+
+Captures a specific Pattern H failure mode: pre-flight may verify CONFIG exists (`template.execution_plan.cards != null`) without verifying CAPABILITY (does the code that consumes this config produce correct behavior?). See Pattern H extension proposal in skeleton CLAUDE.md (separate session) — for "card exists" / "submodule exists" claims, verify all 3: (1) code exists, (2) code does what name implies, (3) production runs exercised it end-to-end. Without all 3, claim is "config/code exists," not "feature is built."
