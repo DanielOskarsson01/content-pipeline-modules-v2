@@ -145,10 +145,13 @@ function buildSuggestionsDoc(config) {
       children.push(rule());
       for (let i = 0; i < data.items.length; i++) {
         const item = data.items[i];
-        children.push(subheading(`${i + 1}. [${item.type}]${item.job ? ` (${item.job})` : ''}`));
-        if (item.current) children.push(label('CURRENT', item.current));
-        children.push(label('SUGGESTED', item.suggested));
-        children.push(label('ADDRESSES', item.addresses));
+        const ctxLabel = item.section || item.job;
+        children.push(subheading(`${i + 1}. [${item.type}]${ctxLabel ? ` (${ctxLabel})` : ''}`));
+        const currentText = item.current_text || item.current;
+        const suggestedText = item.suggested_text || item.suggested;
+        if (currentText) children.push(label('CURRENT', currentText));
+        if (suggestedText) children.push(label('SUGGESTED', suggestedText));
+        if (item.addresses) children.push(label('ADDRESSES', item.addresses));
       }
     }
   }
