@@ -675,3 +675,80 @@ Without this, A/B/C end up "correct but uncommittable as standalone units" and s
 ### Scope of fix
 
 Process-level update to `superpowers:writing-plans` skill or equivalent. Not blocking sub-plan 1 (Section A foundation-on-branch is acceptable per Daniel decision 2026-06-03). Worth applying to future sub-plans' execution plans before drafting.
+
+---
+
+## Item 17 — schema.sql bootstrap not in Supabase migrations history blocks branch dry-runs
+
+**Filed:** 2026-06-03
+**Source:** sub-plan 1 multi-card pattern migration DDL dry-run, content-pipeline-v2 repo
+**Priority:** Medium — recurring tax on every future migration that wants branch-level validation
+
+### Discovery
+
+When creating a Supabase development branch for DDL dry-run of `sql/migration_multi_card_pattern.sql`, the branch ended in `MIGRATIONS_FAILED` status with an empty schema. Investigation via `get_logs` revealed the cause: the very first tracked migration (`entity_routing_phase1`) tries `CREATE TABLE entity_run_meta ... REFERENCES pipeline_runs(id)`, but `pipeline_runs` doesn't exist on the fresh branch.
+
+**Root cause:** Production was bootstrapped by applying `sql/schema.sql` directly (raw `psql` or equivalent), NOT through `apply_migration`. Supabase's `supabase_migrations.schema_migrations` table only tracks the 15 migrations applied since (via `apply_migration`). When a branch is created, Supabase replays only the tracked migrations to provision the branch DB — so the foundational tables defined in `schema.sql` are absent, and every subsequent migration that FK-references them fails.
+
+### Effect on dry-run discipline
+
+Every future migration that wants branch-level DDL validation will hit this same wall. The workaround used for sub-plan 1 was a manual minimal-bootstrap migration applied to the branch first (6 tables from real `schema.sql` definitions + the apply_entity_routing 3-arg stub) before applying the real migration. That worked but is yak-shaving the engineer should not have to redo each time.
+
+### Proposed fix (long-term)
+
+Retroactively register `schema.sql` as a tracked migration via `apply_migration` with a backfilled version timestamp predating the existing tracked ones. Steps:
+
+1. Pick a version number that sorts BEFORE the earliest tracked migration (currently `20260421202908_entity_routing_phase1`). Use `20260101000000_initial_schema` or similar.
+2. Call `apply_migration` with that name + the `schema.sql` content wrapped in `CREATE ... IF NOT EXISTS` (safe — prod state already matches). The `supabase_migrations.schema_migrations` table records the registration without re-applying anything destructive.
+3. Verify by creating a throwaway branch — the replay should now succeed past `entity_routing_phase1` because `pipeline_runs` exists.
+4. After verification, document in CLAUDE.md that branch dry-runs are now first-class supported.
+
+### Workaround (short-term)
+
+Continue the manual-bootstrap dance for each new migration that wants a branch dry-run. Each bootstrap touches only the tables that migration modifies, so the overhead scales with migration scope, not total schema size.
+
+### Why not blocking
+
+Sub-plan 1's DDL dry-run worked with the manual bootstrap. The cost was ~5 minutes of extra setup. But every future migration pays the same tax until this is fixed retroactively. Worth doing once and never again.
+
+---
+
+## Item 18 — Section C: routingHandler.js rewrite (load-bearing for any Step 7 advancement)
+
+**Filed:** 2026-06-03
+**Source:** sub-plan 1 multi-card pattern migration, content-pipeline-v2 repo
+**Priority:** **HIGH** — production tripwire fires (loud error) if any run reaches Step 7 until this is done
+
+### Discovery
+
+After applying `sql/migration_multi_card_pattern.sql` to prod (2026-06-03), the deployed `server/services/routingHandler.js:343` still calls `db.rpc('apply_entity_routing', ...)`. The migration dropped that RPC. Without mitigation, any run advancing through Step 7 (loop-router) and producing routing decisions would crash with cryptic "function does not exist".
+
+Mitigation applied 2026-06-03: `sql/restore_apply_entity_routing_stub.sql` installs a RAISE EXCEPTION stub at the same signature. The stub binds correctly (PostgREST resolves 3-arg call) and raises P0001 with a clear retirement message naming the replacement RPCs (`append_card_instruction` + `mark_card_instruction_*`) and pointing at Section C.
+
+### Scope of fix (Section C)
+
+Rewrite `server/services/routingHandler.js` to:
+
+1. Replace the `apply_entity_routing` RPC call (line 343) with calls to `append_card_instruction` per the per-entity routing decision (see PHASE_3B_SPEC §5.2).
+2. Remove the cascade-delete loop (the BACKLOG #7 bug) — the new design preserves history permanently per spec §3.5.
+3. Use `mark_card_instruction_consumed` when a routed retry completes (spec §5.3) and `mark_card_instruction_skipped` for rounds_exhausted / card_deleted / qa_passed_on_recheck / pool_precondition_not_met / max_loops_backstop (spec §5.4).
+4. Wire `execution_plan_snapshot` reads so routing decisions are made against the frozen plan, not the live template (spec §3.5 + new column from migration §5).
+
+This is the **load-bearing** routing rewrite. It needs its own dry-run + review discipline (matching sub-plan 1 migration). Closes BACKLOG #7 cascade-delete bug as a side effect.
+
+### Operational constraint until Section C deploys
+
+The tripwire stub enforces it loudly, but please respect operationally:
+
+- **DO NOT resume the 2 paused runs that would advance toward Step 7** — `5075e460-f588-...` and `0f5edae6-c291-...`, both currently at step 5
+- **DO NOT start new runs that will reach Step 7**
+- Letting a run hit Step 7 just to see the stub fire is wasted work plus a halted run to clean up
+
+### Dependencies
+
+- Section B (route handler `/run` card-awareness, currently in todos for future session) must land first or concurrently — Section C reads pending instructions that Section B's route handler is responsible for writing card_id stamps for during execution.
+- Once both Section B + Section C ship and deploy, full Multi-Card Pattern is functional end-to-end and the tripwire stub can be removed (no caller left).
+
+### Why not blocking sub-plan 1 conclusion
+
+The tripwire makes the broken state self-enforcing — any accidental Step 7 advancement halts with a clear actionable error. The 4 currently-active runs are dead in practice (0 loop-router output, 5-28 days idle, 2 paused / 2 abandoned). Zero exposure as long as the operational constraint is respected.
