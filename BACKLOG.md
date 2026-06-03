@@ -19,6 +19,11 @@ Tasks not yet scheduled for implementation.
 | 9 | Step 9 distribution gate doesn't exist in current template (skeleton + template config) | Medium | 2026-05-25 |
 | 10 | Pending-spec tracking: prevent indefinite "pending sign-off" state and implementation drift | Low-medium (process) | 2026-05-26 |
 | 11 | Template card definitions cleanup — aspirational vs functional v2 cards in 30-april template | Medium (Sub-plan 1 day-1 task) | 2026-05-29 |
+| 12 | Pre-flight overshoot process rule — pre-flight produces shape; surface decision before inlining implementation-ready spec sections | Low-medium (process) | 2026-06-01 |
+| 13 | UUID_REGEX false-positive risk on submodule_ids (executionPlanUtils) — defensive manifest-loader rejection of UUID-format submodule_ids | Low (negligible in practice; defensive only) | 2026-06-02 |
+| 14 | Sub-plan 1 ship-gate is single-run happy-path + Wazdan-shape — post-ship stress validation (concurrency, malformed data, network errors) needed for true Pattern H criterion 3 | Medium (post-ship validation, not sub-plan 1 blocker) | 2026-06-02 |
+| 15 | Add `DUPLICATE_INSTRUCTION` to `SKIP_REASONS` vocabulary (skeleton repo) — replace placeholder `QA_PASSED_ON_RECHECK` reuse in `cardGroups.expandCardGroups` duplicate-handling path | Low (defensive; well-formed state never hits it post Brutal-critic Fix #1) | 2026-06-02 |
+| 16 | Pre-flight cross-section dependency mapping — Section A pre-flight didn't capture route handler + migration as in-scope prerequisites for autoExecutor to function (caught by independent code-review 2026-06-03; same shape as item 12 pre-flight overshoot) | Low-medium (process) | 2026-06-03 |
 
 ---
 
@@ -472,3 +477,201 @@ Sub-plan 1 will encounter these as deliverable (d) discrepancies and surface the
 ### Process implication
 
 Captures a specific Pattern H failure mode: pre-flight may verify CONFIG exists (`template.execution_plan.cards != null`) without verifying CAPABILITY (does the code that consumes this config produce correct behavior?). See Pattern H extension proposal in skeleton CLAUDE.md (separate session) — for "card exists" / "submodule exists" claims, verify all 3: (1) code exists, (2) code does what name implies, (3) production runs exercised it end-to-end. Without all 3, claim is "config/code exists," not "feature is built."
+
+---
+
+## Item 12 — Pre-flight overshoot: pre-flight produced implementation, not skeletons
+
+**Added 2026-06-01** during V5 Phase 3 Sub-plan 1 pre-flight (architecture plan v5 + pre-flight at `~/.claude/plans/sub-plan-1-preflight.md` + skeleton files at `~/.claude/plans/sub-plan-1-skeletons/`).
+
+### What happened
+
+Pre-flight per plan v5 was scoped to produce SHAPE (signatures, structure, JSDoc, RPC wrappers with logic outlined but not finalized). Deliverables (b) SQL migration + (c) JS files were intended to be skeleton-level.
+
+Pre-flight instead produced near-complete implementations:
+- `migration_multi_card_pattern.sql` (~280 lines): full PL/pgSQL RPC bodies with SELECT FOR UPDATE locking, nested JSONB iteration, jsonb_set calls. Production-ready SQL.
+- `cardInstructions.js` (~270 lines): all 6 functions with full bodies including DB queries, RPC calls, iteration logic, error throws, SKIP_REASONS validation.
+- `executionPlanUtils.js` (~125 lines): all 3 functions with full bodies including UUID corruption detection.
+- `autoExecutor-additions.js` (~200 lines): mixed — some functions full-body, processStep block remained pseudocode.
+
+Total: ~875 lines of mostly production-quality code drafted during what should have been shape-level pre-flight.
+
+### Cause (Pattern A.2)
+
+PHASE_3B spec §5.2-§5.4 provides concrete PL/pgSQL RPC bodies + concrete JS function bodies (markConsumed, markSkipped, getPendingInstructions, writeInstructions, append_card_instruction, mark_card_instruction_consumed). Implementer treated these as implementation-ready and copied/adapted them directly rather than writing stubs that would later be filled in from the same source.
+
+Pattern A.2 ("read affected code in full before planning") inverted: reading implementation-ready spec sections as license to implement, rather than as license to STUB from spec when implementation time arrives.
+
+### Why tolerable this one time
+
+Path B accepted (2026-06-01): not rolling back. Reasoning:
+1. Code mirrors validated PHASE_3B spec (REVIEWED v4) — copying validated spec is not creating new design risk
+2. Untested — no DB touched, no JS executed, no production exposure
+3. Cheap to change before tests run
+4. Rolling back to stubs + re-deriving from same spec is process theater, not value
+
+### Going-forward rule (process)
+
+Pre-flight produces SHAPE. Implementation happens AFTER execution-plan review (CTO + brutal-critic minimum; Gemini for code paths per plan v5 cadence).
+
+EXCEPTION CASE: if a spec section is implementation-ready (concrete code in spec, copy-paste-and-deploy quality) AND copying it is genuinely more efficient than stubbing, the implementer must SURFACE THE DECISION explicitly: "Spec §X is ready to inline. Draft it now (skipping the stub step + skipping the review-then-implement sequence) or stub it?"
+
+The decision belongs to Daniel + reviewer cadence, not the implementer's default. Without explicit surfacing, default is STUB.
+
+### Compounding risk
+
+If the code review on the drafted implementation finds a deep problem (architectural mismatch, subtle bug in RPC body edge cases, JS error handling cascade incorrect), that's the cost of the overshoot — reviews now happen retrospectively on coded work, with less leverage to prevent wasted effort. Tolerable risk in this instance per the 4 reasons above, but the risk is real.
+
+### Detection
+
+How would this have been caught earlier:
+- Daniel asked the A-or-B question at session end (2026-06-01) — that's the catch mechanism that worked.
+- Pre-flight document itself described (b)/(c) as "production-ready" + "full bodies" — language drift from "skeleton" should have been a flag.
+- Pattern H criterion 3 self-check ("production runs exercised end-to-end") at the moment of writing each file would have surfaced the gap ("I'm writing implementation, not just shape").
+
+### Resolution path
+
+- BACKLOG #12 (this entry) — codify the going-forward rule
+- Execution plan for sub-plan 1 frames drafted code as DRAFTED-UNTESTED per Pattern H criterion 3
+- 3-reviewer code review (CTO + brutal-critic + Gemini) happens on the drafted code BEFORE any test runs or deploy
+- If review finds problems, fixes go to the drafted code; not framed as "rework" but as "first code review"
+
+### Pattern B.5 model-independence: confirmed real value (2026-06-02)
+
+The 3-reviewer cycle (CTO Round 1 + Brutal-critic Round 2 + Gemini Round 3) was justified per Pattern B.5 ("model-independent verification"). Concrete validation: Gemini Round 3 independently arrived at the "move dedup into RPC" conclusion that Brutal-critic Round 2 Fix #1 had already made. Two reviewers with different framings + different model providers reached the same conclusion on the TOCTOU race — that's not redundant, that's strong confirmation the fix was correct. Without Gemini, Fix #1 would have been "one reviewer asserted; we trusted." With Gemini, it's "two independent reviewers from different model families converged."
+
+Gemini also found 1 NEW real bug (backup transaction-split safety) + 1 upgrade-recommendation (terminal-state-on-failure mandatory) + 1 rejected-with-rationale (ULID per instruction — over-engineering vs spec §5.3 FIFO).
+
+**Net Pattern B.5 value:** 1 new bug + 1 upgrade + 1 strong confirmation + 1 rejected with documented rationale. Not theater. Worth the round. Recommend continuing the cadence for code with similar fresh-bug risk profiles (new logic added in response to prior reviewer rounds).
+
+### Risk B rejection rationale (Gemini Round 3 2026-06-02)
+
+Gemini Round 3 recommended assigning ULID/timestamp+random hash to each card instruction object to enable stable targeting (vs spec §5.3 FIFO-by-array-position). **REJECTED** with the following rationale:
+
+- Spec §5.3 explicitly mandates FIFO. The drafted code follows spec.
+- FIFO-by-position safety rests on ALL `card_instructions` mutation going through the 3 RPCs under row lock (read-and-mutate atomic within single transaction; no app-memory index drift). Inspected the drafted code paths — only `append_card_instruction`, `mark_card_instruction_consumed`, `mark_card_instruction_skipped` mutate the array, all use SELECT FOR UPDATE or atomic UPDATE-with-WHERE.
+- No real use case demands ULID-based targeting that FIFO doesn't already serve.
+- ULID introduction would be a spec deviation with no demonstrated benefit.
+
+**Shared-invariant note for future maintainers:** FIFO-by-position safety AND the markSkipped FIFO decision (Brutal-critic Round 2 Fix #3) share the same dependency: "ALL card_instructions mutation goes through the 3 RPCs under row lock." If any future code path mutates the array in app memory (read JSONB, modify in JS, write back), revisit BOTH this rejection (which may need ULID-style targeting) AND the markSkipped FIFO alignment (which may need explicit loop_iteration filter to disambiguate). Two decisions, one invariant. Surface the dependency rather than hide it in two separate places. — UUID_REGEX false-positive risk on submodule_ids
+
+**Added 2026-06-02** during V5 Phase 3 Sub-plan 1 Brutal-critic Round 2 review.
+
+### Discovery
+
+`executionPlanUtils.js:28` defines `UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i` to detect corruption (entry that LOOKS like a card_id UUID but is missing from card_definitions). Pattern requires lowercase hex with dashes at fixed positions.
+
+Real submodule_ids in current modules repo are kebab-case ASCII (`sitemap-parser`, `qa-structural`, `keyword-sufficiency-checker`). None match the regex.
+
+### Risk
+
+A developer could in principle name a future submodule with a string matching UUID format (e.g., `abcdef12-3456-7890-cdef-123456789012`). The regex would treat such a submodule_id as a corrupt card reference, logging a warning and returning `submodule_id: null`. The submodule would fail to trigger.
+
+### Why low priority
+
+- Negligible likelihood: kebab-case is the established convention; no one accidentally names a submodule a hex UUID.
+- Operator-error path only: requires a developer to choose UUID-shaped name AND have it accepted by manifest validation.
+- Detection path: corruption-detection branch logs clearly; misdiagnosis is unlikely.
+
+### Optional defense
+
+Manifest-loader rejection of UUID-format submodule_ids at module registration time. ~5 lines of code in `moduleLoader.js`. Adds belt-and-suspenders if anyone in the future doesn't know about the constraint. Not blocking sub-plan 1.
+
+---
+
+## Item 14 — Sub-plan 1 ship-gate is single-run; post-ship stress validation needed
+
+**Added 2026-06-02** during V5 Phase 3 Sub-plan 1 Brutal-critic Round 2 review.
+
+### Discovery
+
+Sub-plan 1 ship-gate test (per execution plan section iv): single 5-entity 30-april template run on production with one Wazdan-shape entity. Verifies happy path + one routing failure mode.
+
+Pattern H criterion 3 ("production runs exercised it end-to-end") implies robustness to production STRESS conditions, not just a single test pass:
+- Concurrent runs: two pipelines routing the same template simultaneously
+- Intermittent network errors: Supabase request failures mid-routing
+- Malformed data: card_definitions corrupted by template editor mid-run
+- High entity count: 100+ entities, batch performance
+- Adversarial inputs: invalid card_id strings, malformed routing_rules
+
+### Why not sub-plan 1 blocker
+
+Sub-plan 1 is foundational infrastructure. Single-run validation is appropriate for the FIRST shipping milestone. Stress validation requires the infrastructure to be working first (you can't stress-test what doesn't exist).
+
+### Post-ship validation scope
+
+After sub-plan 1 ships:
+1. **Concurrency test:** trigger 3-5 simultaneous runs of 30-april template; verify no cross-run data corruption; verify SELECT FOR UPDATE serialization works under load
+2. **Failure injection:** Supabase MCP `apply_migration` with invalid SQL to crash mid-routing; verify partial-state recovery
+3. **Malformed data:** intentionally corrupt card_definitions in a test template; verify executionPlanUtils corruption detection produces clean failure (no silent garbage)
+4. **Scale:** 100-entity run, measure per-entity routing latency, batch performance, DB query patterns
+5. **Adversarial:** invalid card_id strings, malformed routing_rules; verify validateCards rejects at template-save time
+
+Each is a small ad-hoc validation task (~0.5-1 day). Run incrementally during Phase 3 calibration window after sub-plan 1 ships.
+
+### Why important
+
+Pattern H extension (capability verification) commit 6fe686b: "code drafted, untested" is not "feature built." Sub-plan 1 ship-gate verifies happy path. Stress validation closes the gap to "feature built." Without it, sub-plan 1 ships in a known partially-validated state — acceptable for first milestone, but the gap should be tracked and closed before later sub-plans depend on Multi-Card Pattern stability assumptions.
+
+---
+
+## Item 15 — Add `DUPLICATE_INSTRUCTION` to SKIP_REASONS (skeleton repo)
+
+**Added 2026-06-02** during Sub-plan 1 Section A code review (independent reviewer flagged).
+
+### What
+
+`cardGroups.expandCardGroups` (server/services/cardGroups.js, commit `ee402a1`) has a defensive duplicate-handling branch: if an entity has 2+ pending instructions for the same (step, submodule), the first wins (FIFO by array position) and the rest get `markSkipped`'d. Today this skip reuses `SKIP_REASONS.QA_PASSED_ON_RECHECK` as a placeholder, with a `console.warn` flagging the misuse.
+
+### Why placeholder is wrong
+
+`SKIP_REASONS.QA_PASSED_ON_RECHECK` (defined in `server/services/cardInstructions.js`) means *"a routing-handler check found the entity's QA passed on recheck and therefore the queued instruction is no longer needed."* Semantically distinct from *"this is a duplicate instruction that violates the Brutal-critic Fix #1 atomic-dedup invariant."* Reusing the wrong enum:
+- Pollutes downstream analytics (skip-reason histograms count duplicates as QA-passed-on-recheck events)
+- Hides the invariant violation behind a benign-looking reason
+- Makes log-based diagnosis harder (the `console.warn` is the only signal that the path fired)
+
+### Why low priority
+
+Brutal-critic Round 2 Fix #1 added atomic target-level dedup to the `append_card_instruction` RPC (`WHERE NOT EXISTS` on matching pending). In well-formed state, `matching.length > 1` cannot occur — the duplicate branch is unreachable. It exists only as a defensive cleanup for pre-Fix-#1 data states.
+
+### Scope of fix
+
+1. Add `DUPLICATE_INSTRUCTION: 'duplicate_instruction'` to `SKIP_REASONS` enum in `server/services/cardInstructions.js`
+2. Update `mark_card_instruction_skipped` RPC validation (SQL) to accept the new reason in its allowlist
+3. Update `cardGroups.expandCardGroups` line ~100 to use `SKIP_REASONS.DUPLICATE_INSTRUCTION` instead of `QA_PASSED_ON_RECHECK`
+4. Update `cardGroups.test.mjs` test 7 assertion (currently expects `qa_passed_on_recheck`)
+5. Mention in any analytics/observability docs that this 6th reason exists
+
+`SKIP_REASONS` vocabulary is something Gemini code-path verification + brutal-critic Round 2 both touched. Don't let this gap silently persist.
+
+---
+
+## Item 16 — Pre-flight cross-section dependency mapping
+
+**Added 2026-06-03** during Sub-plan 1 Section A integration commit, surfaced by independent code-review.
+
+### Discovery
+
+Section A pre-flight (`/Users/danieloskarsson/.claude/plans/sub-plan-1-execution-plan.md`) scoped Section A as "autoExecutor integration: processStep restructure + 5 leaf helpers + currentIteration derivation" — 5.25 days. Section B/C/migration were named as separate sections but their interdependency with A was not surfaced in A's pre-flight checklist.
+
+Independent code-review during Section A integration session caught that A is non-functional end-to-end without (a) schema migration adding `submodule_runs.card_id` + `submodule_runs.loop_iteration`, (b) `/run` route handler parsing `req.query.card_id` and stamping on INSERT, (c) body-entities batch scoping. These three are explicitly Section B/C + migration work but they are PREREQUISITES for the autoExecutor wiring to function — they're not "downstream sections", they're sibling-dependencies.
+
+Section A committed as foundation-on-branch on `sub-plan-1-multi-card` (commit `a93d239`) with explicit NOT MERGEABLE documentation in commit body + handoff note. Branch isolation prevented production impact; reviewer caught the gap before merge.
+
+### Why this is process-shape, not a one-off
+
+Same pattern as modules-v2 BACKLOG #12 (pre-flight overshoot — pre-flight produced implementation instead of skeletons). In both cases, the issue is the pre-flight not fully mapping the work boundaries. Item 12 was about VERTICAL scope (pre-flight inlined too much); item 16 is about HORIZONTAL scope (pre-flight underscoped by not mapping cross-section dependencies).
+
+### Proposed fix
+
+For multi-section plans like sub-plan 1, each section's pre-flight checklist should include an explicit "cross-section dependencies" subsection that maps:
+
+1. **Upstream prereqs:** what must land BEFORE this section can be tested end-to-end
+2. **Downstream consumers:** what depends on this section's exports/interfaces
+3. **Sibling-dependencies:** sections that don't strictly come before or after but whose interfaces must align (the case here — Section A's autoExecutor changes assume route handler + schema that Section B/migration are responsible for)
+
+Without this, A/B/C end up "correct but uncommittable as standalone units" and surprising the implementer at code-review time. With it, the implementer knows up front whether they're building a standalone shippable change or a layer of a coordinated branch.
+
+### Scope of fix
+
+Process-level update to `superpowers:writing-plans` skill or equivalent. Not blocking sub-plan 1 (Section A foundation-on-branch is acceptable per Daniel decision 2026-06-03). Worth applying to future sub-plans' execution plans before drafting.
