@@ -752,3 +752,35 @@ The tripwire stub enforces it loudly, but please respect operationally:
 ### Why not blocking sub-plan 1 conclusion
 
 The tripwire makes the broken state self-enforcing — any accidental Step 7 advancement halts with a clear actionable error. The 4 currently-active runs are dead in practice (0 loop-router output, 5-28 days idle, 2 paused / 2 abandoned). Zero exposure as long as the operational constraint is respected.
+
+---
+
+## Item 19 — meal-api source code missing from prod disk; recovery vs. retire decision
+
+**Filed:** 2026-06-04
+**Source:** sub-plan 1 Section C deploy gate, pre-condition 0 cherry-pick (commit `24dcc52` on `content-pipeline-v2` branch `sub-plan-1-multi-card`)
+**Priority:** Low — does not block sub-plan 1 deploy; deploy session has explicit handling (handoff addendum 2026-06-04)
+
+### Discovery
+
+The 2026-06-02 (later) Hetzner incident log (modules-v2 CLAUDE.md) recorded that `meal-api` ("Pantry API on port 3002") was running for 5 days at the time of the PM2 alignment incident but its source code is missing from the Hetzner disk — searched `/opt`, `/root`, `/home`. Only PM2 log files remain (`/root/.pm2/logs/meal-api-*.log`).
+
+The pre-condition 0 commit `566c387` (cherry-picked as `24dcc52` onto `sub-plan-1-multi-card` on 2026-06-04) includes a `meal-api` entry in `ecosystem.config.cjs` pointing at `/var/www/meals-api/index.js`. Per the source-of-truth design rationale in the commit message, the entry stays in the config so `pm2 start ecosystem.config.cjs` reflects intended state.
+
+### The decision needed
+
+Two paths, exactly one of which should be taken:
+
+**Path A — restore:** locate `meal-api` source code from a backup, another machine, Dropbox, or rewrite from scratch. Deploy it to `/var/www/meals-api/`. Confirm the service comes up cleanly under `pm2 start ecosystem.config.cjs`. Document in `HETZNER_SERVICES.md` where the canonical source repo lives.
+
+**Path B — retire:** drop the `meal-api` entry from `ecosystem.config.cjs` (and the corresponding documentation in `docs/HETZNER_SERVICES.md`). Remove `/root/.pm2/logs/meal-api-*.log`. Update the boot-chain diagram in `HETZNER_SERVICES.md` to reflect 4 PM2 apps.
+
+The decision is yours, not Claude's — depends on whether the Pantry API service is still wanted (5-day uptime at the time of loss suggests yes, but a single user / hobby tool may already have been retired in your head).
+
+### Deploy gate handling (interim)
+
+Pre-condition 0 of sub-plan 1's deploy gate explicitly handles the fail-loop at deploy time. See `~/.claude/plans/sub-plan-1-section-c-deploy-handoff.md` "Addendum 2026-06-04 — meal-api fail-loop handling at deploy time" for the path (a) verify-and-accept / path (b) neutralize-on-host plan. The deploy session does NOT make the recovery decision; it only handles the fail-loop's runtime impact.
+
+### Why not blocking sub-plan 1 deploy
+
+The deploy gate has a verify-and-accept (or neutralize-on-host) path that does not depend on this decision being made. The `errored` PM2 entry that results from path (a) acts as a visible reminder that this BACKLOG item is owed — appropriate cost for deferring the recovery decision.
