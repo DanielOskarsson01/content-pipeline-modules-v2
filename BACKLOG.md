@@ -755,32 +755,37 @@ The tripwire makes the broken state self-enforcing — any accidental Step 7 adv
 
 ---
 
-## Item 19 — meal-api source code missing from prod disk; recovery vs. retire decision
+## Item 19 — meal-api recovery decision (own session, own scope; decoupled from content-pipeline deploys)
 
 **Filed:** 2026-06-04
-**Source:** sub-plan 1 Section C deploy gate, pre-condition 0 cherry-pick (commit `24dcc52` on `content-pipeline-v2` branch `sub-plan-1-multi-card`)
-**Priority:** Low — does not block sub-plan 1 deploy; deploy session has explicit handling (handoff addendum 2026-06-04)
+**Reframed:** 2026-06-04 (later) — decoupled from sub-plan 1 deploy gate
+**Source:** Hetzner 2026-06-02 (later) incident log — meal-api source missing from prod disk
+**Priority:** Low — entirely unrelated to content-pipeline deploys; own session whenever the meal-api recovery is prioritized
 
 ### Discovery
 
-The 2026-06-02 (later) Hetzner incident log (modules-v2 CLAUDE.md) recorded that `meal-api` ("Pantry API on port 3002") was running for 5 days at the time of the PM2 alignment incident but its source code is missing from the Hetzner disk — searched `/opt`, `/root`, `/home`. Only PM2 log files remain (`/root/.pm2/logs/meal-api-*.log`).
+The 2026-06-02 (later) Hetzner incident log (modules-v2 CLAUDE.md) recorded that `meal-api` ("Pantry API on port 3002") was running for 5 days at the time of the PM2 alignment incident but its source code is missing from the Hetzner disk — searched `/opt`, `/root`, `/home`. Only PM2 log files remain (`/root/.pm2/logs/meal-api-*.log`). meal-api source was later located at `/var/www/meals-api/index.js` per a post-incident note in HETZNER_SERVICES.md history; if that location was correct, it may still be retrievable from disk depending on subsequent state.
 
-The pre-condition 0 commit `566c387` (cherry-picked as `24dcc52` onto `sub-plan-1-multi-card` on 2026-06-04) includes a `meal-api` entry in `ecosystem.config.cjs` pointing at `/var/www/meals-api/index.js`. Per the source-of-truth design rationale in the commit message, the entry stays in the config so `pm2 start ecosystem.config.cjs` reflects intended state.
+### Why this is its own session, not coupled to content-pipeline deploys
 
-### The decision needed
+meal-api is an entirely different application — separate codebase, separate purpose (weekly meal planner / Pantry API on port 3002), no runtime relationship to the content-pipeline. It happens to share the Hetzner host.
+
+Initially this item was filed during sub-plan 1's Section C deploy gate because commit `566c387` had folded all 5 PM2 apps on the host (including meal-api) into one `ecosystem.config.cjs` framed as "global source of truth." That bundling pulled meal-api's broken state into the content-pipeline deploy as a fail-loop-at-`pm2 start` problem, which it wasn't.
+
+On 2026-06-04 the bundling was reversed (skeleton commit `6170d79` on `sub-plan-1-multi-card`): meal-api removed from `ecosystem.config.cjs` and from `docs/HETZNER_SERVICES.md`. The Hetzner host may run other PM2 apps; the content-pipeline config does not claim global source-of-truth. **meal-api is now genuinely decoupled.**
+
+Note: profile-api is NOT subject to this reframing. profile-api IS a content-pipeline runtime dependency (hardcoded `http://localhost:3847` calls in `modules/step-3-scraping/linkedin-profile-scraper/execute.js` and `linkedin-post-scraper/execute.js`; both manifest.json files declare it as required). profile-api stays in `ecosystem.config.cjs` and in scope for content-pipeline deploys.
+
+### The decision needed (when meal-api recovery is prioritized)
 
 Two paths, exactly one of which should be taken:
 
-**Path A — restore:** locate `meal-api` source code from a backup, another machine, Dropbox, or rewrite from scratch. Deploy it to `/var/www/meals-api/`. Confirm the service comes up cleanly under `pm2 start ecosystem.config.cjs`. Document in `HETZNER_SERVICES.md` where the canonical source repo lives.
+**Path A — restore:** locate meal-api source code (try `/var/www/meals-api/` on Hetzner first, then backups / Dropbox / git history). If recoverable, deploy it back to `/var/www/meals-api/` and start it under PM2 as a standalone app (`pm2 start /var/www/meals-api/index.js --name meal-api && pm2 save`). Document where the canonical source repo lives, since the content-pipeline `ecosystem.config.cjs` no longer covers it.
 
-**Path B — retire:** drop the `meal-api` entry from `ecosystem.config.cjs` (and the corresponding documentation in `docs/HETZNER_SERVICES.md`). Remove `/root/.pm2/logs/meal-api-*.log`. Update the boot-chain diagram in `HETZNER_SERVICES.md` to reflect 4 PM2 apps.
+**Path B — retire:** decide the service is no longer wanted. Remove `/var/www/meals-api/` from disk, remove `/root/.pm2/logs/meal-api-*.log`. No further action required (already absent from `ecosystem.config.cjs`).
 
-The decision is yours, not Claude's — depends on whether the Pantry API service is still wanted (5-day uptime at the time of loss suggests yes, but a single user / hobby tool may already have been retired in your head).
+The decision depends on whether the Pantry API service is still wanted. Not Claude's call.
 
-### Deploy gate handling (interim)
+### Why not blocking anything
 
-Pre-condition 0 of sub-plan 1's deploy gate explicitly handles the fail-loop at deploy time. See `~/.claude/plans/sub-plan-1-section-c-deploy-handoff.md` "Addendum 2026-06-04 — meal-api fail-loop handling at deploy time" for the path (a) verify-and-accept / path (b) neutralize-on-host plan. The deploy session does NOT make the recovery decision; it only handles the fail-loop's runtime impact.
-
-### Why not blocking sub-plan 1 deploy
-
-The deploy gate has a verify-and-accept (or neutralize-on-host) path that does not depend on this decision being made. The `errored` PM2 entry that results from path (a) acts as a visible reminder that this BACKLOG item is owed — appropriate cost for deferring the recovery decision.
+meal-api is no longer in any deploy path. Content-pipeline deploys ignore it. The Hetzner host can run meal-api or not; nothing in the content-pipeline cares.
