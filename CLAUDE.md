@@ -53,11 +53,13 @@ This repo contains pluggable submodules for the Content Creation Tool. Each subm
 
 ## See also — process discipline (skeleton repo CLAUDE.md)
 
-Planning, plan review, validation, and progress-reporting discipline live in the skeleton repo: `content-pipeline-v2/CLAUDE.md` → **"🛡 Process discipline — failure modes we've hit"** (patterns A–H). That section governs how architectural work is planned and reviewed across both repos; the module-authoring **Rules 1–12** above govern what an individual submodule must look like. Both apply when a planning task touches a submodule.
+Planning, plan review, validation, and progress-reporting discipline live in the skeleton repo: `content-pipeline-v2/CLAUDE.md` → **"🛡 Process discipline — failure modes we've hit"** (patterns A–I). That section governs how architectural work is planned and reviewed across both repos; the module-authoring **Rules 1–12** above govern what an individual submodule must look like. Both apply when a planning task touches a submodule.
 
-If you're about to start a bug fix, architectural change, or any plan that affects pool/routing/schema/multi-step coordination, **read patterns A–H before drafting.** They are not optional reading — each one is in there because it has already failed in this codebase.
+If you're about to start a bug fix, architectural change, or any plan that affects pool/routing/schema/multi-step coordination, **read patterns A–I before drafting.** They are not optional reading — each one is in there because it has already failed in this codebase.
 
 **Patterns G and H (added 2026-05-29) cover planning-session drift specifically.** A–F catch failures inside individual tasks; G (reviewer engagement at scope moments) and H (current-state verification before citing plan files) catch strategic-level drift — pivots based on stale uploads, scope changes without reviewer engagement, multi-hour sessions that quietly drift from the original direction. If you're about to make a strategic pivot, change scope, or cite a planning document, G and H apply BEFORE you act.
+
+**Pattern I (added 2026-06-06) covers post-merge architectural drift.** When an architectural change merges (DDL migration, contract change, identity-shape change, RPC signature change), callsites referencing the changed surface are NOT covered by the change's own tests. Without a deliberate post-merge callsite audit, those callsites silently break. Pattern I codifies the audit as a mandatory step after any architectural merge, before subsequent work begins on top of it. Three confirmed examples in this codebase: B052 (onConflict strings stale after Multi-Card migration), B054 (multi-source duplicates after composite-key `add` change), the 2026-04-22 `apply_entity_routing` signature mismatch.
 
 ---
 
@@ -668,3 +670,50 @@ Architectural specs in "pending sign-off" state need active tracking to either a
 **Alignment:** Confirmed. The `pipeline-job-search/` config folder mirrors `pipeline-company-profiles/` and positions for BACKLOG #2 work without violating the no-specialized-modules architectural principle. The cv-generator fix preserved in `_archive/` keeps a future un-archive cleaner. The temporary un-archive was tactical and explicitly rolled back. None of tonight's main-branch changes contradict the project's architectural commitments.
 
 **Updated by:** session-closer skill
+
+### Session: 2026-06-02 — Hetzner Xvfb + pm2-root systemd services documented
+
+**Accomplished:**
+- Verified the systemd setup user established earlier today on `188.245.110.34`: `xvfb.service` enabled + active (Xvfb on `:1`, screen 1920x1080x24, `Restart=always`, `ExecStartPre` cleans stale X lock files), `pm2-root.service` unit file now has `Requires=xvfb.service` + `After=xvfb.service` + `Environment=DISPLAY=:1`. Replaced manually-started TigerVNC (running since 2026-04-25) — boot-time start + self-healing now both covered.
+- Confirmed Chrome on `:1` with `--remote-debugging-port=9222` (spawned by `profile-api/server.js`, NOT a separate systemd service). CDP returns HTTP 200. All 5 PM2 apps online (pipeline-api, stage-worker, batch-worker 10h+ uptime; profile-api 3h, meal-api 5D).
+- Wrote `content-pipeline-v2/docs/HETZNER_SERVICES.md` (158 lines) — service unit files verbatim from production, boot chain diagram, self-healing layer table, verification commands, known relic (noVNC websockify on 6080 → dead 5901 proxy).
+- Saved reference memory `hetzner_services.md` pointing at the doc + SSH alias + boot chain + the pm2-root state issue (see below). Created `MEMORY.md` index.
+
+**Decisions:**
+- Infra doc lives in the skeleton repo (`content-pipeline-v2/docs/HETZNER_SERVICES.md`), not modules-v2 — skeleton owns `deploy.sh` + `ecosystem.config.cjs` and the PM2 apps are skeleton-level, so the doc belongs there.
+- Did NOT auto-fix the pm2-root inactive state (see Blockers). Decision belongs to the user — `pm2 kill && systemctl start pm2-root.service` would align state but interrupts production briefly.
+- Left the noVNC websockify relic alone — harmless dead-end proxy, not in scope.
+
+**Blockers/Questions:**
+- **`pm2-root.service` is enabled but currently inactive** even though all 5 PM2 apps are running. PM2 was started outside systemd, so the unit never tracked the daemon. Consequence: boot recovery works (systemd will run `pm2 resurrect`), but a mid-runtime PM2 daemon crash will NOT trigger systemd respawn. Fix is a one-time `pm2 save && pm2 kill && systemctl start pm2-root.service`. Documented in `HETZNER_SERVICES.md` under "Known state issue".
+- Latent LinkedIn jobs scraper bug from the previous session (`profile-api /api/job/:jobId` returning `TypeError: Failed to fetch`) is unrelated to display/systemd — was already on `:1` via TigerVNC at the time, so today's switch to Xvfb doesn't change anything for that endpoint.
+
+**Updated by:** Claude (manual session entry — infrastructure verification + documentation)
+
+### Session: 2026-06-02 (later) — Hetzner pm2-root alignment + websockify cleanup + production recovery from cluster_mode bug
+
+**Status:** Both requested fixes (pm2-root inactive + websockify relic) completed. Production was briefly down ~10 min during the realignment due to a PM2 6.0.14 cluster_mode bug surfaced by the operation; recovered by switching to fork_mode. All 4 PM2 apps online under systemd-managed pm2-root.service. `meal-api` discovered missing from disk — flagged for user.
+
+**Accomplished:**
+- Killed the noVNC `websockify` relic process (PID 1908051, port 6080 → dead :5901, no systemd unit owned it). Port 6080 freed.
+- Started the pm2-root alignment via `pm2 save && pm2 kill && systemctl start pm2-root.service`. systemd unit started but pm2-root timed out on first attempt; PM2 daemon came up but in `activating` state.
+- **Production went down for ~10 minutes** because the resurrected apps (pipeline-api, stage-worker) exited with `code 9 + SIGINT` instantly under PM2 6.0.14's cluster_mode. Diagnosed by running `node --env-file=.env --max-old-space-size=512 server/server.js` directly — worked perfectly outside of PM2.
+- Discovered the dump.pm2 file (and its .bak) had only 2 apps despite 5 actually running — `pm2 save` had been silently writing stale dumps for some time. The 3 missing apps (batch-worker, profile-api, meal-api) would have been lost on any reboot.
+- Recovered by `pm2 delete all && pm2 start <script> --name <name> --node-args=...` for each app individually in fork mode, then `pm2 start /opt/profile-api/server.js --name profile-api`. Couldn't recover meal-api — its source code is not on disk anywhere (searched `/opt`, `/root`, `/home`; only its PM2 log files exist).
+- Restarted via systemd: `pm2 save && systemctl restart pm2-root.service`. New dump has 4 apps (pipeline-api, stage-worker, batch-worker, profile-api), all online in fork_mode, pm2-root.service now `active`.
+- Profile-api's Chrome respawned correctly via its 120s health check after the restart (CDP 9222 returns HTTP 200, Chrome v147.0.7727.15 on display `:1`).
+- Updated `HETZNER_SERVICES.md`: cluster→fork modes in the services table, new "Resolved: pm2-root alignment" section documenting Issue 1 (cluster_mode bug) + Issue 2 (silent dump truncation) + operational discipline (`pm2 save` mandatory after any change), removed the "Known relic" section since websockify is gone, updated History.
+- Updated memory file `hetzner_services.md` with 4 gotchas: cluster_mode broken, `pm2 save` mandatory, meal-api lost, profile-api 120s health check window.
+
+**Decisions:**
+- **Fork mode is the new default for all apps on this server.** PM2 6.0.14 cluster_mode is broken here (code 9 + SIGINT before logs open). Direct `node` invocation works, so it's a PM2 cluster wrapper bug, not an app bug. With `instances: 1` fork is functionally equivalent.
+- **Did NOT edit `ecosystem.config.cjs`.** The file on disk still lacks `exec_mode`, so a fresh `pm2 start ecosystem.config.cjs` from zero state would re-hit the bug. Documented in HETZNER_SERVICES.md "Issue 1". Editing the config is a code change for a separate session — needs user approval and the right safety net (deploy + rollback tag).
+- **meal-api not auto-restored.** Source missing; restoring it requires user input (where the code lives now, or whether to drop it from inventory). Flagged in HETZNER_SERVICES.md and the memory file.
+- **No `tigervncserver@.service` cleanup** — disabled, harmless, left alone.
+
+**Blockers/Questions:**
+- **`meal-api` recovery decision needed.** Was running as "Pantry API on port 3002" for 5 days; logs in `/root/.pm2/logs/meal-api-*.log` confirm it was alive. No source code found on disk. Was it deployed from a private location not searched, or has it been intentionally retired? If keeping: re-deploy. If not: remove its logs and update HETZNER_SERVICES.md to drop it entirely.
+- **ecosystem.config.cjs not edited to mark fork mode.** Future `pm2 start ecosystem.config.cjs` (e.g. after a fresh deploy that wipes state) will re-hit the cluster_mode bug. Either edit the file to add `exec_mode: 'fork'` per app, or investigate the PM2 6.0.14 cluster bug for a real fix (Node 20.20.0 + Ubuntu 24.04.3, sample to test against). User decision.
+- **dump.pm2 silent truncation root cause unknown.** Both dump and dump.bak had only 2 apps despite all 5 running. Possibly a PM2 internal serialization issue, or someone ran `pm2 save` at a moment when only 2 apps were known to that daemon (e.g., apps started via a different daemon instance). Worth keeping an eye on — `pm2 save && cat /root/.pm2/dump.pm2 | jq 'length'` should always show the expected count.
+
+**Updated by:** Claude (manual session entry — incident recovery + documentation update)
