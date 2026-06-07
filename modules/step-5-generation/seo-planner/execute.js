@@ -260,18 +260,18 @@ function parseResearchQueries(template, entityName, entityContext) {
  * Run keyword research queries in parallel via the search provider.
  * Uses Promise.allSettled so partial failures don't kill the entire step.
  */
-async function runKeywordResearch(queries, tools, searchProvider, logger, entityName) {
+async function runKeywordResearch(queries, tools, searchProvider, searchModel, logger, entityName) {
   if (queries.length > 5) {
     logger.warn(`${entityName}: ${queries.length} research queries configured (recommended: ≤5). Consider reducing to control costs.`);
   }
 
-  logger.info(`${entityName}: running ${queries.length} research queries via ${searchProvider}`);
+  logger.info(`${entityName}: running ${queries.length} research queries via ${searchProvider}/${searchModel}`);
 
   const promises = queries.map((query, idx) => {
     logger.info(`${entityName}: research query ${idx + 1}/${queries.length}: ${query.slice(0, 80)}...`);
     return tools.ai.complete({
       prompt: query,
-      model: 'sonar',
+      model: searchModel,
       provider: searchProvider,
       temperature: 0.1,
       max_tokens: 2048,
@@ -314,7 +314,7 @@ function synthesizeResearch(results, searchProvider) {
 async function execute(input, options, tools) {
   const { entities } = input;
   const { ai_model, ai_provider, prompt: promptTemplate, reference_docs, temperature, max_tokens,
-          keyword_research, search_provider, research_queries } = options;
+          keyword_research, search_provider, perplexity_model, research_queries } = options;
   const { logger, progress, ai } = tools;
 
   const results = [];
@@ -367,7 +367,7 @@ async function execute(input, options, tools) {
 
           if (queries.length > 0) {
             progress.update(i + 1, entities.length, `Researching keywords for ${entity.name || 'entity'}`);
-            const researchResults = await runKeywordResearch(queries, tools, search_provider, logger, entity.name);
+            const researchResults = await runKeywordResearch(queries, tools, search_provider, perplexity_model, logger, entity.name);
             keywordResearchText = synthesizeResearch(researchResults, search_provider);
             logger.info(`${entity.name}: keyword research complete — ${researchResults.length}/${queries.length} queries succeeded`);
           }

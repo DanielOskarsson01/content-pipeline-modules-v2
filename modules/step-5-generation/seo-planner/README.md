@@ -3,7 +3,7 @@
 > Keyword distribution planner with web-researched keyword data. Maps target keywords to predefined article sections, generates meta tags and FAQs.
 
 **Module ID:** `seo-planner` | **Step:** 5 (Generation) | **Category:** planning | **Cost:** expensive
-**Version:** 2.0.0 | **Data Operation:** add (➕)
+**Version:** 2.1.0 | **Data Operation:** add (➕)
 
 ---
 
@@ -30,6 +30,36 @@ content-analyzer (＝) -> seo-planner (➕) -> content-writer (➕)
 It uses the **add (➕)** data operation - it chains from the working pool, finding content-analyzer output by the `source_submodule` field, and adds its own output alongside. After approval, the pool contains both analysis items and SEO plan items, distinguished by `source_submodule`.
 
 This is the cheapest step in the chain. The input is just the analysis JSON (a few KB), not the full scraped text (50KB+). This makes it safe to re-run multiple times while iterating on keyword strategy without significant cost.
+
+### v2.1.0: Prompt Coherence + Configurable Perplexity Model (2026-06-07)
+
+v2.1.0 closes the half-migration left by v2.0.0. v2.0.0 swapped IN Perplexity keyword research but left the LLM prompt scaffolded as if a `keyword-summary.md` reference document were still the source. v2.1.0 makes the whole submodule coherent with the Perplexity-as-source design.
+
+Changes:
+
+1. **New `perplexity_model` option** — operators can choose between Perplexity's Sonar tiers without editing code:
+   - `sonar` (default) — cheapest, fastest, basic search grounding
+   - `sonar-pro` — better quality, more expensive
+   - `sonar-reasoning` — chain-of-thought capable for complex queries
+   - `sonar-reasoning-pro` — top-tier reasoning, highest cost
+   
+   Previously hardcoded to `sonar` in execute.js.
+
+2. **Restructured `research_queries` default** — three queries are now explicitly labeled (Query 1 Core / Query 2 Competitor / Query 3 Real Questions) with B2B/audience inference, source URL requests, and a 3+3+3+3 forced split on Query 3 (definitional, comparison, operational, problem-framed). Previously: vague "include primary, long-tail, related" wording, asked Perplexity for "estimated search intent and competition level" (data Perplexity does not have — would be invented), allowed 8-12 questions (downstream uses exactly 5).
+
+3. **Restructured main LLM prompt** — adds an upfront CRITICAL RULE section explicitly forbidding LLM training-data invention of keywords, with one defined exception (entity-name-prefixed long-tail constructions). Adds a section 7 CITATION rule that requires per-keyword provenance tags (Q1/Q2/Q3/analysis) for audit. Reinforces the FAQ rule to pick exactly 5 from Query 3's 12 verbatim, with a documented FAQ shortage warning if fewer are answerable.
+
+4. **Added `keyword_sources` to the output schema** — alongside `target_keywords`, the LLM now records which query (Q1/Q2/Q3) each keyword came from. This lets us audit drift over time: if a keyword is tagged "analysis" or untagged, the LLM is falling back to its training data.
+
+5. **Expanded warnings list** — added explicit categories: meta length problems, keyword gaps, FAQ shortage, research absence.
+
+6. **Manifest metadata updates** — description now mentions Perplexity grounding; reference_docs description demotes `keyword-summary.md` to "fallback when keyword_research disabled" rather than primary input.
+
+7. **Agnosticism polish (post-CTO review)** — four additional refinements before commit:
+   - `keyword_sources` schema uses `Q<n> | analysis` notation (n = 1-based query number) rather than hardcoded Q1/Q2/Q3, so templates with non-default query counts (1-5 queries supported) audit correctly.
+   - `usage_notes` cost claim shows range (defaults ~$0.025 to max ~$0.25/entity), not a single number that misleads operators choosing expensive Sonar tiers.
+   - Exception clause for entity-specific long-tail keyword construction now includes consumer/comparison/podcast/news examples alongside B2B, so the rule reads as audience-agnostic rather than B2B-only.
+   - **New explicit fallback instruction in the INPUTS section** — when `{keyword_research}` arrives empty (Perplexity failed, timed out, or was disabled), the LLM is now instructed to emit a HIGH-PRIORITY warning to the output, tag all keywords as `analysis` in `keyword_sources`, and NOT silently produce a plan as if research succeeded. This makes silent Perplexity failures loud and operator-visible. Confirmed needed by the Pronet Gaming + Wazdan v2.0.0 baseline run (2026-06-07 run aa81daa2) which fell through to the empty-research fallback without any clear signal to operators that research had not actually fired.
 
 ### v2.0.0: Keyword Research Pre-Step via Perplexity Sonar
 
