@@ -126,6 +126,42 @@ Other useful reference docs: format_spec.md (defines the fixed section structure
 - Keyword planning for manual content creation
 - SEO audits - compare planned vs actual keyword usage
 
+## Configuring per content type
+
+The manifest defaults are pipeline-agnostic. Content-shape decisions (how many FAQs, which sections appear in `keyword_distribution`, what voice the meta description has) are NOT manifest options — they live in the **prompt**, which is itself a configurable option.
+
+### How to change content-shape defaults
+
+Override the `prompt` option at template level. Patterns:
+
+**Change FAQ count.** The default prompt says *"Write exactly 5 FAQ questions..."* For a news article (3 FAQs), comparison piece (8 FAQs), or knowledge-base article (10 FAQs), copy the manifest default into your template's `preset_map.seo-planner.fallback_values.prompt`, edit the count, and save. No manifest change required.
+
+**Change output schema sections.** The default prompt's OUTPUT FORMAT shows `keyword_distribution` with `overview`, `categories`, `tags`, `credentials`, `faq` keys. A news template might replace `credentials` with `sources` and add `timeline`. A podcast template might use `episodes`, `guests` instead of `categories`, `tags`. The LLM follows whatever schema your template's prompt shows it — replace the schema block in the prompt override, and the output structure changes accordingly.
+
+**Change vertical / audience framing.** The default prompt says nothing about iGaming, B2B, OnlyiGaming, or any other vertical (per the May 22 architectural commitment). To target consumer reviews, B2B operators, job seekers, podcast listeners, etc., specify that context in the template's prompt override. The OnlyiGaming-specific framing for the `30 april` template (company profile generation) lives in that template's `preset_map.seo-planner.fallback_values.prompt`, NOT here.
+
+**Change number of research queries.** The `research_queries` option supports 1-5 queries (per execute.js warning at line 264-266). Template authors edit the `research_queries` value to add/remove query slots; the main prompt's `keyword_sources` schema uses `Q<n>` notation so it adapts to any query count.
+
+### Why this pattern?
+
+Per modules-v2 CLAUDE.md (Rule 12 + Architectural Commitments): *"Content type variation is handled via configuration (cards, prompts, reference docs) of a small number of flexible generic modules. Specialized modules per content type are an anti-pattern."* Adding `faq_count`, `output_schema_sections`, or similar manifest options for every content-shape knob would multiply the option surface; using template prompt overrides keeps the manifest small and the configuration flexible.
+
+### Cross-submodule schema coupling
+
+When changing seo-planner's OUTPUT FORMAT schema in a template prompt override, the downstream submodules may depend on specific field names. Verified consumers of `seo_plan_json` (as of 2026-06-07):
+
+| Consumer | Fields read |
+|----------|-------------|
+| content-writer | Whole blob via `JSON.stringify` — additive schema changes safe; removing fields it iterates may break |
+| tone-seo-editor | `target_keywords.{primary, secondary, long_tail}` by name |
+| meta-compliance-checker | `target_keywords.{primary, secondary, head_terms, keywords}` |
+| keyword-sufficiency-checker | `target_keywords.*` + `keyword_distribution` (iterates by name) |
+| meta-output, schema-org-injector (Step 8) | `target_keywords`, `meta`, `faqs` |
+| json-output (Step 8) | Whole blob |
+| hallucination-detector, citation-coverage-checker | Don't read seo_plan_json |
+
+**Before changing the schema in a template prompt override**, grep these consumers for the field names you intend to remove or restructure. If a consumer iterates a field you remove, you'll need to either (a) keep the field but document it as empty for the new content type, OR (b) configure the consumer's prompt override (or skip the consumer entirely in the template) to match.
+
 ## Options Guide
 
 | Option | Default | When to Change | Impact |
