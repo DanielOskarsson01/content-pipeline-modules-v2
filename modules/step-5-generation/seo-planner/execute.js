@@ -243,17 +243,36 @@ function buildEntityContext(entity, analyzerItem) {
 
 /**
  * Parse research_queries textarea into interpolated query strings.
- * One query per line, with {entity_name} and {entity_context} placeholders.
+ *
+ * Splits on `Query N —` markers when present (multi-line queries with shared preamble).
+ * Falls back to one-query-per-line when no markers are found (simple flat lists).
+ *
+ * Marker matches: "Query 1 —", "Query 2 -", "Query 3 –" at start of a line.
  */
 function parseResearchQueries(template, entityName, entityContext) {
+  const interpolate = (s) => s
+    .replace(/\{entity_name\}/g, entityName)
+    .replace(/\{entity_context\}/g, entityContext);
+
+  const MARKER = /^Query\s+\d+\s*[—–-]/m;
+
+  if (MARKER.test(template)) {
+    const parts = template.split(/^(?=Query\s+\d+\s*[—–-])/m);
+    const startsWithMarker = MARKER.test(parts[0]);
+    const preamble = startsWithMarker ? '' : parts[0].trim();
+    const queryChunks = (startsWithMarker ? parts : parts.slice(1))
+      .map(c => c.trim())
+      .filter(c => c.length > 0);
+    return queryChunks.map(chunk => interpolate(
+      preamble ? `${preamble}\n\n${chunk}` : chunk
+    ));
+  }
+
   return template
     .split('\n')
     .map(q => q.trim())
     .filter(q => q.length > 0)
-    .map(q => q
-      .replace(/\{entity_name\}/g, entityName)
-      .replace(/\{entity_context\}/g, entityContext)
-    );
+    .map(interpolate);
 }
 
 /**
