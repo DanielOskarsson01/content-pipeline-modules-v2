@@ -24,6 +24,7 @@ Tasks not yet scheduled for implementation.
 | 14 | Sub-plan 1 ship-gate is single-run happy-path + Wazdan-shape — post-ship stress validation (concurrency, malformed data, network errors) needed for true Pattern H criterion 3 | Medium (post-ship validation, not sub-plan 1 blocker) | 2026-06-02 |
 | 15 | Add `DUPLICATE_INSTRUCTION` to `SKIP_REASONS` vocabulary (skeleton repo) — replace placeholder `QA_PASSED_ON_RECHECK` reuse in `cardGroups.expandCardGroups` duplicate-handling path | Low (defensive; well-formed state never hits it post Brutal-critic Fix #1) | 2026-06-02 |
 | 16 | Pre-flight cross-section dependency mapping — Section A pre-flight didn't capture route handler + migration as in-scope prerequisites for autoExecutor to function (caught by independent code-review 2026-06-03; same shape as item 12 pre-flight overshoot) | Low-medium (process) | 2026-06-03 |
+| 20 | tone-seo-editor: `tone_style` dropdown is redundant with prompt textarea + reference_docs mechanism | Low (cleanup) | 2026-06-07 |
 
 ---
 
@@ -789,3 +790,49 @@ The decision depends on whether the Pantry API service is still wanted. Not Clau
 ### Why not blocking anything
 
 meal-api is no longer in any deploy path. Content-pipeline deploys ignore it. The Hetzner host can run meal-api or not; nothing in the content-pipeline cares.
+
+---
+
+## Item 20 — tone-seo-editor: `tone_style` dropdown is redundant with prompt textarea + reference_docs mechanism
+
+**Added:** 2026-06-07
+**Priority:** Low (cleanup)
+**Scope:** modules repo — `modules/step-5-generation/tone-seo-editor/{manifest.json, execute.js, README.md}`
+**Related:** Item 2 (Step 5 content-type flexibility); tone-seo-editor v1.2.0 commit `a24464b`
+
+### Issue
+
+The `tone_style` option is a `select` field with 3 hardcoded values (`b2b_authoritative`, `casual_informative`, `technical_precise`) and a `TONE_STYLES` constant in [execute.js:16-46](modules/step-5-generation/tone-seo-editor/execute.js#L16-L46) that maps each value to ~7 lines of tone instructions. The instructions are injected into the prompt via the `{tone_instructions}` placeholder.
+
+This was designed before the `{doc:<filename>}` + `reference_docs` mechanism existed. Now that mechanism does exist, the dropdown overlaps with what operators already control via the prompt textarea + uploaded tone docs (e.g. `tone_guide.md`, future `humorous_voice.md`, etc.).
+
+The redundancy causes three small problems:
+
+1. **Adding a 4th tone (relaxed/humorous, journalistic, narrative-personal, etc.) requires a code change** — edit `TONE_STYLES` in execute.js, add a value to the enum in manifest.json, deploy, PM2 restart. The whole point of pushing config out of code is to avoid this.
+2. **Conflict risk** — if the operator picks `casual_informative` from the dropdown but their custom prompt + uploaded voice doc say something different, the prompt now contains two competing tone blocks.
+3. **UI promise mismatch** — the dropdown looks like the primary way to control tone, but the actual mechanism is the prompt textarea + reference_docs. Confusing for new operators.
+
+### Why not addressed earlier
+
+Discovered while clarifying the v1.2.0 architectural pattern. The dropdown is not a v1.2.0 regression — it pre-dates v1.0.0. Out of scope for the v1.2.0 commit, which targeted vertical/brand lock-ins in the prompt default. The dropdown is a separate cleanup.
+
+Critically: **the dropdown is NOT a hard architectural violation.** Operators can already ignore it and control tone entirely via the prompt textarea + reference_docs. New tones can ship today via prompt-as-preset (Option 3 in the 2026-06-07 discussion) without a code change. This item is about removing a redundant piece of UI, not unblocking anything.
+
+### Proposed fix
+
+Drop the dropdown, drop `TONE_STYLES` in execute.js, drop the `{tone_instructions}` placeholder. Tone instructions live 100% in `reference_docs` (uploaded `tone_guide.md`-style files referenced via `{doc:<filename>}`) and in the prompt textarea. Same pattern as v1.2.0 used for vertical/brand framing.
+
+### Migration concern
+
+Removing the `tone_style` manifest option will break existing templates that depend on it. Coordination needed:
+
+- Identify templates with non-default `tone_style` values
+- For each, append the corresponding `TONE_STYLES` block content into the template's stored prompt (or attach the matching reference doc)
+- Then remove the option from manifest.json + execute.js
+
+Migration plan should be drafted alongside the code change.
+
+### Not blocking
+
+- Your new company-profile template (2026-06-07) works fine with the current dropdown — pick `b2b_authoritative`, attach `tone_guide.md` via reference_docs, customize the prompt textarea if needed
+- A future humorous/relaxed pipeline can ship today via Option 3 (humorous voice instructions inline in the prompt textarea, saved as a preset) — no need to wait for this cleanup
