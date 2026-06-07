@@ -27,6 +27,7 @@ Tasks not yet scheduled for implementation.
 | 20 | tone-seo-editor: `tone_style` dropdown is redundant with prompt textarea + reference_docs mechanism | Low (cleanup) | 2026-06-07 |
 | 21 | Anthropic prompt caching not enabled in skeleton `ai.complete` — large reference docs paid for per call instead of cached | Medium (cost) | 2026-06-07 |
 | 22 | New Step 1 submodule: `sonar-deep-research` for LLM-grounded entity discovery (complements scraping) | Medium (new module) | 2026-06-07 |
+| 23 | Template creator dropdown + preset map should order submodules by pipeline-execution sequence (skeleton) | Low (UX) | 2026-06-07 |
 
 ---
 
@@ -1017,3 +1018,70 @@ The quality lift on thin-website entities justifies this many times over. For ri
 ### Why not addressed today (2026-06-07)
 
 New module creation is a from-scratch design + manifest + execute.js + README + tests + production verification. Cleanly out of scope for tonight's template-tuning session. Architectural shape is clear; execution needs a dedicated session.
+
+---
+
+## Item 23 — Template creator dropdown + preset map should order submodules by pipeline-execution sequence
+
+**Added:** 2026-06-07
+**Priority:** Low (UX cleanup)
+**Scope:** skeleton repo — `content-pipeline-v2/server/services/moduleLoader.js` (`getSubmodulesGroupedByCategory`), client-side preset map renderer
+**Related:** moduleOrder.js (CATEGORY_ORDER constant), 2026-06-07 company-profile template setup that triggered the diagnosis
+
+### Issue
+
+When the operator opens the template creator's "add submodule" dropdown for a step, the modules appear in an order that doesn't reflect their pipeline-execution sequence. Same for the preset map showing presets across all modules.
+
+Concrete failure mode: while setting up a company-profile template on 2026-06-07, the operator added `deep-links` as the first Step 1 submodule because it appeared first in the dropdown — but `deep-links` has `pool_precondition: requires_items` and needs a prior submodule (sitemap-parser, page-links, browser-crawler, etc.) to populate the pool first. The misconfiguration only surfaced at runtime when Step 1 halted with "At least one submodule must be approved before approving the step" (because deep-links was correctly skipped with `skipped_no_input` per the empty-pool-fix work).
+
+If the dropdown had shown sitemap-parser, page-links, browser-crawler, csv-discovery, etc. BEFORE deep-links (matching CATEGORY_ORDER: website → crawling → search → news → ...), the operator would naturally pick a discovery-producing module first and add deep-links as a second step for depth.
+
+### Root cause
+
+`getSubmodulesGroupedByCategory` in [moduleLoader.js:154-186](../content-pipeline-v2/server/services/moduleLoader.js#L154-L186) sorts submodules WITHIN each category by `sort_order` but does NOT sort the categories themselves. The returned object's keys iterate in JavaScript insertion order — roughly the order categories are encountered during module-file iteration, which is filesystem-order, not pipeline-order.
+
+The canonical category order already exists in [moduleOrder.js:11-15](../content-pipeline-v2/server/services/moduleOrder.js#L11-L15):
+
+```js
+export const CATEGORY_ORDER = {
+  website: 1, crawling: 2, search: 3, news: 4, filtering: 5, scraping: 6, analysis: 7,
+  planning: 8, generation: 9, seo: 10, review: 11, qa: 12,
+  formatting: 13, bundling: 14, media: 15, data: 16, testing: 17,
+};
+```
+
+`sortSubmoduleIds` already applies this when sorting submodule IDs for execution order. The grouping function just doesn't use it.
+
+### Proposed fix
+
+Two small changes in [moduleLoader.js:154-186](../content-pipeline-v2/server/services/moduleLoader.js#L154-L186):
+
+1. Import `CATEGORY_ORDER` from moduleOrder.js (currently only imports from itself)
+2. Before returning, rebuild the `groups` object with keys inserted in CATEGORY_ORDER sequence:
+
+```js
+const orderedGroups = {};
+const sortedCategories = Object.keys(groups).sort((a, b) => {
+  const orderA = CATEGORY_ORDER[a] ?? 99;
+  const orderB = CATEGORY_ORDER[b] ?? 99;
+  return orderA - orderB;
+});
+for (const cat of sortedCategories) {
+  orderedGroups[cat] = groups[cat];
+}
+return orderedGroups;
+```
+
+JS preserves insertion order for non-integer keys (ES2015+), so `Object.keys(orderedGroups)` will iterate in CATEGORY_ORDER sequence for any consumer. No API contract break.
+
+Also apply the same ordering to the preset map — wherever presets are grouped/displayed by module, ensure modules appear in CATEGORY_ORDER + sort_order sequence (use the existing `sortSubmoduleIds` from moduleOrder.js).
+
+### Not blocking
+
+- Operators can still configure templates correctly — the misordering doesn't prevent valid configurations, just makes them less obvious.
+- Manifest validation + runtime checks (empty-pool-fix from 2026-05-24) catch misconfigurations gracefully — the error message at step-approval time is correct.
+- Workaround: operators who know the pipeline pick the right submodule regardless of dropdown order.
+
+### Why this matters
+
+It's a small change with big leverage on operator error rate. The category-order data already exists; the UI just isn't consuming it consistently. Same shape of bug as the cv-generator field-name mismatch fixed 2026-05-31 — a contract that exists on one side but isn't honored on the other.
