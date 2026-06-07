@@ -26,6 +26,7 @@ Tasks not yet scheduled for implementation.
 | 16 | Pre-flight cross-section dependency mapping — Section A pre-flight didn't capture route handler + migration as in-scope prerequisites for autoExecutor to function (caught by independent code-review 2026-06-03; same shape as item 12 pre-flight overshoot) | Low-medium (process) | 2026-06-03 |
 | 20 | tone-seo-editor: `tone_style` dropdown is redundant with prompt textarea + reference_docs mechanism | Low (cleanup) | 2026-06-07 |
 | 21 | Anthropic prompt caching not enabled in skeleton `ai.complete` — large reference docs paid for per call instead of cached | Medium (cost) | 2026-06-07 |
+| 22 | New Step 1 submodule: `sonar-deep-research` for LLM-grounded entity discovery (complements scraping) | Medium (new module) | 2026-06-07 |
 
 ---
 
@@ -900,3 +901,119 @@ Caching kicks in only when ≥2 entities run within the 5-minute window — whic
 ### Why not addressed today (2026-06-07)
 
 Surfaced during cost analysis but out of scope for tonight's new-template setup. The right place to fix is the skeleton, not the modules repo. Requires API-shape refactor + per-module update + production verification — a separate session.
+
+---
+
+## Item 22 — New Step 1 submodule: `sonar-deep-research` for LLM-grounded entity discovery
+
+**Added:** 2026-06-07
+**Priority:** Medium (new module — meaningful quality lift on entities with thin websites)
+**Scope:** modules repo — new submodule `modules/step-1-discovery/sonar-deep-research/`
+**Related:** Item 21 (Perplexity caching); seo-planner v2.1.0 (existing Perplexity integration in Step 5)
+
+### Issue
+
+Step 1 currently has 9 discovery modules, all scraping-based: sitemap-parser, page-links, browser-crawler, deep-links, rss-feeds, seed-url-builder, csv-discovery, api-search, test-dummy. **No LLM-grounded entity research exists at the discovery stage.**
+
+Perplexity is wired into the pipeline at exactly one place: seo-planner's `keyword_research` integration. That's a narrow tactical use — keyword discovery serving one downstream task. It is NOT a knowledge-base build for the whole pipeline.
+
+Consequence: when an entity has a thin website (single landing page, minimal text, JS-rendered content the scrapers struggle with), the entire downstream chain (content-analyzer → seo-planner → content-writer) is starved of input. The cite-or-omit rule we added to content-writer makes this worse — the writer will correctly omit specifics it can't cite, producing thin profiles for thin-website entities. The fix is more input at the source, not more discipline downstream.
+
+### The proposed module
+
+**Module:** `sonar-deep-research`
+**Step:** 1 (Discovery)
+**Cost:** medium (one Perplexity sonar-deep-research call per entity)
+**Data operation:** `add` (produces a `deep_research_json` field on the entity)
+**Pool precondition:** `empty_ok` (Step 1 module, doesn't require upstream items)
+
+**Input:** entity name + optional context string (e.g. "Pronet Gaming" + "B2B iGaming platform provider")
+
+**Output (per entity):** a single pool item with a `deep_research_json` field containing structured research:
+
+```json
+{
+  "deep_research_json": {
+    "entity_overview": "1-paragraph synthesis",
+    "key_facts": {
+      "founded": "year + source",
+      "headquarters": "location + source",
+      "employees": "range + source",
+      "key_people": [{"name": "...", "role": "...", "source": "URL"}],
+      "ownership": "...",
+      "key_partners": ["..."],
+      "key_clients": ["..."]
+    },
+    "market_position": {
+      "primary_offerings": ["..."],
+      "target_audiences": ["..."],
+      "geographic_focus": ["..."],
+      "competitive_differentiators": ["..."]
+    },
+    "recent_news": [
+      {"date": "...", "headline": "...", "summary": "...", "source": "URL"}
+    ],
+    "regulatory_context": {
+      "licenses_held": ["..."],
+      "jurisdictions": ["..."],
+      "compliance_certifications": ["..."]
+    },
+    "ecosystem_position": {
+      "industry_terminology": ["topical-authority terms from this entity's space"],
+      "adjacent_companies": ["competitors / partners worth mentioning"]
+    },
+    "source_citations": [{"index": 1, "url": "...", "title": "..."}]
+  }
+}
+```
+
+### Why Step 1 (not Step 5)
+
+The research is **discovery-stage** because it informs every later step:
+
+- **content-analyzer** can cross-reference deep-research facts against scraped content (e.g. "Source page says founded in 2015, but deep research found founded in 1996 with rebranding in 2015 — flag this discrepancy")
+- **seo-planner** can use ecosystem_position.industry_terminology as additional topical signals
+- **content-writer** can cite deep-research facts when scraped content is thin (graceful fallback)
+- **QA modules** can use deep-research as ground-truth for fact-checking
+
+Putting this in Step 5 would couple it to one downstream consumer (likely seo-planner or content-writer) and prevent earlier steps from using it.
+
+### Why not bake into seo-planner
+
+The seo-planner's Perplexity integration is for KEYWORD discovery. Entity research is a different concern. Conflating them would:
+- Force every pipeline that wants entity research to also want SEO planning
+- Prevent reuse across content types (a news pipeline might want entity research without keyword distribution)
+- Violate the architectural principle of small modules with single concerns
+
+### Module specifics
+
+- `provider`: perplexity (model: `sonar-deep-research` or `sonar-pro` depending on depth needs — operator chooses)
+- `prompt`: a structured prompt that asks for the JSON schema above, with cite-or-null discipline matching content-analyzer
+- `reference_docs`: optional — operator can attach domain-specific guides (e.g. for iGaming, attach a brief on what counts as a "license" vs "certification" vs "registration")
+- `temperature`: low (0.1-0.2) — research should be factual
+- `max_tokens`: 8192 (deep research outputs can be substantial)
+
+### Downstream integration
+
+content-analyzer's execute.js already accepts arbitrary fields from pool items. To consume deep research:
+1. Add a `{deep_research}` placeholder to the content-analyzer prompt template
+2. Update content-analyzer's `buildPrompt` to inject `deep_research_json` content into that placeholder if present, empty string if absent
+3. content-analyzer prompt instructs the model to use deep_research as a SECONDARY source (scraped content is primary), and to flag discrepancies between the two
+
+No breaking changes to existing pipelines that don't use the new module — the `{deep_research}` placeholder is silently empty when absent.
+
+### Cost estimate
+
+Perplexity sonar-deep-research pricing as of June 2026: ~$3 per 1000 calls + token costs. Per entity: ~$0.05-0.15 depending on depth. For 100 entities: ~$5-15.
+
+The quality lift on thin-website entities justifies this many times over. For rich-website entities, the marginal value is smaller but the cross-validation against scraped content still catches scraper failures and stale data.
+
+### Not blocking
+
+- Existing pipelines work without it.
+- Tonight's company-profile template setup proceeds without it.
+- Adding it is purely additive — no module needs to change to start producing useful output, and downstream integration is opt-in via the `{deep_research}` placeholder.
+
+### Why not addressed today (2026-06-07)
+
+New module creation is a from-scratch design + manifest + execute.js + README + tests + production verification. Cleanly out of scope for tonight's template-tuning session. Architectural shape is clear; execution needs a dedicated session.
