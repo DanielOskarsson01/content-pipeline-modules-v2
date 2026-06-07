@@ -28,6 +28,7 @@ Tasks not yet scheduled for implementation.
 | 21 | Anthropic prompt caching not enabled in skeleton `ai.complete` — large reference docs paid for per call instead of cached | Medium (cost) | 2026-06-07 |
 | 22 | New Step 1 submodule: `sonar-deep-research` for LLM-grounded entity discovery (complements scraping) | Medium (new module) | 2026-06-07 |
 | 23 | Template creator dropdown + preset map should order submodules by pipeline-execution sequence (skeleton) | Low (UX) | 2026-06-07 |
+| 24 | Template editor — drag-and-drop reorder for submodules within a step (skeleton) | Medium (UX, ordering matters) | 2026-06-07 |
 
 ---
 
@@ -1085,3 +1086,63 @@ Also apply the same ordering to the preset map — wherever presets are grouped/
 ### Why this matters
 
 It's a small change with big leverage on operator error rate. The category-order data already exists; the UI just isn't consuming it consistently. Same shape of bug as the cv-generator field-name mismatch fixed 2026-05-31 — a contract that exists on one side but isn't honored on the other.
+
+---
+
+## Item 24 — Template editor needs drag-and-drop reorder for submodules within a step
+
+**Added:** 2026-06-07
+**Priority:** Medium (UX, ordering matters in most steps)
+**Scope:** skeleton repo — `content-pipeline-v2/client/src/components/pages/TemplateEditor.tsx` (frontend-only — backend already supports custom order)
+**Related:** Item 23 (dropdown initial-ordering); 2026-06-07 launch-endpoint bug-fix session (3f290b4 + 157c430)
+
+### Issue
+
+The Template Editor's per-step submodule list exposes only **add** and **remove** actions — no way to reorder submodules after adding them. The execution order is fixed at the moment of first save (existing entries preserved, new entries appended via `sortSubmoduleIds`). To change order, the operator must delete-all-and-re-add in the desired sequence — painful and error-prone.
+
+Surfaced 2026-06-07 immediately after the launch-endpoint fixes (`3f290b4` + `157c430`) unblocked the pipeline. Operator observed submodules executing in template-add order and asked why they can't reorder via the UI.
+
+### Why ordering matters
+
+Most pipeline steps have real ordering dependencies:
+
+- **Step 1 (Discovery):** `deep-links` has `pool_precondition: requires_items` — must run AFTER `sitemap-parser` / `page-links` / `browser-crawler` / similar `empty_ok` modules that populate the pool. Wrong order = halt with `skipped_no_input` cascade (already a friction point that hit during the 2026-06-07 session).
+- **Step 2 (Validation):** `url-canonicalizer` should typically run BEFORE `url-dedup` so dedup sees normalized URLs.
+- **Step 5 (Generation):** `content-analyzer` → `seo-planner` → `content-writer` → `tone-seo-editor` is the canonical sequence; reordering breaks the data dependency chain.
+- **Step 7 (Routing):** `loop-router` must typically be last so it sees all QA results.
+- **Step 8 (Bundling):** Bundling order matters for combined-output formats.
+
+### Backend status: order already supported
+
+The fix is frontend-only. Verified by reading the skeleton:
+
+- `submodules_per_step` in `templates.execution_plan` is an **ordered JSON array** per step (e.g. `{"1": ["sitemap-parser", "page-links", "deep-links"], ...}`)
+- The save endpoint at [`templates.js:432-437`](../content-pipeline-v2/server/routes/templates.js#L432-L437) preserves existing array order verbatim and only runs `sortSubmoduleIds` on genuinely-NEW entries (B046 fix from earlier)
+- The auto-executor reads the array in order — `submodules_per_step[stepIndex].forEach(...)` style
+- So a UI that lets the operator drag-reorder and saves the new array order Just Works against the existing backend
+
+### Proposed fix
+
+Frontend-only change in `client/src/components/pages/TemplateEditor.tsx`:
+
+1. Wrap the per-step submodule chip list in a drag-and-drop context (use `@dnd-kit` — modern, accessible, MIT-licensed, ~30KB; or `react-beautiful-dnd` if already pulled in elsewhere)
+2. Each submodule chip becomes a `SortableItem` with a drag handle (small grip icon at left edge)
+3. On drop, reorder the local `submodulesPerStep[stepIdx]` array and call `onSave({ ...plan, submodules_per_step: updated })`
+4. Visual feedback during drag: ghost outline of the dragged chip, blue highlight on the drop zone
+
+### Alternatives rejected
+
+- **Up/down arrow buttons** — workable fallback if drag-drop is too much scope, but less discoverable and clunkier UX
+- **Number-input field per submodule** — awkward, doesn't communicate the order visually
+- **Auto-sort by category+sort_order at execution time** — REJECTED, breaks operator intent (some orderings vary by content type per template)
+- **Force delete-and-readd workflow** — current painful workaround, bit during 2026-06-07 setup
+
+### Not blocking
+
+- Operators can still configure templates correctly by delete-and-readd or by being careful about initial add order
+- Pipeline runs work as expected once the order is correct
+- The architectural constraints (deep-links being `requires_items`) are caught at runtime, not silently broken
+
+### Why this matters more than #23
+
+#23 is about WHICH ORDER modules appear in the dropdown (the initial signal). This item is about LETTING OPERATORS CHANGE THE ORDER after the fact (the override mechanism). #23 makes the right choice easier; #24 makes wrong choices recoverable without delete-and-readd. Both are needed; #24 is the higher-leverage one because it covers all the cases #23 doesn't (custom orderings the operator wants for content-type-specific reasons).
