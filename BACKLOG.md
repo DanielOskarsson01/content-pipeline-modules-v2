@@ -25,6 +25,7 @@ Tasks not yet scheduled for implementation.
 | 15 | Add `DUPLICATE_INSTRUCTION` to `SKIP_REASONS` vocabulary (skeleton repo) — replace placeholder `QA_PASSED_ON_RECHECK` reuse in `cardGroups.expandCardGroups` duplicate-handling path | Low (defensive; well-formed state never hits it post Brutal-critic Fix #1) | 2026-06-02 |
 | 16 | Pre-flight cross-section dependency mapping — Section A pre-flight didn't capture route handler + migration as in-scope prerequisites for autoExecutor to function (caught by independent code-review 2026-06-03; same shape as item 12 pre-flight overshoot) | Low-medium (process) | 2026-06-03 |
 | 20 | tone-seo-editor: `tone_style` dropdown is redundant with prompt textarea + reference_docs mechanism | Low (cleanup) | 2026-06-07 |
+| 21 | Anthropic prompt caching not enabled in skeleton `ai.complete` — large reference docs paid for per call instead of cached | Medium (cost) | 2026-06-07 |
 
 ---
 
@@ -836,3 +837,66 @@ Migration plan should be drafted alongside the code change.
 
 - Your new company-profile template (2026-06-07) works fine with the current dropdown — pick `b2b_authoritative`, attach `tone_guide.md` via reference_docs, customize the prompt textarea if needed
 - A future humorous/relaxed pipeline can ship today via Option 3 (humorous voice instructions inline in the prompt textarea, saved as a preset) — no need to wait for this cleanup
+
+---
+
+## Item 21 — Anthropic prompt caching not enabled in skeleton `ai.complete` — large reference docs paid for per call instead of cached
+
+**Added:** 2026-06-07
+**Priority:** Medium (cost — meaningful at production scale)
+**Scope:** skeleton repo — `content-pipeline-v2/server/workers/stageWorker.js` (the `ai.complete` tool the modules use)
+**Related:** content-analyzer cost analysis on 2026-06-07; Item 2 (Step 5 flexibility)
+
+### Issue
+
+The skeleton's `ai.complete` tool ([stageWorker.js:146-198](../content-pipeline-v2/server/workers/stageWorker.js#L146-L198)) sends every Anthropic API call as a single `{role: 'user', content: prompt}` message with **no `cache_control` markers**. Every entity in a batch pays full input cost for the same large reference docs (`master_categories.md` ~17K tokens, `master_tags.md` ~3K tokens, `format_spec.md`, `tone_guide.md`, etc.) on top of any inline closed-vocabulary lookup tables operators add to their prompts.
+
+For a 100-entity content-analyzer run with default reference docs, the cached-vs-uncached cost difference is ~$13-130 (model-dependent) — the static prefix gets re-charged 100 times instead of once.
+
+### What prompt caching does
+
+Anthropic's `cache_control: {type: 'ephemeral'}` markers on stable prompt prefixes cause the API to cache that portion for ~5 minutes. Subsequent calls within the window read from cache at ~10% of normal input cost.
+
+### Per-module impact estimate
+
+| Module | Static prefix | Typical batch | Savings on 100 entities (Sonnet) |
+|---|---|---|---|
+| content-analyzer | ~20K tokens (master_categories + master_tags) | 2-100 entities | ~$56 input → ~$6 |
+| content-writer | ~15K tokens (format_spec + tone_guide + analysis context) | same | ~$42 input → ~$5 |
+| seo-planner | ~8K tokens (format_spec + tone_guide + research) | same | ~$22 input → ~$3 |
+| tone-seo-editor | ~5K tokens (tone_guide) | same | ~$14 input → ~$2 |
+
+Caching kicks in only when ≥2 entities run within the 5-minute window — which is normal for batch processing.
+
+### Implementation sketch
+
+1. Refactor `ai.complete` signature to accept a structured input separating cached prefix from variable suffix:
+   ```js
+   ai.complete({
+     cached_prefix: '<reference docs + slug lists + static instructions>',
+     content: '<{entity_content} + entity-specific bits>',
+     model, provider, temperature, max_tokens
+   })
+   ```
+2. Build the Anthropic API request as:
+   ```js
+   messages: [{
+     role: 'user',
+     content: [
+       { type: 'text', text: cached_prefix, cache_control: { type: 'ephemeral' } },
+       { type: 'text', text: content }
+     ]
+   }]
+   ```
+3. Update modules incrementally — most already structure prompts as `<reference docs> <instructions> {entity_content} <output schema>`, so the split point is natural.
+4. Verify cost reduction by reading `cache_creation_input_tokens` and `cache_read_input_tokens` from API response usage data.
+
+### Not blocking
+
+- Module behavior unchanged — caching is a pure cost optimization.
+- Single-entity runs and runs >5 min apart don't benefit but aren't penalized.
+- Can be rolled out one module at a time — content-analyzer first (biggest savings), others later.
+
+### Why not addressed today (2026-06-07)
+
+Surfaced during cost analysis but out of scope for tonight's new-template setup. The right place to fix is the skeleton, not the modules repo. Requires API-shape refactor + per-module update + production verification — a separate session.
