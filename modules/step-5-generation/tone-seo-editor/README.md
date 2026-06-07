@@ -1,14 +1,15 @@
 # Tone & SEO Editor
 
-> Post-writing editing pass that refines content for B2B tone and SEO keyword integration.
+> Post-writing editing pass that refines content for tone and SEO keyword integration. Content-type-agnostic by default; vertical/brand framing is layered in via presets or template-level prompt overrides.
 
 **Module ID:** `tone-seo-editor` | **Step:** 5 (Generation) | **Category:** generation | **Cost:** medium
-**Version:** 1.1.0 | **Data Operation:** add (+)
+**Version:** 1.2.0 | **Data Operation:** add (+)
 
 ## Changelog
 
-- **1.1.0** — Prompt tightened: H1 + lead paragraph MUST contain primary keyword; keyword frequency capped at 3-4 per article; FAQ questions preserved verbatim; brand tone guide injected via `{doc:tone_guide.md}`; "leave good sections alone" license added.
-  - **Upgrade note:** existing templates with a customized stored prompt do NOT auto-pick-up the new default. To apply the v1.1.0 rules to an old template, re-paste the default prompt or merge the diff manually, then tick `tone_guide.md` in `reference_docs`.
+- **1.2.0** — Module-level default genericised per the "small generic modules, not specialized ones" architectural commitment. Removed iGaming-vertical and B2B framing, removed hardcoded `{doc:tone_guide.md}` placeholder, removed company-profile-specific `[Overview]` / `[Primary Category: ...]` literal examples (rule kept generically). Generic SEO/structural/citation/FAQ rules retained. `{doc:<filename>}` mechanism still supported — operator chooses the filename in their preset or override. See **Configuring per content type** below for the preset + template-override pattern.
+  - **Upgrade note:** existing templates with a customized stored prompt do NOT auto-pick-up the new default. Templates that previously customized around the v1.0.0/v1.1.0 iGaming framing or `{doc:tone_guide.md}` placeholder continue to work unchanged. To adopt the v1.2.0 genericised default + preset architecture on an existing template, load the new default into the prompt textarea, then layer the OnlyiGaming voice preset on top.
+- **1.1.0** — (committed, not pushed) Added `{doc:tone_guide.md}` hardcoded placeholder and "leave good sections alone" license. Lock-ins reverted in v1.2.0; license retained.
 - **1.0.0** — Initial release.
 
 ---
@@ -65,7 +66,7 @@ It uses the **add** data operation — it produces a revised version of the cont
 | `tone_style` | b2b_authoritative | Switch based on audience and content type | Changes the tone instruction set sent to the LLM |
 | `max_content_chars` | 50000 | Increase for very long profiles; decrease to save tokens | Content truncated beyond this limit |
 | `prompt` | (editing template) | Customize for specific editorial guidelines or brand voice | Full LLM instruction with `{content_markdown}`, `{keyword_targets}`, `{tone_instructions}`, and `{doc:<filename>}` placeholders |
-| `reference_docs` | (none) | Attach `tone_guide.md` from `pipeline-company-profiles/` (or equivalent brand voice doc) | Files selected here are injected via `{doc:<filename>}` placeholders in the prompt. The default prompt uses `{doc:tone_guide.md}`. |
+| `reference_docs` | (none) | Attach any reference doc your prompt references via a `{doc:<filename>}` placeholder (e.g. a voice guide, style sheet, brand brief). | Files selected here are injected into the prompt wherever a matching `{doc:<filename>}` placeholder appears. Unmatched placeholders are silently stripped. The module default uses NO `{doc:...}` placeholders — add one in your preset or template-level override and tick the matching file. |
 
 ### Tone Styles Explained
 
@@ -77,6 +78,35 @@ Friendly, approachable tone. Uses contractions, occasional rhetorical questions,
 
 **technical_precise**
 Exact terminology, no marketing language. Specific numbers, version numbers, protocol names. Passive voice where the actor is irrelevant. Completeness over brevity. Good for technical product profiles or integration guides.
+
+## Configuring per content type
+
+The module default prompt is intentionally content-type-agnostic (no vertical lock, no hardcoded reference-doc filename, no content-type-specific output markers). Per the project's architectural commitment ("small generic modules, not specialized ones"), vertical/brand/content-type specifics layer on via two mechanisms:
+
+### Preset — for specifics reused across multiple templates
+
+Presets are operator-authored and stored in the skeleton's `option_presets` Supabase table. They are not files in this repo — there is nothing to commit. Author flow:
+
+1. In the UI, open any template's Tone & SEO Editor step.
+2. Paste the full customized prompt (e.g. add the vertical framing, append `{doc:tone_guide.md}` under a "### BRAND TONE GUIDE" section) into the `prompt` textarea.
+3. Click **Save as preset**, name it (e.g. `OnlyiGaming B2B iGaming Voice`), choose **Global** so all projects see it.
+4. Other templates select it from the **— Presets —** dropdown above the prompt field; the full prompt loads.
+
+**Stacking is NOT supported.** The preset dropdown REPLACES the field value — picking a preset clobbers whatever is there, picking a second preset clobbers the first. One preset per option per template.
+
+### Template-level override — for one-off specifics
+
+Anything specific to a single template (e.g. company-profile output markers like `[Overview]` or `[Primary Category: ...]`) belongs in the template's stored prompt, not the preset. Workflow:
+
+1. Select the relevant preset from the dropdown to load its prompt as a starting point.
+2. Edit the prompt textarea directly to append/insert the template-specific rules.
+3. Save the template. The customized prompt is stored against that template only.
+
+The OnlyiGaming company-profile template, for example, loads the `OnlyiGaming B2B iGaming Voice` preset and then appends a rule: *"Do NOT change or remove these heading/type markers: [Overview], [Primary Category: ...]."*
+
+### `{doc:<filename>}` placeholder mechanism
+
+Any text inside the prompt of the form `{doc:somefile.md}` is replaced at execution time with the contents of `somefile.md`, IF the operator ticks `somefile.md` in `reference_docs`. If the file is not attached, the placeholder is silently stripped. The filename is arbitrary — pick whatever the operator will upload (`tone_guide.md`, `voice_brief.md`, `style_guide.md`, etc.). The module makes no assumptions about which filenames exist.
 
 ## Recipes
 
