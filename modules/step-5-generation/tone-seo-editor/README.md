@@ -3,7 +3,13 @@
 > Post-writing editing pass that refines content for B2B tone and SEO keyword integration.
 
 **Module ID:** `tone-seo-editor` | **Step:** 5 (Generation) | **Category:** generation | **Cost:** medium
-**Version:** 1.0.0 | **Data Operation:** add (+)
+**Version:** 1.1.0 | **Data Operation:** add (+)
+
+## Changelog
+
+- **1.1.0** — Prompt tightened: H1 + lead paragraph MUST contain primary keyword; keyword frequency capped at 3-4 per article; FAQ questions preserved verbatim; brand tone guide injected via `{doc:tone_guide.md}`; "leave good sections alone" license added.
+  - **Upgrade note:** existing templates with a customized stored prompt do NOT auto-pick-up the new default. To apply the v1.1.0 rules to an old template, re-paste the default prompt or merge the diff manually, then tick `tone_guide.md` in `reference_docs`.
+- **1.0.0** — Initial release.
 
 ---
 
@@ -58,7 +64,8 @@ It uses the **add** data operation — it produces a revised version of the cont
 | `temperature` | 0.4 | Lower (0.3) for minimal changes; higher (0.5) for more aggressive rewrites | Controls how much the editor deviates from original |
 | `tone_style` | b2b_authoritative | Switch based on audience and content type | Changes the tone instruction set sent to the LLM |
 | `max_content_chars` | 50000 | Increase for very long profiles; decrease to save tokens | Content truncated beyond this limit |
-| `prompt` | (editing template) | Customize for specific editorial guidelines or brand voice | Full LLM instruction with `{content_markdown}`, `{keyword_targets}`, `{tone_instructions}` placeholders |
+| `prompt` | (editing template) | Customize for specific editorial guidelines or brand voice | Full LLM instruction with `{content_markdown}`, `{keyword_targets}`, `{tone_instructions}`, and `{doc:<filename>}` placeholders |
+| `reference_docs` | (none) | Attach `tone_guide.md` from `pipeline-company-profiles/` (or equivalent brand voice doc) | Files selected here are injected via `{doc:<filename>}` placeholders in the prompt. The default prompt uses `{doc:tone_guide.md}`. |
 
 ### Tone Styles Explained
 
