@@ -1,9 +1,9 @@
 # SEO Planner
 
-> Keyword distribution planner with web-researched keyword data. Maps target keywords to predefined article sections, generates meta tags and FAQs.
+> Keyword distribution planner with web-researched keyword data. Selects target keywords and produces meta tags, optional FAQs, and section-level keyword distribution. The manifest default is fully project-agnostic; pipeline-specific shapes (e.g. company-profile section breakdowns) come from template-level prompt overrides.
 
 **Module ID:** `seo-planner` | **Step:** 5 (Generation) | **Category:** planning | **Cost:** expensive
-**Version:** 2.1.0 | **Data Operation:** add (➕)
+**Version:** 2.2.0 | **Data Operation:** add (➕)
 
 ---
 
@@ -30,6 +30,116 @@ content-analyzer (＝) -> seo-planner (➕) -> content-writer (➕)
 It uses the **add (➕)** data operation - it chains from the working pool, finding content-analyzer output by the `source_submodule` field, and adds its own output alongside. After approval, the pool contains both analysis items and SEO plan items, distinguished by `source_submodule`.
 
 This is the cheapest step in the chain. The input is just the analysis JSON (a few KB), not the full scraped text (50KB+). This makes it safe to re-run multiple times while iterating on keyword strategy without significant cost.
+
+### v2.2.0: Agnostic Manifest + Per-Template Refusal Flag + Defensive Parser (2026-06-09)
+
+v2.2.0 is the pilot of an architectural principle that will be rolled out across all submodule manifests: **manifest defaults must be 100% project-agnostic**. Pipeline-specific shape (company-profile categories/tags/credentials sections, news-article lede/quotes, podcast episode/guest structure, etc.) lives only in template-level prompt overrides, never in manifest defaults.
+
+#### What changed
+
+1. **Manifest default prompt is now fully agnostic.** All references to company-profile concepts (categories, tags, credentials, FAQ sections by name, 5-FAQ hardcoding, B2B/iGaming framing) have been removed from `options[prompt].default` and the matching `options_defaults.prompt`. The agnostic default produces a flat plan: `target_keywords` (primary/secondary/long_tail), `keyword_sources` (provenance audit), `meta` (title/description with character counts), `faqs` (count-driven), `tone_notes`, `warnings`, and a free-form `keyword_distribution: {}` object that the template fills via `format_spec.md`.
+
+2. **New `requires_prompt_override` option (boolean, default `false`).** Per-template fail-loud flag. When a template sets this `true` via `preset_map.<sub>.fallback_values.requires_prompt_override` and the runtime prompt equals the manifest default (no override configured), seo-planner refuses the run *before* any keyword research fires, with an actionable error: *"Template requires a seo-planner prompt override but none is configured. Upload a prompt override in this template's seo-planner settings, or unset requires_prompt_override on this template."* When the flag is `false` (or absent), the agnostic manifest default is a legitimate run path.
+
+3. **Refusal detection is comparison-based, not sentinel-based.** `execute.js` loads its own manifest at module-load time and stores `MANIFEST_DEFAULT_PROMPT`. The refusal trigger is strict equality: `options.prompt === MANIFEST_DEFAULT_PROMPT`. Any UI edit — even a single-character tweak — counts as an override and proceeds. No sentinel string is injected into the prompt text. (Detection survives all edit styles.)
+
+4. **New `faq_count` option (number, default 0).** Drives FAQ count on the agnostic path (`{faq_count}` placeholder in the manifest default prompt). On override paths, `faq_count` is ignored unless the override prompt explicitly uses the `{faq_count}` placeholder. Single source of truth per run: either the override's hardcoded count or `faq_count`, never both.
+
+5. **Defensive parser with markdown-leak recovery.** `parseJsonResponse()` now runs a defensive cleanup pass when initial parse fails: it strips lines starting with `#` (markdown headings) from inside the extracted JSON region and retries. This recovers from the failure pattern seen in 2026-06-08 production runs where the LLM emitted `# KEYWORD PLAN` headings before or inside the JSON.
+
+6. **Raw LLM output preserved on parse failure.** When JSON parsing fails after defensive cleanup, the error carries the original (pre-cleanup) LLM response as `err.rawText`. The catch block in `execute()` logs the first 2000 characters of that raw text to the submodule_run's `logs` array. Forensic diagnosis after a parse failure is now minutes instead of hours.
+
+7. **JSON-only enforcement strengthened in the prompt.** The agnostic default's OUTPUT FORMAT section ends with: *"The first character of your response MUST be `{` and the last character MUST be `}`. No markdown headings before, after, or inside the JSON. No code fences. No explanation. No preamble."* The defensive parser is the second line of defense; the prompt is the first.
+
+#### Semver decision
+
+This is a **minor bump (2.1.0 → 2.2.0)**, not major, because no code path in `content-pipeline-v2/` or `content-pipeline-modules-v2/` consumes manifest defaults at the field-name level. The skeleton's `moduleLoader.js` and `submoduleRuns.js` pass `output_schema` through as `output_render_schema` for the UI's result cards, but downstream submodules (content-writer, tone-seo-editor, meta-compliance-checker, keyword-sufficiency-checker) introspect runtime `seo_plan_json` data, not the manifest. Documented assumption: if a future consumer of manifest defaults emerges, the consumer needs to handle the now-thinner agnostic schema, but the existing four are unaffected.
+
+#### Configuring per content type (template prompt overrides)
+
+The manifest default is a legitimate generic run path. Pipelines that need section-structured output (the company-profile pipeline today, future news/podcast/marketplace pipelines tomorrow) override the prompt via the template's `preset_map.<sub>.fallback_values.prompt`, paired with `requires_prompt_override = true` to fail-loud if the override is later removed.
+
+Three example template configurations:
+
+##### Example A — Company-profile pipeline (live: template `7th june 17.15`)
+
+```jsonc
+{
+  "preset_map": {
+    "seo-planner": {
+      "fallback_values": {
+        "requires_prompt_override": true,
+        "prompt": "You are an SEO strategist for OnlyiGaming, a B2B directory ... [full text in /modules/step-5-generation/pipeline-company-profiles/seo_planner_prompt.md]",
+        "ai_model": "sonnet"
+      }
+    }
+  }
+}
+```
+
+Output shape: target_keywords + keyword_distribution with **categories[]** / **tags[]** / **credentials** / **faq** sub-objects + 5 hardcoded FAQs + meta. The override's prompt drives FAQ count (hardcoded 5); `faq_count` is unused on this path.
+
+##### Example B — News-article pipeline (hypothetical)
+
+```jsonc
+{
+  "preset_map": {
+    "seo-planner": {
+      "fallback_values": {
+        "requires_prompt_override": true,
+        "prompt": "You are an SEO strategist for a news outlet ... Map keywords to: lede, nut graf, quotes, context, callout box ...",
+        "faq_count": 0,
+        "ai_model": "haiku"
+      }
+    }
+  }
+}
+```
+
+Output shape: target_keywords + keyword_distribution with **lede / nut_graf / quotes / context / callout** sub-objects + 0 FAQs (news articles don't use FAQ schema) + meta.
+
+##### Example C — Podcast-episode pipeline (hypothetical)
+
+```jsonc
+{
+  "preset_map": {
+    "seo-planner": {
+      "fallback_values": {
+        "requires_prompt_override": true,
+        "prompt": "You are an SEO strategist for a podcast ... Map keywords to: episode_summary, timestamps, guest_intros, key_takeaways ...",
+        "faq_count": 3,
+        "ai_model": "haiku"
+      }
+    }
+  }
+}
+```
+
+Output shape: target_keywords + keyword_distribution with **episode_summary / timestamps / guest_intros / key_takeaways** sub-objects + 3 FAQs + meta. Podcast pipeline uses the `{faq_count}` placeholder in its prompt to make count template-configurable.
+
+#### Cross-submodule schema coupling (downstream consumers)
+
+Override prompts must produce a `seo_plan_json` shape that downstream submodules can read. The shared, backward-compatible backbone is:
+
+| Field | Required by | Required value |
+|---|---|---|
+| `meta.title` (string) | content-writer | Any non-empty string |
+| `target_keywords.primary` (string) | meta-compliance-checker, tone-seo-editor, keyword-sufficiency-checker | Any non-empty string |
+| `target_keywords.secondary` (string[]) | (same as above) | Array of strings (can be empty) |
+| `target_keywords.long_tail` (string[]) | (same as above) | Array of strings (can be empty) |
+
+Optional fields downstream consumers handle gracefully when present:
+
+| Field | Used by | What it enables |
+|---|---|---|
+| `meta.description`, `meta.title_chars`, `meta.description_chars` | meta-compliance-checker | Per-field length compliance checks |
+| `keyword_distribution.overview.headline_keywords[]` | keyword-sufficiency-checker | Extra head-term coverage source |
+| `keyword_sources` | (forensic audit only) | Records which research query each keyword came from |
+| `faqs[].{question, answer_brief, target_keyword}` | content-writer (carried in JSON.stringify) | FAQ section in the article |
+| `tone_notes` | tone-seo-editor (carried in JSON.stringify) | Tone guidance for the editor |
+| `warnings[]` | UI display | Operator review flags |
+
+Override prompts that produce additional `keyword_distribution` sub-objects (categories/tags/credentials/faq for company profiles, etc.) are extensions on top of this backbone — they don't replace it.
 
 ### v2.1.0: Prompt Coherence + Configurable Perplexity Model (2026-06-07)
 

@@ -1,30 +1,46 @@
 /**
  * SEO Planner — Step 5 Generation submodule
  *
- * Takes content-analyzer output and generates an SEO keyword distribution plan:
- * target keywords mapped to predefined sections, meta title/description, and FAQs.
+ * Takes content-analyzer output and generates a keyword distribution plan:
+ * target keywords, meta title/description, optional FAQs, and section-level
+ * keyword distribution. The manifest default is fully project-agnostic;
+ * pipeline-specific shapes (e.g. company-profile categories/tags/credentials
+ * section breakdowns) are added via template-level prompt overrides.
  *
- * v2.0.0: Adds keyword research pre-step via Perplexity Sonar (or other search providers).
- * Researches actual keywords from the web before the LLM creates the plan.
- * Pipeline-agnostic — works for company profiles, review articles, news, bios, etc.
+ * v2.0.0: keyword research pre-step via Perplexity Sonar.
+ * v2.1.0: configurable perplexity_model, keyword_sources audit field.
+ * v2.2.0: manifest default is fully agnostic. New options requires_prompt_override
+ *         (per-template fail-loud flag) and faq_count (agnostic-path FAQ count knob).
+ *         {faq_count} placeholder interpolation. Defensive parser handles markdown
+ *         leakage. Raw LLM output preserved in submodule logs on parse failure.
  *
  * Data operation: ADD (+) — adds SEO plan alongside analysis.
  * Requires content-analyzer to have run first (finds items via source_submodule).
  */
 
+const MANIFEST = require('./manifest.json');
+const MANIFEST_DEFAULT_PROMPT = MANIFEST.options_defaults.prompt;
+
 /**
  * Replace prompt placeholders with actual content.
  * - {entity_content} → analysis JSON
  * - {keyword_research} → keyword research results (or fallback to keyword-summary.md)
+ * - {faq_count} → configurable FAQ count (agnostic-path knob; override prompts that
+ *                 don't use the placeholder are unaffected)
  * - {doc:filename} → reference doc content
  */
-function buildPrompt(promptTemplate, entityContent, referenceDocs, keywordResearchText) {
+function buildPrompt(promptTemplate, entityContent, referenceDocs, keywordResearchText, faqCount) {
   let prompt = promptTemplate.replace(/\{entity_content\}/g, entityContent);
 
   // Replace {keyword_research} — research results, or fallback to keyword-summary.md, or empty notice
   const keywordFallback = (referenceDocs && referenceDocs['keyword-summary.md']) || '';
   const keywordData = keywordResearchText || keywordFallback || 'No keyword research data available.';
   prompt = prompt.replace(/\{keyword_research\}/g, keywordData);
+
+  // Replace {faq_count} with the configured count. Override prompts that don't
+  // include the placeholder are unaffected; for them the override's own FAQ
+  // instructions remain authoritative.
+  prompt = prompt.replace(/\{faq_count\}/g, String(faqCount ?? 0));
 
   // Replace {doc:filename} placeholders
   if (referenceDocs && typeof referenceDocs === 'object') {
@@ -44,11 +60,23 @@ function escapeRegex(str) {
 }
 
 /**
- * Parse JSON from LLM response, handling markdown code fences.
- * Handles: complete fences, truncated fences, preamble text.
+ * Parse JSON from an LLM response.
+ *
+ * Strategy:
+ *   1. Strip a single outer ```json fence if present
+ *   2. Trim to the substring between the first `{` and the last `}`
+ *   3. Try JSON.parse. If it succeeds, return the parsed plan.
+ *   4. On failure, run a defensive cleaner that removes markdown-heading
+ *      lines (^#.*) inside the JSON region — defense against the
+ *      `# KEYWORD PLAN ... { "target_keywords": ... }` leak pattern
+ *      observed in 2026-06-08 production runs.
+ *   5. On final failure, throw an Error whose `.rawText` property carries
+ *      the original (pre-cleanup) LLM response so the catch block can
+ *      preserve it in the submodule_run logs for forensic analysis.
  */
 function parseJsonResponse(text) {
-  let cleaned = text.trim();
+  const original = typeof text === 'string' ? text : String(text ?? '');
+  let cleaned = original.trim();
 
   const fenceMatch = cleaned.match(/```(?:json|JSON)?\s*\n?([\s\S]*?)\n?```/);
   if (fenceMatch) {
@@ -63,7 +91,28 @@ function parseJsonResponse(text) {
     cleaned = cleaned.substring(firstBrace, lastBrace + 1);
   }
 
-  return JSON.parse(cleaned);
+  try {
+    return JSON.parse(cleaned);
+  } catch (firstErr) {
+    // Defensive pass: strip markdown heading lines that may have leaked
+    // INTO the JSON region. A line starting with `#` is never valid JSON
+    // (no JSON key/value begins with `#`), so removing such lines cannot
+    // corrupt valid JSON, and may recover it from a markdown-laced response.
+    const stripped = cleaned
+      .split('\n')
+      .filter(line => !/^\s*#/.test(line))
+      .join('\n')
+      .trim();
+    try {
+      return JSON.parse(stripped);
+    } catch (secondErr) {
+      const err = new Error(`JSON parse failed after defensive cleanup: ${secondErr.message}`);
+      err.rawText = original;
+      err.firstError = firstErr.message;
+      err.secondError = secondErr.message;
+      throw err;
+    }
+  }
 }
 
 /**
@@ -85,7 +134,14 @@ function validateMeta(meta) {
 
 /**
  * Flatten SEO plan JSON into display-friendly fields.
- * Handles v1.3.0 (keyword_distribution) and v1.2.0 (content_outline) schemas.
+ *
+ * The manifest default emits target_keywords + meta + faqs + keyword_distribution
+ * as a free-form object (typically {}). Company-profile overrides emit the same
+ * shape PLUS keyword_distribution sub-objects for overview/categories/tags/
+ * credentials/faq sections — this function renders those when present so the
+ * UI can display them, but does not require them.
+ *
+ * Backwards-compat: also handles v1.2.0 content_outline schema if encountered.
  */
 function flattenPlan(plan) {
   const keywords = plan.target_keywords || {};
@@ -101,15 +157,14 @@ function flattenPlan(plan) {
     keywords.long_tail?.length ? `Long-tail: ${keywords.long_tail.join(', ')}` : null,
   ].filter(Boolean).join('\n');
 
-  // Keyword distribution text (v1.3.0)
   const dist = plan.keyword_distribution;
   let keywordDistText = '';
   let keywordDistPreview = '';
 
-  if (dist) {
+  if (dist && typeof dist === 'object' && !Array.isArray(dist)) {
     const lines = [];
 
-    // Overview
+    // Overview (company-profile override and any other override with this section)
     if (dist.overview) {
       lines.push('Overview:');
       if (dist.overview.headline_keywords?.length) {
@@ -120,8 +175,8 @@ function flattenPlan(plan) {
       }
     }
 
-    // Categories
-    const cats = dist.categories || [];
+    // Categories (company-profile override)
+    const cats = Array.isArray(dist.categories) ? dist.categories : [];
     if (cats.length > 0) {
       lines.push('');
       lines.push('Categories:');
@@ -136,8 +191,8 @@ function flattenPlan(plan) {
       }
     }
 
-    // Tags
-    const tags = dist.tags || [];
+    // Tags (company-profile override)
+    const tags = Array.isArray(dist.tags) ? dist.tags : [];
     if (tags.length > 0) {
       lines.push('');
       lines.push('Tags:');
@@ -148,16 +203,29 @@ function flattenPlan(plan) {
       }
     }
 
-    // Credentials
+    // Credentials (company-profile override)
     if (dist.credentials?.keywords?.length) {
       lines.push('');
       lines.push(`Credentials: ${dist.credentials.keywords.join(', ')}`);
     }
 
-    // FAQ
+    // FAQ section keywords (company-profile override)
     if (dist.faq?.keywords?.length) {
       lines.push('');
       lines.push(`FAQ: ${dist.faq.keywords.join(', ')}`);
+    }
+
+    // Any other custom sections (other overrides) — render generically
+    const knownKeys = new Set(['overview', 'categories', 'tags', 'credentials', 'faq']);
+    for (const [secName, secVal] of Object.entries(dist)) {
+      if (knownKeys.has(secName)) continue;
+      if (secVal && typeof secVal === 'object') {
+        const flat = JSON.stringify(secVal);
+        if (flat !== '{}' && flat !== '[]') {
+          lines.push('');
+          lines.push(`${secName}: ${flat.slice(0, 200)}${flat.length > 200 ? '…' : ''}`);
+        }
+      }
     }
 
     keywordDistText = lines.join('\n') || 'No keyword distribution generated';
@@ -175,10 +243,17 @@ function flattenPlan(plan) {
     for (const tag of tags) {
       (tag.keywords || []).forEach(k => totalUniqueKeywords.add(k));
     }
-    keywordDistPreview = `${cats.length} categories, ${tags.length} tags, ${totalUniqueKeywords.size} unique keywords`;
+    if (totalUniqueKeywords.size === 0) {
+      // Agnostic path — show target_keywords counts instead
+      const tk = keywords.secondary?.length || 0;
+      const lt = keywords.long_tail?.length || 0;
+      keywordDistPreview = `target_keywords: ${tk} secondary, ${lt} long-tail`;
+    } else {
+      keywordDistPreview = `${cats.length} categories, ${tags.length} tags, ${totalUniqueKeywords.size} unique keywords`;
+    }
 
   } else if (plan.content_outline) {
-    // Fallback: v1.2.0 content_outline format
+    // Backwards-compat: v1.2.0 content_outline format
     const outline = plan.content_outline || [];
     keywordDistPreview = outline.map(s => {
       const type = s.type ? `[${s.type}]` : '';
@@ -197,6 +272,12 @@ function flattenPlan(plan) {
       }
     }
     keywordDistText = outlineLines.join('\n') || 'No outline generated';
+  } else {
+    // No distribution at all — agnostic path with no format spec
+    const tk = keywords.secondary?.length || 0;
+    const lt = keywords.long_tail?.length || 0;
+    keywordDistText = 'No section-level distribution (no format_spec.md provided)';
+    keywordDistPreview = `target_keywords: ${tk} secondary, ${lt} long-tail`;
   }
 
   // Meta text with character counts
@@ -207,12 +288,14 @@ function flattenPlan(plan) {
     `Description: ${meta.description || 'Not generated'} (${descChars} chars)`,
   ].join('\n');
 
-  // FAQs text — v1.3.0: answer_brief + target_keyword; v1.2.0: answer_brief; v1.0.0: answer
-  const faqsText = faqs.map((faq, i) => {
-    const direction = faq.answer_brief || faq.answer || '';
-    const keyword = faq.target_keyword ? `\nKeyword: ${faq.target_keyword}` : '';
-    return `Q${i + 1}: ${faq.question}\nDirection: ${direction}${keyword}`;
-  }).join('\n\n') || 'No FAQs generated';
+  // FAQs text
+  const faqsText = faqs.length === 0
+    ? 'No FAQs requested'
+    : faqs.map((faq, i) => {
+        const direction = faq.answer_brief || faq.answer || '';
+        const keyword = faq.target_keyword ? `\nKeyword: ${faq.target_keyword}` : '';
+        return `Q${i + 1}: ${faq.question}\nDirection: ${direction}${keyword}`;
+      }).join('\n\n');
 
   return {
     primary_keyword: primaryKeyword,
@@ -229,7 +312,7 @@ function flattenPlan(plan) {
 
 /**
  * Extract a short context string from the analysis for research query interpolation.
- * Tries common fields across pipeline types (company profiles, categories, etc.).
+ * Tries common fields across pipeline types (company profiles, news, etc.).
  */
 function buildEntityContext(entity, analyzerItem) {
   const analysis = analyzerItem.analysis_json || analyzerItem;
@@ -330,14 +413,71 @@ function synthesizeResearch(results, searchProvider) {
   return `## Keyword Research (${searchProvider}, ${results.length} queries, ${totalCitations} sources)\n\n${sections.join('\n\n---\n\n')}`;
 }
 
+/**
+ * Build the error-result item for a single entity when the run cannot proceed.
+ */
+function buildErrorItem(entityName, errMsg) {
+  return {
+    entity_name: entityName,
+    status: 'error',
+    primary_keyword: '',
+    keyword_plan_preview: '',
+    meta_title: '',
+    faq_count: 0,
+    keywords_text: '',
+    keyword_distribution_text: '',
+    meta_text: '',
+    faqs_text: '',
+    tone_notes: '',
+    warnings: '',
+    error: errMsg,
+    seo_plan_json: null,
+  };
+}
+
 async function execute(input, options, tools) {
   const { entities } = input;
-  const { ai_model, ai_provider, prompt: promptTemplate, reference_docs, temperature, max_tokens,
-          keyword_research, search_provider, perplexity_model, research_queries } = options;
+  const {
+    ai_model, ai_provider, prompt: promptTemplate, reference_docs,
+    temperature, max_tokens,
+    keyword_research, search_provider, perplexity_model, research_queries,
+    faq_count, requires_prompt_override,
+  } = options;
   const { logger, progress, ai } = tools;
 
   const results = [];
   const errors = [];
+
+  // Refusal check: per-template fail-loud flag. When a template sets
+  // requires_prompt_override = true via preset_map.<sub>.fallback_values, and
+  // no prompt override is configured (so options.prompt === the manifest default),
+  // refuse the run early with a clear actionable error. The manifest default
+  // remains a valid run path when this flag is not set.
+  if (requires_prompt_override === true && promptTemplate === MANIFEST_DEFAULT_PROMPT) {
+    const errMsg = 'Template requires a seo-planner prompt override but none is configured. Upload a prompt override in this template\'s seo-planner settings, or unset requires_prompt_override on this template.';
+    logger.error(`seo-planner refused run: ${errMsg}`);
+    for (const entity of entities) {
+      errors.push(`${entity.name}: ${errMsg}`);
+      results.push({
+        entity_name: entity.name,
+        items: [buildErrorItem(entity.name, errMsg)],
+        meta: { status: 'error' },
+      });
+    }
+    if (tools._partialItems) {
+      tools._partialItems.length = 0;
+      tools._partialItems.push(...results.flatMap(r => r.items));
+    }
+    return {
+      results,
+      summary: {
+        total_entities: entities.length,
+        total_items: 0,
+        description: `0/${entities.length} SEO plans generated — refused: template requires prompt override`,
+        errors,
+      },
+    };
+  }
 
   for (let i = 0; i < entities.length; i++) {
     const entity = entities[i];
@@ -354,22 +494,7 @@ async function execute(input, options, tools) {
 
       results.push({
         entity_name: entity.name,
-        items: [{
-          entity_name: entity.name,
-          status: 'error',
-          primary_keyword: '',
-          keyword_plan_preview: '',
-          meta_title: '',
-          faq_count: 0,
-          keywords_text: '',
-          keyword_distribution_text: '',
-          meta_text: '',
-          faqs_text: '',
-          tone_notes: '',
-          warnings: '',
-          error: errMsg,
-          seo_plan_json: null,
-        }],
+        items: [buildErrorItem(entity.name, errMsg)],
         meta: { status: 'error' },
       });
       if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
@@ -403,7 +528,7 @@ async function execute(input, options, tools) {
         ? JSON.stringify(analyzerItem.analysis_json, null, 2)
         : JSON.stringify(analyzerItem, null, 2);
 
-      const prompt = buildPrompt(promptTemplate, analysisContent, reference_docs, keywordResearchText);
+      const prompt = buildPrompt(promptTemplate, analysisContent, reference_docs, keywordResearchText, faq_count);
 
       const response = await ai.complete({
         prompt,
@@ -413,7 +538,19 @@ async function execute(input, options, tools) {
         max_tokens,
       });
 
-      const plan = parseJsonResponse(response.text);
+      let plan;
+      try {
+        plan = parseJsonResponse(response.text);
+      } catch (parseErr) {
+        // Forensic preservation: log the raw LLM response so the next failure
+        // is debuggable in minutes rather than hours.
+        const rawSnippet = (parseErr.rawText || response.text || '').slice(0, 2000);
+        logger.error(
+          `${entity.name}: JSON parse failed — ${parseErr.firstError || parseErr.message}. ` +
+          `Raw LLM response (first 2000 chars): ${JSON.stringify(rawSnippet)}`
+        );
+        throw parseErr;
+      }
 
       // Validate meta lengths (warn, don't fail)
       const metaWarnings = validateMeta(plan.meta || {});
@@ -463,22 +600,7 @@ async function execute(input, options, tools) {
 
       results.push({
         entity_name: entity.name,
-        items: [{
-          entity_name: entity.name,
-          status: 'error',
-          primary_keyword: '',
-          keyword_plan_preview: '',
-          meta_title: '',
-          faq_count: 0,
-          keywords_text: '',
-          keyword_distribution_text: '',
-          meta_text: '',
-          faqs_text: '',
-          tone_notes: '',
-          warnings: '',
-          error: err.message,
-          seo_plan_json: null,
-        }],
+        items: [buildErrorItem(entity.name, err.message)],
         meta: { status: 'error' },
       });
       if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
@@ -502,3 +624,5 @@ async function execute(input, options, tools) {
 }
 
 module.exports = execute;
+// Exported for test harness use only — not part of the public submodule interface.
+module.exports.__testing = { parseJsonResponse, parseResearchQueries, buildPrompt, MANIFEST_DEFAULT_PROMPT };
