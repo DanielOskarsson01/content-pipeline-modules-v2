@@ -8,25 +8,66 @@ THIS FILE IS A SNAPSHOT, not the canonical value. The UI edits the template dire
 in Supabase; this markdown is a versioned record for code review, audit, and onboarding.
 If you change the template via the UI, re-export this file so the snapshot stays current.
 
-Last synced: 2026-06-09 — v2 added SLUG FIDELITY RULE after 09:41 production run produced
-`[Primary Category: platform-provider]` in the article header despite the analyzer correctly
-emitting `casino-platforms` + `sportsbook-platform` from the closed vocabulary. haiku was
-paraphrasing the slug into an invented "cleaner" label. Two coordinated fixes: (a) bump
-ai_model to sonnet on this override; (b) add a verbatim-copy rule for category and tag slugs.
+Last synced: 2026-06-09 — v3:
+- Pairs with content-writer submodule v1.5.0 which adds the agnostic `allowed_slug_paths`
+  manifest option. The submodule is now content-type-agnostic — cover letters, news,
+  podcasts, etc. that do not use slug brackets in headings leave `allowed_slug_paths`
+  empty and get unchanged v1.4.0 behavior. Company-profile templates configure paths.
+- This template configures allowed_slug_paths to extract
+    Primary Category=categories.primary[].slug
+    Secondary Category=categories.secondary[].slug
+    Tag=tags.existing[].slug
+    Tag=tags.suggested_new[].label
+- The prompt's SLUG FIDELITY RULE now points at the ALLOWED SLUGS block (emitted by
+  the submodule at run time, prepended to entity_content above the narrative source
+  pages) as the authoritative closed vocabulary, instead of asking the model to walk
+  the analysis_json itself.
 
-The override is paired with `ai_model: sonnet` on the same template's
-`preset_map['content-writer'].fallback_values`.
+Previous versions:
+- v1 (2026-02-23): original draft.
+- v2 (2026-06-09 morning): added inline SLUG FIDELITY RULE pointing at JSON paths.
+  Sonnet still drifted on Pronet Gaming under heavy narrative pressure (60K chars of
+  scraped pages saying "platform provider" repeatedly). The rule asked the model to
+  walk the JSON, which it could not reliably do when distracted by narrative.
+- v3 (2026-06-09 afternoon, current): per-entity closed vocabulary is precomputed by
+  the submodule (`allowed_slug_paths` walks `analysis_json` and renders a block). The
+  prompt rule points the model at the precomputed list. The model only has to copy.
+
+The override is paired with:
+- `ai_model: sonnet`
+- `allowed_slug_paths` config (see above)
+on the same template's `preset_map['content-writer'].fallback_values`.
 
 Placeholders interpolated at run time:
-- {entity_content} = analysis_json + seo_plan_json + source_pages
+- {entity_content} = ALLOWED SLUGS block (v1.5.0+) + analysis_json + seo_plan_json + source_pages
 - {doc:format_spec.md} = format spec reference doc
 - {doc:tone_guide.md} = tone guide reference doc
 -->
+
+## Required template configuration
+
+Beyond this prompt, the company-profile template MUST set the following on
+`preset_map['content-writer'].fallback_values`:
+
+```jsonc
+{
+  "prompt": "<the prompt block below>",
+  "ai_model": "sonnet",
+  "allowed_slug_paths": "Primary Category=categories.primary[].slug\nSecondary Category=categories.secondary[].slug\nTag=tags.existing[].slug\nTag=tags.suggested_new[].label"
+}
+```
+
+If `allowed_slug_paths` is missing, the submodule emits no ALLOWED SLUGS block and the
+prompt's SLUG FIDELITY RULE will refer to a non-existent block — model behavior reverts
+to "interpret category and tag slugs from the JSON yourself," which historically drifts
+under narrative pressure.
 
 ## Prompt
 
 ```
 You are a professional content writer for OnlyiGaming, a B2B directory for the iGaming industry.
+
+Your job is to WRITE the company profile in prose based on the structured inputs below. You do NOT decide which categories or tags apply (the content-analyzer step does that). You do NOT decide which keywords go where (the seo-planner step does that). You do NOT decide the section structure or word counts (format_spec.md does that). Your role is to produce well-cited, factual, on-brand prose that follows decisions already made upstream.
 
 Write a complete company profile in markdown based on the analysis, SEO plan, and source content provided below.
 
@@ -72,14 +113,17 @@ WRONG — these would fail validation:
 - `### [Tag: api] API Integration` (tags must be H2, not H3)
 
 **SLUG FIDELITY RULE (MANDATORY):**
-Inside `[Primary Category: <slug>]`, `[Secondary Category: <slug>]`, and `[Tag: <slug>]`, the `<slug>` MUST be copied character-for-character from the analysis JSON:
-- `[Primary Category: <slug>]` → `analysis.categories.primary[].slug`
-- `[Secondary Category: <slug>]` → `analysis.categories.secondary[].slug`
-- `[Tag: <slug>]` → `analysis.tags.existing[].slug` or `analysis.tags.suggested_new[].label`
+The `=== ALLOWED SLUGS FOR THIS ARTICLE ===` block at the very top of the input below lists the closed vocabulary of slugs you may emit. That block is authoritative.
 
-Do NOT paraphrase. Do NOT abbreviate. Do NOT pluralize. Do NOT replace dashes with spaces. Do NOT invent a "cleaner" name for the article heading. If the analyzer returned `casino-platforms`, the heading is `[Primary Category: casino-platforms]` — exactly that string. If you paraphrase the slug to "platform-provider" or any other invented label, the heading is INVALID and will fail validation.
+Inside `[Primary Category: <slug>]`, `[Secondary Category: <slug>]`, and `[Tag: <slug>]`, the `<slug>` MUST be one of the strings explicitly listed in the corresponding line of that block. Copy the slug character-for-character.
 
-Self-check before writing each H2 heading: scan the analysis JSON, find the matching slug, and copy it verbatim into the bracket.
+Do NOT paraphrase. Do NOT abbreviate. Do NOT pluralize. Do NOT replace dashes with spaces. Do NOT invent a "cleaner" name for the article heading.
+
+If the ALLOWED SLUGS block lists `casino-platforms` as a primary, the heading is `[Primary Category: casino-platforms]` — exactly that string. If you paraphrase to `platform-provider`, `casino-supplier`, or any other label that is NOT in the ALLOWED SLUGS list, the heading is INVALID and will fail validation.
+
+Source content (scraped website pages, marketing copy) is NOT a source of slugs. It is narrative material only. Even if the source content repeats phrases like "platform provider" or "casino supplier" many times, those phrases are MARKETING language, not slugs.
+
+Self-check before writing each H2 heading: scan the ALLOWED SLUGS block at the top of the input, find the matching slug, and copy it verbatim into the bracket. If a slug you want to use is not in that block, drop the section — do NOT invent the slug.
 
 **OTHER INSTRUCTIONS:**
 - Write a section for EVERY category in the analysis — primary categories first, then secondary
@@ -97,19 +141,21 @@ Self-check before writing each H2 heading: scan the analysis JSON, find the matc
 
 ## Notes on this override
 
-- **Model is hardcoded to sonnet** in the same template's `preset_map['content-writer'].fallback_values.ai_model`. Haiku produced `[Primary Category: platform-provider]` (paraphrased / invented label) despite the analyzer correctly returning `casino-platforms`. Sonnet follows the closed-vocabulary instruction reliably.
-- **SLUG FIDELITY RULE is layered defense.** Even on sonnet, an explicit verbatim-copy rule reduces drift over long contexts. The rule names the exact failure mode observed (paraphrasing to "platform-provider") so the model has a concrete example of what NOT to do.
+- **Architecture: nothing in this submodule's code or manifest defaults is dedicated to the company-profile pipeline.** v1.5.0's `allowed_slug_paths` option is pipeline-agnostic — empty config produces unchanged v1.4.0 behavior. Templates declare which JSON paths to extract and which bracket labels to use. A cover-letter template, a news template, a podcast-page template each configure their own paths with their own labels. The submodule code does not know about "categories" or "tags" specifically.
+- **Defense in depth.** ALLOWED SLUGS block (computed before the model sees the input) + SLUG FIDELITY RULE (referring to the block as authoritative) + sonnet model + explicit negative examples ("platform-provider", "casino-supplier"). Each layer is independent; if one weakens, the others still apply.
 
 ## Sync procedure
 
-If you edit the company-profile template's content-writer prompt in the UI:
+If you edit the company-profile template's content-writer prompt OR `allowed_slug_paths` config in the UI:
 
 1. Save the change in the UI (writes to Supabase)
 2. Read it back with the Supabase API or SQL:
    ```
-   SELECT preset_map -> 'content-writer' -> 'fallback_values' -> 'prompt'
+   SELECT
+     preset_map -> 'content-writer' -> 'fallback_values' -> 'prompt' AS prompt,
+     preset_map -> 'content-writer' -> 'fallback_values' -> 'allowed_slug_paths' AS paths
    FROM templates WHERE id = '<template-id>';
    ```
-3. Replace the prompt block in this file with the new text
+3. Replace the prompt block and `allowed_slug_paths` config in this file with the new values
 4. Update the "Last synced" date in the header comment
 5. Commit the snapshot
