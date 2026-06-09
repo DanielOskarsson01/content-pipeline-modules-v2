@@ -800,9 +800,10 @@ meal-api is no longer in any deploy path. Content-pipeline deploys ignore it. Th
 ## Item 20 — tone-seo-editor: `tone_style` dropdown is redundant with prompt textarea + reference_docs mechanism
 
 **Added:** 2026-06-07
-**Priority:** Low (cleanup)
+**Updated:** 2026-06-09 — re-prioritized after Rule 13 codification (CLAUDE.md). Was "Low (cleanup)" pre-rule; now a Rule 13 violation by the operational test ("Can this change be made by editing a template in the UI?") — adding a new tone (`playful_consumer_brand`, `journalistic`, etc.) requires editing `TONE_STYLES` in execute.js + the manifest enum + a deploy, which the rule prohibits.
+**Priority:** Medium (formal Rule 13 violation as of 2026-06-09)
 **Scope:** modules repo — `modules/step-5-generation/tone-seo-editor/{manifest.json, execute.js, README.md}`
-**Related:** Item 2 (Step 5 content-type flexibility); tone-seo-editor v1.2.0 commit `a24464b`
+**Related:** Item 2 (Step 5 content-type flexibility); tone-seo-editor v1.2.0 commit `a24464b`; CLAUDE.md Rule 13 (added 2026-06-09 in the content-writer v1.6.0 / agnosticism session)
 
 ### Issue
 
@@ -820,7 +821,9 @@ The redundancy causes three small problems:
 
 Discovered while clarifying the v1.2.0 architectural pattern. The dropdown is not a v1.2.0 regression — it pre-dates v1.0.0. Out of scope for the v1.2.0 commit, which targeted vertical/brand lock-ins in the prompt default. The dropdown is a separate cleanup.
 
-Critically: **the dropdown is NOT a hard architectural violation.** Operators can already ignore it and control tone entirely via the prompt textarea + reference_docs. New tones can ship today via prompt-as-preset (Option 3 in the 2026-06-07 discussion) without a code change. This item is about removing a redundant piece of UI, not unblocking anything.
+~~Critically: **the dropdown is NOT a hard architectural violation.** Operators can already ignore it and control tone entirely via the prompt textarea + reference_docs. New tones can ship today via prompt-as-preset (Option 3 in the 2026-06-07 discussion) without a code change. This item is about removing a redundant piece of UI, not unblocking anything.~~
+
+**Updated 2026-06-09:** With Rule 13 codified ("If a change cannot be made by editing a template in the UI, it lives in code, and code must be 100% pipeline-agnostic"), the dropdown IS now a formal architectural violation. The three hardcoded `TONE_STYLES` blocks (`b2b_authoritative` even mentions "CTOs, compliance officers, procurement leads" — light B2B framing baked into code) fail the operational test outright. Operators can still work around it today by ignoring the dropdown, but the violation is on the books now and remediation is no longer "low priority cleanup" — it's "remove the rule violation."
 
 ### Proposed fix
 
