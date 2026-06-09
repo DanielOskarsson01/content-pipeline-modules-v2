@@ -49,6 +49,16 @@ This repo contains pluggable submodules for the Content Creation Tool. Each subm
 
     For broader architectural principles (small generic modules, step boundary discipline, ID-based composition), see the **Architectural commitments** section below.
 
+13. **The UI-editability rule (binding architectural test).** A change that CANNOT be made by editing a template in the UI (prompt, model, reference docs, or any `preset_map` field) lives in code: submodule `execute.js`, manifest defaults (`options[*].default` / `options_defaults.*`), or skeleton routes. Anything in code MUST be 100% pipeline-agnostic. Submodule code and manifest defaults must not be optimized for whichever pipeline is in production today.
+
+    **Operational test before adding any code or manifest default:** Ask, "Can this be expressed as configuration that a template uploads via the UI?" If yes, put it there. If no, the implementation must work equally well for every current and future content type.
+
+    Good: a generic `allowed_slug_paths` textarea option whose default is empty; templates configure paths. Good: a `requires_prompt_override` boolean option whose default is false; templates flip it true when they depend on pipeline-specific shape.
+
+    Bad: an `extractCompanyCategories()` function in `execute.js` that knows about `categories.primary[].slug`. Bad: a manifest default `prompt` that opens with "You are a B2B iGaming directory writer" — would be a valid OnlyiGaming-pipeline prompt, but it's hardcoded in code that any pipeline inherits.
+
+    Rationale: violating this rule makes the next content type (news, podcast, cover letters, marketplace, etc.) silently inherit assumptions baked into code. Specialization belongs in template `preset_map` overrides stored in Supabase, edited via the UI — not in submodule defaults or executor logic.
+
 ---
 
 ## See also — process discipline (skeleton repo CLAUDE.md)

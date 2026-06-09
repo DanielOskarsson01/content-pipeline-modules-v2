@@ -1,5 +1,5 @@
 /**
- * Standalone test harness for content-writer v1.5.0 allowed_slug_paths feature.
+ * Standalone test harness for content-writer v1.5.0+ features.
  *
  * Run: node modules/step-5-generation/content-writer/test-allowed-slugs.js
  * From repo root.
@@ -9,15 +9,20 @@
  *   - parseAllowedSlugConfig: textarea config → [{ label, path }] entries
  *   - renderAllowedSlugsBlock: per-entity block emission (null when no config / no slugs)
  *   - assembleEntityContent: full assembly with slug block prepended (or not)
+ *   - (v1.6.0) Manifest sanity: agnostic default + byte-identical prompt copies
+ *   - (v1.6.0) Refusal matrix: requires_prompt_override × prompt-vs-default × 4 scenarios
  *
  * The point is to prove that the submodule is pipeline-agnostic:
  *   - Empty config (cover letters, news, anything) → behavior identical to v1.4.0
  *   - Company-profile config → categories + tags surfaced as a closed vocabulary
  *   - News config → topics surfaced as a closed vocabulary (different shape)
+ *   - Manifest default contains zero pipeline-specific vocabulary
+ *   - Per-template refusal flag fails loud when an override is missing
  */
 
 const execute = require('./execute.js');
-const { walkSlugPath, parseAllowedSlugConfig, renderAllowedSlugsBlock, assembleEntityContent } = execute.__testing;
+const MANIFEST = require('./manifest.json');
+const { walkSlugPath, parseAllowedSlugConfig, renderAllowedSlugsBlock, assembleEntityContent, MANIFEST_DEFAULT_PROMPT } = execute.__testing;
 
 let pass = 0, fail = 0;
 function assert(cond, msg) {
@@ -203,7 +208,95 @@ assert(v150cv.includes('[Variant: <slug>]'), 'cover-letter pipeline could use th
 assert(v150cv.includes('`cmo`') && v150cv.includes('`ceo`'), 'cover-letter slugs extracted correctly');
 
 // -------------------------------------------------------------------------
-// Summary
+// Manifest sanity (v1.6.0)
 // -------------------------------------------------------------------------
-console.log(`\n=== Result: ${pass} pass, ${fail} fail ===`);
-process.exit(fail === 0 ? 0 : 1);
+console.log('\n=== Manifest sanity (v1.6.0) ===');
+assert(MANIFEST.version === '1.6.0', `manifest version is 1.6.0 (got ${MANIFEST.version})`);
+assert(typeof MANIFEST_DEFAULT_PROMPT === 'string' && MANIFEST_DEFAULT_PROMPT.length > 500, 'MANIFEST_DEFAULT_PROMPT loaded (>500 chars)');
+const promptOpt = MANIFEST.options.find(o => o.name === 'prompt');
+assert(promptOpt.default === MANIFEST_DEFAULT_PROMPT, 'options[prompt].default === options_defaults.prompt (byte-identical — load-bearing for refusal)');
+assert(MANIFEST.options.some(o => o.name === 'requires_prompt_override'), 'requires_prompt_override option present');
+assert(MANIFEST.options_defaults.requires_prompt_override === false, 'requires_prompt_override default is false');
+
+// Verify the manifest default contains NO company-profile vocabulary
+const FORBIDDEN = ['OnlyiGaming', 'iGaming', 'B2B', 'casino-platforms', 'sportsbook-platform', 'company profile', 'Primary Category:', 'casino', 'sportsbook'];
+for (const word of FORBIDDEN) {
+  assert(!MANIFEST_DEFAULT_PROMPT.includes(word), `manifest default does NOT contain "${word}" (agnosticism check)`);
+}
+
+// -------------------------------------------------------------------------
+// Refusal matrix (v1.6.0) — 4 scenarios mirroring seo-planner v2.2.0
+// -------------------------------------------------------------------------
+console.log('\n=== Refusal matrix (4 scenarios) ===');
+
+function makeTools(aiResponseText = '# [Overview] Title\n\nContent here.') {
+  const logs = [];
+  return {
+    logs,
+    logger: {
+      info: (m) => logs.push({ level: 'info', message: m }),
+      warn: (m) => logs.push({ level: 'warn', message: m }),
+      error: (m) => logs.push({ level: 'error', message: m }),
+    },
+    progress: { update: () => {} },
+    ai: { complete: async () => ({ text: aiResponseText, tokens_in: 100, tokens_out: 50, model: 'haiku', provider: 'anthropic' }) },
+    _partialItems: [],
+  };
+}
+
+const mockEntity = {
+  name: 'TestEntity',
+  items: [
+    { source_submodule: 'content-analyzer', analysis_json: { categories: { primary: [] } } },
+    { source_submodule: 'page-scraper', text_content: 'page content', url: 'https://test.example/page' },
+  ],
+};
+
+const baseOptions = {
+  ...MANIFEST.options_defaults,
+};
+
+(async () => {
+  // Scenario A: flag=true + default prompt → MUST REFUSE
+  {
+    const tools = makeTools();
+    const opts = { ...baseOptions, requires_prompt_override: true, prompt: MANIFEST_DEFAULT_PROMPT };
+    const result = await execute({ entities: [mockEntity] }, opts, tools);
+    assert(result.summary.total_items === 0, 'A: refused — 0 items');
+    assert(result.summary.errors.length === 1, 'A: refused — 1 error per entity');
+    assert(result.results[0].items[0].error.includes('requires a content-writer prompt override'), 'A: error message names the actual cause');
+    assert(tools.logs.some(l => l.level === 'error' && l.message.includes('refused run')), 'A: refusal logged as error');
+    assert(!tools.logs.some(l => l.message.includes('writing content')), 'A: refusal fires BEFORE any LLM call');
+  }
+
+  // Scenario B: flag=true + custom override → PROCEED
+  {
+    const tools = makeTools();
+    const opts = { ...baseOptions, requires_prompt_override: true, prompt: 'Custom override prompt: {entity_content}' };
+    const result = await execute({ entities: [mockEntity] }, opts, tools);
+    assert(result.summary.errors.length === 0, 'B: no refusal — override present');
+  }
+
+  // Scenario C: flag=false + manifest default → PROCEED (agnostic default is legitimate)
+  {
+    const tools = makeTools();
+    const opts = { ...baseOptions, requires_prompt_override: false, prompt: MANIFEST_DEFAULT_PROMPT };
+    const result = await execute({ entities: [mockEntity] }, opts, tools);
+    assert(result.summary.errors.length === 0, 'C: no refusal — flag false, agnostic default is legitimate run path');
+  }
+
+  // Scenario D: flag missing (undefined) + manifest default → PROCEED
+  {
+    const tools = makeTools();
+    const opts = { ...baseOptions, prompt: MANIFEST_DEFAULT_PROMPT };
+    delete opts.requires_prompt_override;
+    const result = await execute({ entities: [mockEntity] }, opts, tools);
+    assert(result.summary.errors.length === 0, 'D: no refusal — flag missing treated as false');
+  }
+
+  // -------------------------------------------------------------------------
+  // Summary
+  // -------------------------------------------------------------------------
+  console.log(`\n=== Result: ${pass} pass, ${fail} fail ===`);
+  process.exit(fail === 0 ? 0 : 1);
+})();

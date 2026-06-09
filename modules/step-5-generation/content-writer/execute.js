@@ -7,11 +7,25 @@
  * 3. Scraped source content (raw material for specific, detailed prose)
  *
  * v1.4.0: seo-planner dependency is optional. Writer warns and proceeds
- * without SEO plan section when seo-planner has not run upstream.
+ *         without SEO plan section when seo-planner has not run upstream.
+ * v1.5.0: agnostic allowed_slug_paths option — when set, prepends a per-entity
+ *         ALLOWED SLUGS block above the narrative. Submodule code does not
+ *         know about category/tag/slug as content-type-specific concepts.
+ * v1.6.0: agnostic manifest default prompt (no OnlyiGaming / iGaming / bracket-
+ *         heading format). New `requires_prompt_override` option mirrors the
+ *         seo-planner v2.2.0 pattern: when a template sets the flag true AND
+ *         no override is configured (prompt equals manifest default), refuse
+ *         the run early with a clear actionable error. Templates that depend
+ *         on pipeline-specific shape (company-profile bracket headings, news
+ *         article structure, podcast episode layout) set the flag true on
+ *         their preset_map.content-writer.fallback_values.
  *
  * Data operation: ADD (+) — adds written content alongside analysis.
  * Requires content-analyzer. seo-planner is optional.
  */
+
+const MANIFEST = require('./manifest.json');
+const MANIFEST_DEFAULT_PROMPT = MANIFEST.options_defaults.prompt;
 
 /**
  * Replace prompt placeholders with actual content.
@@ -255,12 +269,55 @@ function assembleEntityContent(analyzerItem, plannerItem, sourceContent, allowed
 
 async function execute(input, options, tools) {
   const { entities } = input;
-  const { ai_model, ai_provider, prompt: promptTemplate, reference_docs, max_source_chars, temperature, max_tokens, allowed_slug_paths } = options;
+  const { ai_model, ai_provider, prompt: promptTemplate, reference_docs, max_source_chars, temperature, max_tokens, allowed_slug_paths, requires_prompt_override } = options;
   const { logger, progress, ai } = tools;
 
   const maxChars = max_source_chars || 100000;
   const results = [];
   const errors = [];
+
+  // Refusal check: per-template fail-loud flag. When a template sets
+  // requires_prompt_override = true via preset_map.content-writer.fallback_values,
+  // and no prompt override is configured (so options.prompt === the manifest
+  // default), refuse the run early with a clear actionable error. The manifest
+  // default remains a valid run path when this flag is not set — so cover
+  // letters, news articles, podcast pages and any content type that does not
+  // depend on pipeline-specific output shape can use the agnostic default.
+  if (requires_prompt_override === true && promptTemplate === MANIFEST_DEFAULT_PROMPT) {
+    const errMsg = 'Template requires a content-writer prompt override but none is configured. Upload a prompt override in this template\'s content-writer settings, or unset requires_prompt_override on this template.';
+    logger.error(`content-writer refused run: ${errMsg}`);
+    for (const entity of entities) {
+      errors.push(`${entity.name}: ${errMsg}`);
+      results.push({
+        entity_name: entity.name,
+        items: [{
+          entity_name: entity.name,
+          status: 'error',
+          word_count: 0,
+          section_count: 0,
+          has_citations: false,
+          meta_title: '',
+          content_preview: '',
+          content_markdown: '',
+          error: errMsg,
+        }],
+        meta: { status: 'error' },
+      });
+    }
+    if (tools._partialItems) {
+      tools._partialItems.length = 0;
+      tools._partialItems.push(...results.flatMap(r => r.items));
+    }
+    return {
+      results,
+      summary: {
+        total_entities: entities.length,
+        total_items: 0,
+        description: `0/${entities.length} items written — refused: template requires prompt override`,
+        errors,
+      },
+    };
+  }
 
   for (let i = 0; i < entities.length; i++) {
     const entity = entities[i];
@@ -390,8 +447,8 @@ async function execute(input, options, tools) {
   const successCount = results.filter(r => r.meta.status === 'success').length;
   const totalWords = results.reduce((sum, r) => sum + (r.meta.word_count || 0), 0);
   const description = errors.length > 0
-    ? `${successCount}/${entities.length} profiles written (${totalWords} words) — ${errors.length} error(s)`
-    : `${successCount} profiles written — ${totalWords} total words`;
+    ? `${successCount}/${entities.length} items written (${totalWords} words) — ${errors.length} error(s)`
+    : `${successCount} items written — ${totalWords} total words`;
 
   return {
     results,
@@ -411,4 +468,5 @@ module.exports.__testing = {
   parseAllowedSlugConfig,
   renderAllowedSlugsBlock,
   assembleEntityContent,
+  MANIFEST_DEFAULT_PROMPT,
 };

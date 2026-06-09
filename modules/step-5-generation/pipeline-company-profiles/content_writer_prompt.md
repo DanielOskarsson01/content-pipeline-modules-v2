@@ -8,7 +8,19 @@ THIS FILE IS A SNAPSHOT, not the canonical value. The UI edits the template dire
 in Supabase; this markdown is a versioned record for code review, audit, and onboarding.
 If you change the template via the UI, re-export this file so the snapshot stays current.
 
-Last synced: 2026-06-09 — v3:
+Last synced: 2026-06-09 — v4 (paired with content-writer manifest v1.6.0):
+- The content-writer manifest's `options_defaults.prompt` is now fully agnostic
+  (no OnlyiGaming, no iGaming, no bracket-heading format examples). A new
+  `requires_prompt_override` manifest option (default false) mirrors the
+  seo-planner v2.2.0 pattern.
+- The company-profile template (`7th june 17.15`) MUST set
+  `preset_map.content-writer.fallback_values.requires_prompt_override = true`
+  so the run refuses loud if the company-profile prompt override is ever
+  removed. Configured via Supabase PATCH on 2026-06-09 afternoon.
+- The prompt body below is unchanged from v3 — only the surrounding template
+  configuration tightened.
+
+v3:
 - Pairs with content-writer submodule v1.5.0 which adds the agnostic `allowed_slug_paths`
   manifest option. The submodule is now content-type-agnostic — cover letters, news,
   podcasts, etc. that do not use slug brackets in headings leave `allowed_slug_paths`
@@ -36,6 +48,7 @@ Previous versions:
 The override is paired with:
 - `ai_model: sonnet`
 - `allowed_slug_paths` config (see above)
+- `requires_prompt_override: true` (v4 — fails loud if this override is ever removed)
 on the same template's `preset_map['content-writer'].fallback_values`.
 
 Placeholders interpolated at run time:
@@ -53,6 +66,7 @@ Beyond this prompt, the company-profile template MUST set the following on
 {
   "prompt": "<the prompt block below>",
   "ai_model": "sonnet",
+  "requires_prompt_override": true,
   "allowed_slug_paths": "Primary Category=categories.primary[].slug\nSecondary Category=categories.secondary[].slug\nTag=tags.existing[].slug\nTag=tags.suggested_new[].label"
 }
 ```
