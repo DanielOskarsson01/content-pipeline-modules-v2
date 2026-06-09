@@ -31,7 +31,19 @@ jobs:
             -e "ssh -i ~/.ssh/deploy_key" \
             ./ root@188.245.110.34:/opt/content-pipeline-modules-v2/
 
-      - name: Install deps and restart workers
+      - name: Install deps and restart PM2 (deterministic cycle)
         run: |
+          # Mirrors skeleton repo's deploy.sh PM2 lifecycle. Two failure modes
+          # this closes (both observed in this codebase):
+          #   1. PM2 6.0.14 named-restart races: `pm2 restart stage-worker` can
+          #      report "Process 1 not found" when the daemon's process map
+          #      gets cycled mid-flight by another deploy. Failed on every
+          #      modules-v2 push from v1.5.0 onwards (2026-06-09).
+          #   2. Stale dump.pm2 from the 2026-06-02 silent-truncation issue:
+          #      a fresh `pm2 save` after `pm2 start` rewrites the dump.
+          # Brief gap: ~5-30s while apps stop and restart. profile-api's Chrome
+          # respawns via its own 120s health check after profile-api restarts.
           ssh -i ~/.ssh/deploy_key root@188.245.110.34 \
-            "cd /opt/content-pipeline-modules-v2 && npm install --omit=dev && pm2 restart stage-worker pipeline-api && pm2 save"
+            "cd /opt/content-pipeline-modules-v2 && npm install --omit=dev && \
+             cd /opt/content-pipeline-v2 && pm2 delete all 2>/dev/null || true && \
+             pm2 start ecosystem.config.cjs && pm2 save"
