@@ -2,7 +2,7 @@
   "id": "keyword-sufficiency-checker",
   "name": "Keyword Sufficiency Checker",
   "description": "Validate that generated content includes target SEO keywords at the right density and in the right positions (headlines, first paragraphs, meta tags).",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "step": 6,
   "category": "qa",
   "cost": "cheap",
@@ -47,6 +47,13 @@
       "label": "Check negative keywords",
       "description": "Fail if any negative keywords from the SEO plan appear in the content.",
       "default": true
+    },
+    {
+      "name": "allow_empty_keyword_plan",
+      "type": "boolean",
+      "label": "Allow empty keyword plan",
+      "description": "When false (default), the check FAILS loudly if an SEO plan IS present but contains zero keyword targets -- a sign upstream seo-planner produced empty output. Set true to restore the legacy behavior of passing with a warning. (When no SEO plan is present at all, the check always skips with a pass -- this flag does not affect that case.)",
+      "default": false
     }
   ],
 
@@ -54,7 +61,8 @@
     "pass_threshold": 0.6,
     "head_term_density_min": 0.01,
     "head_term_density_max": 0.03,
-    "check_negatives": true
+    "check_negatives": true,
+    "allow_empty_keyword_plan": false
   },
 
   "item_key": "entity_name",

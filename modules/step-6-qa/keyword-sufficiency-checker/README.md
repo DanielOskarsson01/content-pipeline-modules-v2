@@ -28,7 +28,8 @@ Citation references (`[#1]`, `[#2]`) are stripped before analysis so keywords ap
 ## When to Use
 
 - **Always** after content-writer and seo-planner have both run
-- **Works without seo-planner** -- if no SEO plan is found, returns pass with a warning (nothing to check against)
+- **Works without seo-planner** -- if no SEO plan is found at all, returns pass with a warning (nothing to check against)
+- **Fails loudly on an empty plan** -- if an SEO plan IS present but contains zero keyword targets (upstream seo-planner produced empty output), the check fails by default. This is a contract-hardening guard; see the `allow_empty_keyword_plan` option and Edge Cases below.
 - **Before Step 7** (loop-router) so failed entities can be routed back for rewriting
 - Pairs well with `meta-compliance-checker` for comprehensive QA coverage
 
@@ -58,6 +59,7 @@ Both shapes are handled transparently.
 | `head_term_density_min` | number | 0.01 | Minimum density for head terms (1%) | Lower for long-form content where natural density is lower. |
 | `head_term_density_max` | number | 0.03 | Maximum density for head terms (3%) | Lower to 0.02 for content where keyword stuffing is a bigger risk. |
 | `check_negatives` | boolean | true | Whether to check for negative keywords | Disable if the SEO plan has no negative keywords defined. |
+| `allow_empty_keyword_plan` | boolean | false | When false, FAIL loudly if an SEO plan is present but has zero keyword targets (a sign seo-planner produced empty output). When true, restore the legacy pass-with-warning. | Leave false for production. Set true only for a deliberate carve-out where empty plans are expected and acceptable. Does **not** affect the no-plan-at-all case, which always passes with a warning. |
 
 ---
 
@@ -141,6 +143,15 @@ keyword_score: 1
 placement_report: "No SEO plan with keywords found. Keyword check skipped -- returning pass with warning."
 ```
 
+### Loud-fail (SEO plan present but empty)
+
+```
+entity_name: "EmptyPlanCorp"
+qa_pass: false
+keyword_score: 0
+placement_report: "SEO plan has no keyword targets -- upstream seo-planner produced empty output. (Set allow_empty_keyword_plan to skip this check with a pass.)"
+```
+
 ---
 
 ## Output Fields
@@ -169,6 +180,7 @@ pass_threshold: 0.6
 head_term_density_min: 0.01
 head_term_density_max: 0.03
 check_negatives: true
+allow_empty_keyword_plan: false
 ```
 
 ### Strict SEO
@@ -197,7 +209,8 @@ check_negatives: false
 
 ## Edge Cases
 
-- **No `seo_plan_json` available** (seo-planner did not run): returns pass with warning. Nothing to check against.
+- **No `seo_plan_json` available** (seo-planner did not run): returns pass with warning. Nothing to check against. Unaffected by `allow_empty_keyword_plan`.
+- **`seo_plan_json` present but with zero keyword targets** (seo-planner ran but produced empty output): returns **fail** with score 0 and an error reason by default. Set `allow_empty_keyword_plan: true` to restore the legacy pass-with-warning. This guard exists because an empty plan silently passing (the pre-1.0.1 behavior) hides upstream seo-planner failures.
 - **No `content_markdown` found**: returns fail with score 0. No content = no keywords.
 - **Very short content** (< 200 words): density calculations are unreliable. Flagged in the placement report but does not automatically fail.
 - **Keywords in citations only**: citation references (`[#1]`, `[#2]`) are stripped before analysis. Keywords must appear in prose.
@@ -219,8 +232,8 @@ check_negatives: false
 Results feed into Step 7 (loop-router) for routing decisions:
 
 - **Pass**: route to Step 8 (bundling) or Step 9 (distribution)
-- **Fail**: route back to Step 5 (content-writer) for rewriting, with the placement report providing specific feedback on what to fix
-- **Skipped**: treat as pass -- no SEO plan means nothing to enforce
+- **Fail**: route back to Step 5 (content-writer) for rewriting, with the placement report providing specific feedback on what to fix. An empty-SEO-plan failure (see Edge Cases) points further upstream -- to seo-planner -- rather than to content-writer.
+- **Skipped**: treat as pass -- no SEO plan (at all) means nothing to enforce
 
 ---
 

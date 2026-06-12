@@ -442,11 +442,12 @@ module.exports = async function execute(input, options, tools) {
     head_term_density_min = 0.01,
     head_term_density_max = 0.03,
     check_negatives = true,
+    allow_empty_keyword_plan = false,
   } = options;
 
   logger.info(
     `Config: pass_threshold=${pass_threshold}, density=${head_term_density_min}-${head_term_density_max}, ` +
-    `check_negatives=${check_negatives}`
+    `check_negatives=${check_negatives}, allow_empty_keyword_plan=${allow_empty_keyword_plan}`
   );
 
   const results = [];
@@ -460,19 +461,28 @@ module.exports = async function execute(input, options, tools) {
     const seoItems = (entity.items || []).filter(item => item.seo_plan_json);
 
     // --- Extract SEO plan keywords ---
+    const seoPlanPresent = seoItems.length > 0;
     let keywords = { headTerms: [], midTail: [], entities: [], negatives: [] };
     for (const item of seoItems) {
       const extracted = extractKeywords(item.seo_plan_json);
-      if (extracted.headTerms.length > 0 || extracted.midTail.length > 0) {
+      const extractedTotal =
+        extracted.headTerms.length + extracted.midTail.length +
+        extracted.entities.length + extracted.negatives.length;
+      if (extractedTotal > 0) {
         keywords = extracted;
         break;
       }
     }
 
-    // Edge case: no SEO plan available -- skip check, return pass with warning
-    const hasKeywordPlan = keywords.headTerms.length > 0 || keywords.midTail.length > 0;
-    if (!hasKeywordPlan) {
-      logger.warn(`${entity.name}: no seo_plan_json with keywords found -- skipping keyword check (pass with warning)`);
+    const totalKeywordTargets =
+      keywords.headTerms.length + keywords.midTail.length +
+      keywords.entities.length + keywords.negatives.length;
+
+    // Edge case: no SEO plan present at all -- skip check, return pass with
+    // warning. This is the documented "works without seo-planner data" contract
+    // and is intentionally unaffected by allow_empty_keyword_plan.
+    if (!seoPlanPresent) {
+      logger.warn(`${entity.name}: no seo_plan_json found -- skipping keyword check (pass with warning)`);
       results.push({
         entity_name: entity.name,
         items: [{
@@ -492,6 +502,60 @@ module.exports = async function execute(input, options, tools) {
           skip_reason: 'no_seo_plan',
         },
       });
+      continue;
+    }
+
+    // W1.1 contract-hardening: an SEO plan IS present but yields zero keyword
+    // targets -- a sign upstream seo-planner produced empty output. Previously
+    // this silently PASSed (keyword_score: 1). Loud-fail by default;
+    // allow_empty_keyword_plan restores the legacy pass-with-warning.
+    if (totalKeywordTargets === 0) {
+      if (allow_empty_keyword_plan) {
+        logger.warn(`${entity.name}: seo_plan_json present but has no keyword targets -- skipping keyword check (allow_empty_keyword_plan=true)`);
+        results.push({
+          entity_name: entity.name,
+          items: [{
+            entity_name: entity.name,
+            qa_pass: true,
+            keyword_score: 1,
+            missing_keywords: JSON.stringify([]),
+            misplaced_keywords: JSON.stringify([]),
+            negative_keywords_found: JSON.stringify([]),
+            placement_report: 'SEO plan present but has no keyword targets. Keyword check skipped (allow_empty_keyword_plan=true) -- returning pass with warning.',
+            density_report: '',
+          }],
+          meta: {
+            qa_pass: true,
+            keyword_score: 1,
+            skipped: true,
+            skip_reason: 'empty_keyword_plan_allowed',
+          },
+        });
+        continue;
+      }
+
+      const failReason = 'SEO plan has no keyword targets -- upstream seo-planner produced empty output.';
+      logger.error(`${entity.name}: ${failReason}`);
+      const failResult = {
+        entity_name: entity.name,
+        items: [{
+          entity_name: entity.name,
+          qa_pass: false,
+          keyword_score: 0,
+          missing_keywords: JSON.stringify([]),
+          misplaced_keywords: JSON.stringify([]),
+          negative_keywords_found: JSON.stringify([]),
+          placement_report: failReason + ' (Set allow_empty_keyword_plan to skip this check with a pass.)',
+          density_report: '',
+        }],
+        meta: {
+          qa_pass: false,
+          keyword_score: 0,
+          error: 'empty_keyword_plan',
+        },
+      };
+      results.push(failResult);
+      if (tools._partialItems) tools._partialItems.push(...failResult.items);
       continue;
     }
 
@@ -688,7 +752,7 @@ module.exports = async function execute(input, options, tools) {
     const parts = [];
     if (passCount > 0) parts.push(`${passCount} passed`);
     if (failCount > 0) parts.push(`${failCount} failed`);
-    if (skippedCount > 0) parts.push(`${skippedCount} skipped (no SEO plan)`);
+    if (skippedCount > 0) parts.push(`${skippedCount} skipped (no/empty SEO plan)`);
     description = `${parts.join(', ')} of ${totalEntities} entities (avg score: ${avgScore})`;
   }
 
