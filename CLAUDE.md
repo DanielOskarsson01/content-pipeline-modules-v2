@@ -780,3 +780,43 @@ Architectural specs in "pending sign-off" state need active tracking to either a
 **Alignment:** Confirmed. The plan honors both project architectural commitments — "small generic modules, not specialized ones" (Bucket A default; the primitive is applied surgically only where genuinely needed) and "step boundary discipline" (no cross-step responsibility creep). It also honors Rule 13 (UI-editability test) by moving content-type-specific framing out of manifest defaults and into either template preset_map overrides or `pipeline-<type>/` reference docs — never into code that other content types reuse. The triage-first approach corrects the over-application bias the brief warned about.
 
 **Updated by:** session-closer skill
+
+### Session: 2026-06-12 — W1.1 shipped: keyword-sufficiency-checker v1.0.1 (loud-fail on empty seo_plan)
+
+**Status:** First execution session against the canonical Plan 2 (Rule 13 rollout). Workstream 1 task **W1.1 complete** — implemented, TDD-tested, code-reviewed, committed (`ca83d9b`), pushed, CI-deployed to Hetzner, and production-verified. Stopped before W1.2 per explicit instruction. Single focused task; ran inline (not subagent-driven).
+
+**Accomplished:**
+- Fixed the silent-pass bug in `modules/step-6-qa/keyword-sufficiency-checker/execute.js`. Previously, an `seo_plan_json` that was **present but empty** (zero keyword targets) silently PASSed (`keyword_score: 1`, `skipped: true`), hiding upstream seo-planner failures. The checker now distinguishes three cases: **no plan at all** → skip-with-pass (unchanged, documented contract); **plan present but empty** → LOUD FAIL (`qa_pass: false`, `keyword_score: 0`, error logged, reason names the cause); **plan present but empty + `allow_empty_keyword_plan`** → skip-with-pass carve-out.
+- Added manifest option `allow_empty_keyword_plan` (boolean, default `false`) to both `options` and `options_defaults`. PATCH bump 1.0.0 → 1.0.1.
+- Broadened the keyword-target count to all four lists (head + mid + entities + negatives) per the W1.1 spec — necessary so a plan that legitimately carries only entities/negatives isn't falsely flagged empty.
+- TDD: wrote `test-empty-plan.js` (new, repo convention) FIRST, watched it fail red against the silent-pass code, then implemented → green. 17/17 assertions: loud-fail default, carve-out skip, no-plan skip (regression guard), real-plan-proceeds-to-scoring (baseline no-change guard).
+- Proved "no baseline behavior change" via an A/B diff: ran the pre-change `execute.js` (git HEAD) vs the new one on representative non-empty + no-plan inputs → byte-identical output. Only the present-but-empty path changes, by design.
+- Independent code review (`/code-review`, general-purpose agent): **PASS / PROCEED**, zero critical/warning. Folded in its one user-facing INFO: summary skip-label "(no SEO plan)" → "(no/empty SEO plan)" so it stays accurate once the carve-out skip exists.
+- Updated `README.md` (Rule 7): new option row, loud-fail example, Edge Cases entry distinguishing no-plan vs empty-plan, "What Happens Next" note that an empty-plan failure points upstream to seo-planner (not content-writer).
+- Decision_log entry written to Supabase (id `53de609c-…`, project `content-pipeline-modules-v2`).
+- Pre-deploy rollback tag `pre-rule13-w1-1-2026-06-12` (annotated) set on the parent commit `f80245d` (the pre-W1.1 / prior production state), pushed to origin.
+- Commit `ca83d9b` pushed to `origin/main`; CI run `27406285414` ("Deploy modules to Hetzner") completed **success**.
+- Production verified per the recipe: `shasum -a 256` on all four files matches local HEAD byte-for-byte on Hetzner (`/opt/content-pipeline-modules-v2/...`); PM2 shows **4/4 apps online** (pipeline-api, stage-worker, batch-worker, profile-api), fresh restart from the deploy's `pm2 delete all && pm2 start` cycle.
+
+**Decisions:**
+- **Loud-fail scoped to "present but empty" only.** "No `seo_plan_json` at all" remains a legitimate skip-with-pass (the documented "works without seo-planner data" contract) and is intentionally unaffected by `allow_empty_keyword_plan`. Distinguished via `seoPlanPresent = seoItems.length > 0`.
+- **`allow_empty_keyword_plan` default `false`** — fail-loud is the safe production default; the flag is an explicit opt-out carve-out, not a trip-wire (consistent with brief Lesson 2: defaults must be runnable, not deliberate trip-wires — here the safe default is to surface the upstream failure).
+- **Committed directly to `main`.** The project workflow (every prior session log + the CI `deploy.yml`) deploys on push to main; branching would break the CI-deploy-on-push flow the user invoked. Overrides the generic "branch first" default per explicit user instruction.
+- **New fail branch pushes to `tools._partialItems`** (Rule 10) — more consistent with the success path than with the older no-content sibling branch (which doesn't push); harmless for a no-I/O checker.
+
+**Blockers/Questions:**
+- **None for W1.1.** W1.2–W1.5 (content-writer slug loud-fail/warn; content-analyzer fidelity gate + pre-flight; citation-coverage-checker template-flag audit; tone-seo-editor shared-parser marker gate) remain open per the canonical plan; not started.
+- **Honesty caveat on the no-change proof:** the A/B byte-identical proof covers the realistic plan shapes (which always carry head/mid terms). A degenerate plan with *only* negatives/entities and no head/mid now proceeds-and-fails instead of skip-and-pass — arguably more correct, surfaced in code review as INFO, and not a shape real seo-planner output produces. No literal full-pipeline run against the locked Casino Platforms project data was performed (the module is pure deterministic no-I/O; logic-equivalence is a sound substitute).
+- **Tooling notes for future sessions:** the Supabase MCP server (`00ae70c1-…`) does NOT have access to the decision_log project `zgfvgghfkkbrbiunsgry` (different org → permission denied) — decision_log entries must go via the REST API with `SUPABASE_ANON_KEY`. That key lives in `~/.zshrc` / `~/.zprofile` but is NOT in the non-interactive Bash-tool shell, so the local pre-commit hook prints "SUPABASE_ANON_KEY not set — skipping" and does not enforce the gate; write the entry explicitly (sourced via `zsh -c 'source ~/.zprofile; …'`).
+
+**Files touched this session:**
+- `modules/step-6-qa/keyword-sufficiency-checker/execute.js` — three-way no-plan/empty-plan/proceed split + loud-fail branch + new option destructure + summary label fix. (modified, committed)
+- `modules/step-6-qa/keyword-sufficiency-checker/manifest.json` — `allow_empty_keyword_plan` option + version 1.0.1. (modified, committed)
+- `modules/step-6-qa/keyword-sufficiency-checker/README.md` — documented the new behavior + option (Rule 7). (modified, committed)
+- `modules/step-6-qa/keyword-sufficiency-checker/test-empty-plan.js` — new TDD test, 17 assertions. (added, committed)
+- Commit `ca83d9b`; rollback tag `pre-rule13-w1-1-2026-06-12` on `f80245d`. CI deploy `27406285414` success.
+- This `CLAUDE.md` session entry (working-tree change; not committed as part of the W1.1 code commit).
+
+**Alignment:** Confirmed. W1.1 honors Rule 13 — the new option, its default, the failure-path strings, and the logic carry zero content-type/iGaming/company-profile assumptions (verified in review). It honors the Plan 2 Workstream-1 intent: establish a loud-failing baseline (the empty-plan guard) BEFORE any Workstream-2 prompt/manifest migration, so a later regression run is attributable to the migration, not a pre-existing silent pass. No scope creep beyond W1.1; W1.2 not started.
+
+**Updated by:** Claude (manual session entry — W1.1 execution + deploy + production verification)
