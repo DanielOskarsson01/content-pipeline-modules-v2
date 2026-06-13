@@ -183,6 +183,24 @@ function parseAllowedSlugConfig(configStr) {
 }
 
 /**
+ * Count how many slugs resolve across all configured paths for an analyzer item.
+ *
+ * Used by execute() to detect the W1.2 "allowed_slug_paths configured but
+ * nothing resolved" condition — previously a SILENT omission of the closed-
+ * vocabulary block (renderAllowedSlugsBlock returns null), which let the model
+ * emit invalid slug values with no signal. Returns 0 when the analyzer item has
+ * no analysis_json or none of the configured paths match — exactly the cases
+ * where renderAllowedSlugsBlock would have returned null for lack of slugs.
+ */
+function countResolvedSlugs(analyzerItem, config) {
+  const aj = analyzerItem && analyzerItem.analysis_json;
+  if (!aj || typeof aj !== 'object' || !Array.isArray(config)) return 0;
+  let total = 0;
+  for (const { path } of config) total += walkSlugPath(aj, path).length;
+  return total;
+}
+
+/**
  * Render the per-entity ALLOWED SLUGS block, IF the template configured any
  * allowed-slug paths. Otherwise return null and assembleEntityContent skips
  * the block entirely (pure-narrative content types unaffected).
@@ -269,7 +287,7 @@ function assembleEntityContent(analyzerItem, plannerItem, sourceContent, allowed
 
 async function execute(input, options, tools) {
   const { entities } = input;
-  const { ai_model, ai_provider, prompt: promptTemplate, reference_docs, max_source_chars, temperature, max_tokens, allowed_slug_paths, requires_prompt_override } = options;
+  const { ai_model, ai_provider, prompt: promptTemplate, reference_docs, max_source_chars, temperature, max_tokens, allowed_slug_paths, requires_prompt_override, require_slug_paths } = options;
   const { logger, progress, ai } = tools;
 
   const maxChars = max_source_chars || 100000;
@@ -366,6 +384,38 @@ async function execute(input, options, tools) {
 
     if (!plannerItem) {
       logger.warn(`${entity.name}: no seo-planner output found — writing without SEO plan`);
+    }
+
+    // W1.2 contract-hardening: allowed_slug_paths is configured but no slugs
+    // resolved from analysis_json for this entity. Previously this was SILENT —
+    // renderAllowedSlugsBlock returned null, the closed-vocabulary block was
+    // omitted, and the model could emit invalid slug values with no signal.
+    // Warn by default; hard-fail when require_slug_paths is set.
+    const slugConfig = parseAllowedSlugConfig(allowed_slug_paths);
+    if (slugConfig.length > 0 && countResolvedSlugs(analyzerItem, slugConfig) === 0) {
+      const msg = `allowed_slug_paths is configured (${slugConfig.length} path(s)) but no slugs resolved from analysis_json — the closed-vocabulary block will be omitted and the model may emit invalid slug values. Check that content-analyzer produced the expected fields for these paths.`;
+      if (require_slug_paths === true) {
+        logger.error(`${entity.name}: ${msg}`);
+        errors.push(`${entity.name}: ${msg}`);
+        results.push({
+          entity_name: entity.name,
+          items: [{
+            entity_name: entity.name,
+            status: 'error',
+            word_count: 0,
+            section_count: 0,
+            has_citations: false,
+            meta_title: '',
+            content_preview: '',
+            content_markdown: '',
+            error: msg,
+          }],
+          meta: { status: 'error' },
+        });
+        if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
+        continue;
+      }
+      logger.warn(`${entity.name}: ${msg}`);
     }
 
     try {
@@ -466,6 +516,7 @@ module.exports = execute;
 module.exports.__testing = {
   walkSlugPath,
   parseAllowedSlugConfig,
+  countResolvedSlugs,
   renderAllowedSlugsBlock,
   assembleEntityContent,
   MANIFEST_DEFAULT_PROMPT,

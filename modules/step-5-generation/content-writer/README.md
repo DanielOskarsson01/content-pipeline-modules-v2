@@ -3,7 +3,7 @@
 > Write content using analysis data, optional SEO plan, and scraped source content.
 
 **Module ID:** `content-writer` | **Step:** 5 (Generation) | **Category:** generation | **Cost:** expensive
-**Version:** 1.4.0 | **Data Operation:** add (➕)
+**Version:** 1.6.1 | **Data Operation:** add (➕)
 
 ---
 
@@ -193,6 +193,7 @@ Run 2: ai_model: gpt-4o, ai_provider: openai
 - **Long article fragility** - For very long articles (5,000+ words), LLMs may lose coherence in later sections
 - **Many categories stretch word budget** - With 6+ categories at 150-300 words each, the article may exceed the word target
 - **Source content truncation** - max_source_chars truncates scraped content. If important details are on pages beyond the truncation point, they won't appear in the article
+- **Allowed-slug-paths fidelity (v1.6.1)** - when `allowed_slug_paths` is configured but no slugs resolve from `analysis_json` (e.g. content-analyzer produced none of the expected fields), the writer logs a WARNING and omits the closed-vocabulary block (the model may then emit invalid slug values). Set the new `require_slug_paths` option to `true` to hard-fail the entity instead, so a missing/empty analysis surfaces loud. No effect when `allowed_slug_paths` is empty.
 
 ## What Happens Next
 
@@ -217,6 +218,6 @@ For now, the approved content_markdown is the deliverable. Copy it, import it, o
 - **Display type:** cards (not table) - one card per entity with expandable detail modal showing full article as prose
 - **Selectable:** true - operators approve/reject entire entity article
 - **Detail view:** `detail_schema` with header (entity_name, status as badge, word_count, meta_title) and sections (content_markdown as prose, meta_title as text, error). The prose section is scrollable and is the primary way users read the article
-- **Error handling:** Missing analysis input and LLM failures handled per-entity. Entities missing content-analyzer get clear error: "Missing upstream output: content-analyzer. Run content-analyzer first." Missing seo-planner logs a warning and proceeds. Warns (doesn't fail) if no scraped source pages are found.
+- **Error handling:** Missing analysis input and LLM failures handled per-entity. Entities missing content-analyzer get clear error: "Missing upstream output: content-analyzer. Run content-analyzer first." Missing seo-planner logs a warning and proceeds. Warns (doesn't fail) if no scraped source pages are found. When `allowed_slug_paths` is configured but resolves to zero slugs, warns by default or hard-fails the entity when `require_slug_paths` is true (v1.6.1).
 - **Dependencies:** `tools.ai` (LLM calls), `tools.logger`, `tools.progress`
 - **Files:** `manifest.json`, `execute.js`

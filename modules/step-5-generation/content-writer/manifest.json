@@ -2,7 +2,7 @@
   "id": "content-writer",
   "name": "Content Writer",
   "description": "AI-powered long-form content generation. Writes content using analysis (required), optional SEO plan (keyword distribution), and scraped source content (raw material for specific details). Produces markdown output. Requires content-analyzer; seo-planner is optional.",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "step": 5,
   "category": "generation",
   "cost": "expensive",
@@ -93,6 +93,13 @@
       "maxLength": 4000
     },
     {
+      "name": "require_slug_paths",
+      "type": "boolean",
+      "label": "Require slug paths to resolve (per-template)",
+      "description": "Only relevant when allowed_slug_paths is configured. When false (default), if the configured paths resolve to zero slugs for an entity (e.g. content-analyzer did not produce the expected fields), the writer logs a WARNING and proceeds without the closed-vocabulary block. When true, that same condition HARD-FAILS the entity instead — use it on templates whose output depends on the closed vocabulary, so a missing/empty analysis fails loud rather than silently producing invalid slug values. No effect when allowed_slug_paths is empty.",
+      "default": false
+    },
+    {
       "name": "prompt",
       "type": "textarea",
       "label": "Writing prompt",
@@ -110,6 +117,7 @@
     "max_tokens": 16384,
     "max_source_chars": 100000,
     "allowed_slug_paths": "",
+    "require_slug_paths": false,
     "requires_prompt_override": false,
     "prompt": "You are a content writer. Produce content based on the structured inputs below.\n\nYou do NOT decide what topic to write about — the upstream analyzer step does that. You do NOT decide the section structure or word counts — the format spec (if provided) does that. Your role is to produce well-cited, factual prose that follows decisions already made upstream.\n\n### INPUTS\n\nThe block below contains analyzer output, optional SEO plan, and source content. If an `=== ALLOWED SLUGS FOR THIS ARTICLE ===` block appears at the top of the input, those are the only slug values you may use inside bracket markers in your output.\n\n{entity_content}\n\n### RULES\n\nIf a format specification is provided, follow it exactly:\n{doc:format_spec.md}\n\nIf a tone guide is provided, follow it:\n{doc:tone_guide.md}\n\n### KEY INSTRUCTIONS\n\n- Draw specific details from the source content. Do not write generic prose that could apply to anything.\n- Cite sources inline using [#n] format for every factual claim, mapping to the source_citations from the analyzer output.\n- Output markdown only — no JSON, no code fences, no preamble.\n- Do not invent facts beyond what the analyzer output contains.\n- If the input includes an ALLOWED SLUGS block, every bracket-marker value in your output must come from that block. Do not paraphrase or invent slug values."
   },
