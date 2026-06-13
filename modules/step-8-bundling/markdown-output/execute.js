@@ -9,6 +9,9 @@
  */
 
 const yaml = require('js-yaml');
+// Shared canonical marker grammar (W1.5) — single source of truth for the
+// heading-bracket regex, also used by tone-seo-editor's preservation gate.
+const { headingMarkerRegex } = require('../../_shared/marker-parser.js');
 
 /**
  * Strip [Type Marker] prefixes from headings.
@@ -17,7 +20,7 @@ const yaml = require('js-yaml');
  */
 function stripMarkers(markdown) {
   return markdown.replace(
-    /^(#{1,6})\s+\[([^\]]+)\]/gm,
+    headingMarkerRegex(),
     (match, hashes, content) => {
       // Clean up category/tag markers: "Primary Category: online-casinos" → "Online Casinos"
       let cleaned = content;

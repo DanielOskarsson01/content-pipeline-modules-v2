@@ -8,7 +8,16 @@
  *
  * Data operation: ADD (+) — appends revised content alongside existing pool items.
  * Requires BOTH content-writer and seo-planner to have run first.
+ *
+ * v1.2.1 (W1.5): post-edit marker-preservation gate. The heading bracket
+ *         markers ([Primary Category: slug], [Tag: slug], etc.) that the Step 8
+ *         bundlers parse must survive the LLM edit verbatim. The gate reuses the
+ *         bundlers' own parser (modules/_shared/marker-parser.js) so it can
+ *         never drift from what the bundlers actually accept.
  */
+
+// Shared canonical marker grammar (W1.5) — same parser the Step 8 bundlers use.
+const { extractHeadingMarkers } = require('../../_shared/marker-parser.js');
 
 /**
  * Tone style instruction sets.
@@ -297,6 +306,31 @@ function formatPlacementsText(placements) {
   }).join('\n');
 }
 
+/**
+ * W1.5 marker-preservation gate. Returns the list of heading bracket markers
+ * present in `originalMd` that are NO LONGER parseable in `revisedMd`, using the
+ * SAME shared parser the Step 8 bundlers use. Empty list = all preserved.
+ *
+ * Pipeline-agnostic: content with no markers yields [] on both sides → passes
+ * trivially. Multiset-aware via remaining counts, so a marker that legitimately
+ * appears twice in the input must appear twice in the output too.
+ */
+function validateMarkerPreservation(originalMd, revisedMd) {
+  const origMarkers = extractHeadingMarkers(originalMd);
+  if (origMarkers.length === 0) return [];
+  const revCounts = new Map();
+  for (const m of extractHeadingMarkers(revisedMd)) {
+    revCounts.set(m, (revCounts.get(m) || 0) + 1);
+  }
+  const dropped = [];
+  for (const m of origMarkers) {
+    const c = revCounts.get(m) || 0;
+    if (c <= 0) dropped.push(m);
+    else revCounts.set(m, c - 1);
+  }
+  return dropped;
+}
+
 async function execute(input, options, tools) {
   const { entities } = input;
   const { ai_model, ai_provider, prompt: promptTemplate, temperature, max_tokens, tone_style, max_content_chars, reference_docs } = options;
@@ -380,6 +414,38 @@ async function execute(input, options, tools) {
 
       // Strip code fences if LLM wrapped the output despite instructions
       revisedMarkdown = revisedMarkdown.replace(/^```(?:markdown|md)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+
+      // W1.5 marker-preservation gate: every heading bracket marker the Step 8
+      // bundlers can parse in what we SENT the model (truncatedMarkdown) must
+      // still be parseable in the revised output. Comparing against the sent
+      // text (not the full original) avoids false positives when the original
+      // was truncated before the model ever saw the later markers. A dropped or
+      // mangled marker would make the bundlers emit garbled headings — fail loud.
+      const droppedMarkers = validateMarkerPreservation(truncatedMarkdown, revisedMarkdown);
+      if (droppedMarkers.length > 0) {
+        const errMsg = `tone-seo-editor dropped or mangled ${droppedMarkers.length} heading marker(s) present in the input: ${droppedMarkers.map(m => `[${m}]`).join(', ')}. These markers are consumed verbatim by the Step 8 bundlers; losing them produces garbled output. Re-run with a prompt that preserves bracket markers exactly.`;
+        logger.error(`${entity.name}: ${errMsg}`);
+        errors.push(`${entity.name}: ${errMsg}`);
+        results.push({
+          entity_name: entity.name,
+          items: [{
+            entity_name: entity.name,
+            status: 'error',
+            word_count: 0,
+            tone_changes_count: 0,
+            keywords_placed: 0,
+            revision_summary: '',
+            content_preview: '',
+            content_markdown: '',
+            keyword_placements: [],
+            keyword_placements_text: '',
+            error: errMsg,
+          }],
+          meta: { status: 'error' },
+        });
+        if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
+        continue;
+      }
 
       // Compute diff stats
       const toneChangesCount = diffContent(originalMarkdown, revisedMarkdown);
@@ -481,3 +547,5 @@ async function execute(input, options, tools) {
 }
 
 module.exports = execute;
+// Exported for test harness use only — not part of the public submodule interface.
+module.exports.__testing = { validateMarkerPreservation };

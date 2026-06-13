@@ -7,6 +7,7 @@
 
 ## Changelog
 
+- **1.2.1** — Added a post-edit **marker-preservation gate** (W1.5). Every heading bracket marker the Step 8 bundlers can parse in the input (e.g. `[Primary Category: slug]`, `[Tag: slug]`) MUST still be parseable in the revised output, or the entity hard-fails with an error naming the dropped markers. The gate reuses the bundlers' own parser (`modules/_shared/marker-parser.js`), so it can never drift from what the bundlers actually accept. Pipeline-agnostic: input with no markers passes trivially. Behaviour is otherwise unchanged.
 - **1.2.0** — Module-level default genericised per the "small generic modules, not specialized ones" architectural commitment. Removed iGaming-vertical and B2B framing, removed hardcoded `{doc:tone_guide.md}` placeholder, removed company-profile-specific `[Overview]` / `[Primary Category: ...]` literal examples (rule kept generically). Generic SEO/structural/citation/FAQ rules retained. `{doc:<filename>}` mechanism still supported — operator chooses the filename in their preset or override. See **Configuring per content type** below for the preset + template-override pattern.
   - **Upgrade note:** existing templates with a customized stored prompt do NOT auto-pick-up the new default. Templates that previously customized around the v1.0.0/v1.1.0 iGaming framing or `{doc:tone_guide.md}` placeholder continue to work unchanged. To adopt the v1.2.0 genericised default + preset architecture on an existing template, load the new default into the prompt textarea, then layer the OnlyiGaming voice preset on top.
 - **1.1.0** — (committed, not pushed) Added `{doc:tone_guide.md}` hardcoded placeholder and "leave good sections alone" license. Lock-ins reverted in v1.2.0; license retained.
@@ -180,7 +181,7 @@ temperature: 0.3
 
 - **No factual verification** — The editor cannot verify that its changes preserve factual accuracy. It is instructed not to add or remove claims, but LLMs occasionally do so
 - **Citation preservation** — The prompt instructs preservation of `[#n]` citations, but aggressive edits may occasionally relocate or drop them
-- **Heading marker fidelity** — Type markers like `[Overview]` and `[Primary Category: ...]` should be preserved, but verify after editing
+- **Heading marker fidelity** — Type markers like `[Overview]` and `[Primary Category: ...]` are now ENFORCED (v1.2.1): if the LLM drops or mangles any marker present in the input, the entity hard-fails instead of silently passing garbled output downstream. The check uses the Step 8 bundlers' own parser. (Markers lost to `max_content_chars` truncation are not counted — only markers in the text actually sent to the model.)
 - **Keyword stuffing risk** — If too many keywords are targeted, the LLM may over-insert them. Keep target lists under 15 total keywords
 - **Language limitations** — Tone instructions assume English. Other languages may not benefit from the same editing patterns
 - **Content length** — Very long content (40,000+ chars) may be truncated, causing partial editing. Monitor the `max_content_chars` setting

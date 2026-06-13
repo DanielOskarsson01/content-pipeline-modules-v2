@@ -3,7 +3,9 @@
 > Convert pipeline Markdown to HTML with optional schema.org Organization JSON-LD and CSS styling.
 
 **Module ID:** `html-output` | **Step:** 8 (Bundling) | **Category:** formatting | **Cost:** cheap
-**Version:** 1.0.0 | **Data Operation:** transform (=)
+**Version:** 1.0.1 | **Data Operation:** transform (=)
+
+> **v1.0.1 (W1.5):** the heading-marker regex is now sourced from the shared `modules/_shared/marker-parser.js` (single source of truth, also used by tone-seo-editor's marker-preservation gate). Strip behavior is byte-identical to v1.0.0 — verified by an old-vs-new output diff.
 
 ---
 
