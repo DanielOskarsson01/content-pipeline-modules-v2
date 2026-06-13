@@ -3,7 +3,7 @@
 > Keyword distribution planner with web-researched keyword data. Selects target keywords and produces meta tags, optional FAQs, and section-level keyword distribution. The manifest default is fully project-agnostic; pipeline-specific shapes (e.g. company-profile section breakdowns) come from template-level prompt overrides.
 
 **Module ID:** `seo-planner` | **Step:** 5 (Generation) | **Category:** planning | **Cost:** expensive
-**Version:** 2.2.0 | **Data Operation:** add (➕)
+**Version:** 2.2.1 | **Data Operation:** add (➕)
 
 ---
 
@@ -30,6 +30,10 @@ content-analyzer (＝) -> seo-planner (➕) -> content-writer (➕)
 It uses the **add (➕)** data operation - it chains from the working pool, finding content-analyzer output by the `source_submodule` field, and adds its own output alongside. After approval, the pool contains both analysis items and SEO plan items, distinguished by `source_submodule`.
 
 This is the cheapest step in the chain. The input is just the analysis JSON (a few KB), not the full scraped text (50KB+). This makes it safe to re-run multiple times while iterating on keyword strategy without significant cost.
+
+### v2.2.1: Corrective JSON retry (2026-06-13)
+
+The defensive parser (v2.2.0) recovers JSON when markdown *headings leak into* an otherwise-JSON response. It cannot recover when the model returns the entire plan as **markdown prose** (no JSON object at all) — observed 2026-06-13 on a template whose prompt had lost its `OUTPUT FORMAT`/JSON-contract section, so sonnet produced a readable report instead of JSON. v2.2.1 adds `completeWithJsonRetry`: on a parse failure it re-issues the call **once** at `temperature: 0` with a strict JSON-only correction that includes the prior (invalid) response and asks the model to re-output the same information as a single JSON object (a reformat, which models comply with reliably). On a second failure it still throws loudly, preserving `rawText`. The retry is pipeline-agnostic — it names no content-type-specific keys, only constrains the output format — so it protects every template against prompt drift and stochastic markdown. The root-cause fix for a missing JSON contract still lives in the template prompt (the `OUTPUT FORMAT` section); this retry is the second line of defense. Tested in `test-json-retry.js`.
 
 ### v2.2.0: Agnostic Manifest + Per-Template Refusal Flag + Defensive Parser (2026-06-09)
 

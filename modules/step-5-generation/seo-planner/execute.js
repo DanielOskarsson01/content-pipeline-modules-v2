@@ -116,6 +116,46 @@ function parseJsonResponse(text) {
 }
 
 /**
+ * Call the model and parse its JSON response, with ONE corrective retry.
+ *
+ * Failure mode this guards (observed 2026-06-13, Wazdan + Pronet): the model
+ * returns a markdown/prose plan instead of a JSON object, so parseJsonResponse
+ * throws. The retry re-issues the call at temperature 0 with a strict
+ * JSON-only correction that INCLUDES the prior (invalid) response, asking the
+ * model to re-output the same information as a single JSON object — a reformat,
+ * which models comply with far more reliably than a fresh generation.
+ *
+ * Pipeline-agnostic: the correction names no content-type-specific keys; it
+ * only constrains the OUTPUT FORMAT. On a second failure it throws, preserving
+ * .rawText (the retry response) for forensic logging — i.e. it stays loud.
+ */
+async function completeWithJsonRetry(ai, baseOpts, logger, entityName) {
+  const first = await ai.complete(baseOpts);
+  try {
+    return parseJsonResponse(first.text);
+  } catch (firstErr) {
+    logger.warn(
+      `${entityName}: SEO plan response was not valid JSON (${firstErr.message}) — ` +
+      `retrying once with a strict JSON-only correction.`
+    );
+    const correction =
+      'Your previous response was NOT valid JSON — it contained markdown, headings, prose, or code fences.\n\n' +
+      'Re-output the EXACT SAME information as ONLY a single valid JSON object and nothing else: ' +
+      'no markdown, no "#" headings, no "**" bold, no prose, no commentary, no code fences, no preamble. ' +
+      'Your response MUST start with "{" and end with "}".\n\n' +
+      'Your previous (invalid) response was:\n' + (first.text || '');
+    const second = await ai.complete({ ...baseOpts, prompt: correction, temperature: 0 });
+    try {
+      return parseJsonResponse(second.text);
+    } catch (secondErr) {
+      secondErr.rawText = second.text;
+      secondErr.firstAttemptText = first.text;
+      throw secondErr;
+    }
+  }
+}
+
+/**
  * Validate meta tag lengths and return warnings.
  */
 function validateMeta(meta) {
@@ -530,24 +570,23 @@ async function execute(input, options, tools) {
 
       const prompt = buildPrompt(promptTemplate, analysisContent, reference_docs, keywordResearchText, faq_count);
 
-      const response = await ai.complete({
-        prompt,
-        model: ai_model,
-        provider: ai_provider,
-        temperature,
-        max_tokens,
-      });
-
       let plan;
       try {
-        plan = parseJsonResponse(response.text);
+        // Call + parse with ONE corrective retry if the model returns
+        // markdown/prose instead of JSON (see completeWithJsonRetry).
+        plan = await completeWithJsonRetry(
+          ai,
+          { prompt, model: ai_model, provider: ai_provider, temperature, max_tokens },
+          logger,
+          entity.name
+        );
       } catch (parseErr) {
         // Forensic preservation: log the raw LLM response so the next failure
         // is debuggable in minutes rather than hours.
-        const rawSnippet = (parseErr.rawText || response.text || '').slice(0, 2000);
+        const rawSnippet = (parseErr.rawText || '').slice(0, 2000);
         logger.error(
-          `${entity.name}: JSON parse failed — ${parseErr.firstError || parseErr.message}. ` +
-          `Raw LLM response (first 2000 chars): ${JSON.stringify(rawSnippet)}`
+          `${entity.name}: JSON parse failed after corrective retry — ${parseErr.firstError || parseErr.message}. ` +
+          `Raw retry response (first 2000 chars): ${JSON.stringify(rawSnippet)}`
         );
         throw parseErr;
       }
@@ -625,4 +664,4 @@ async function execute(input, options, tools) {
 
 module.exports = execute;
 // Exported for test harness use only — not part of the public submodule interface.
-module.exports.__testing = { parseJsonResponse, parseResearchQueries, buildPrompt, MANIFEST_DEFAULT_PROMPT };
+module.exports.__testing = { parseJsonResponse, completeWithJsonRetry, parseResearchQueries, buildPrompt, MANIFEST_DEFAULT_PROMPT };
