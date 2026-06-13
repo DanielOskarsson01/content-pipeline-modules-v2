@@ -3,7 +3,7 @@
 > Structural fact extraction from scraped content. Classifies into categories, assigns tags, extracts key facts, and maps source citations.
 
 **Module ID:** `content-analyzer` | **Step:** 5 (Generation) | **Category:** analysis | **Cost:** expensive
-**Version:** 1.4.0 | **Data Operation:** add (+)
+**Version:** 1.4.1 | **Data Operation:** add (+)
 
 ---
 
@@ -227,6 +227,7 @@ reference_docs: [master_categories.md]
 - **Single-language assumption** - The default prompt is in English and expects English-language source text. Non-English companies may need a modified prompt
 - **No cross-entity intelligence** - Each company is analyzed independently. The model doesn't know what categories other companies received, so consistency depends on the reference doc
 - **JSON parse fragility** - LLMs occasionally return malformed JSON. The module handles markdown code fence wrapping but deeply malformed responses fail with raw_response included for debugging
+- **Vocabulary fidelity gate (v1.4.1, opt-in)** - the optional `vocabulary_checks` option turns the "garbage taxonomy" risk above into a loud failure instead of a silent pass. When configured (e.g. `categories.primary[].slug=master_categories.md`), the module (a) pre-flight FAILS the run before any LLM call if a referenced vocab doc is missing/empty, and (b) FAILS any entity whose assigned slug at a configured path is not present in the named doc. Leave empty (default) and the gate is inert — the module behaves exactly as before. The slug-membership check is deliberately lenient (it never rejects a slug that appears in the doc) so it cannot false-fail a valid run; its job is to catch grossly-invented slugs. Operator note: the vocab doc must contain each allowed slug as a contiguous token (e.g. `casino-platforms`, not `casino - platforms`) — the real master_categories.md / master_tags.md formats already satisfy this.
 
 ## What Happens Next
 
@@ -246,6 +247,6 @@ The analysis_json is the single source of truth for downstream submodules. If a 
 - **Display type:** cards (not table) - one card per entity with expandable detail modal
 - **Selectable:** true - operators approve/reject entire entity analysis
 - **Detail view:** `detail_schema` with header (entity_name, status as badge, model_used) and dynamic sections auto-generated from LLM JSON keys via `_dynamic_sections`
-- **Error handling:** LLM failures and missing input are handled per-entity (partial success pattern). JSON parse failures fall back to displaying raw LLM text as a prose section. Failed entities include error message in a dynamic error section
+- **Error handling:** LLM failures and missing input are handled per-entity (partial success pattern). JSON parse failures fall back to displaying raw LLM text as a prose section. Failed entities include error message in a dynamic error section. With `vocabulary_checks` configured (v1.4.1), a missing/empty referenced vocab doc refuses the whole run before any LLM call, and an out-of-vocabulary slug fails that entity with an error naming the slug + source doc.
 - **Dependencies:** `tools.ai` (LLM calls), `tools.logger`, `tools.progress`
 - **Files:** `manifest.json`, `execute.js`

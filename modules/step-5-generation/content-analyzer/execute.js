@@ -211,9 +211,105 @@ function flattenAnalysis(analysis) {
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// W1.3 — vocabulary-fidelity gate helpers (pipeline-agnostic)
+//
+// These helpers carry NO content-type knowledge. The paths and doc names come
+// from the per-template `vocabulary_checks` option; an empty option makes the
+// gate inert. This mirrors content-writer's `allowed_slug_paths` mechanism.
+// ---------------------------------------------------------------------------
+
+/**
+ * Walk a tiny dot-notation path with `[]` array iteration into a structured
+ * object, returning an array of string leaves. Identical semantics to
+ * content-writer's walkSlugPath (kept local — modules are self-contained).
+ */
+function walkSlugPath(obj, path) {
+  if (obj == null || typeof path !== 'string' || path.length === 0) return [];
+  const segments = path.split('.');
+  let curr = obj;
+  for (let i = 0; i < segments.length; i++) {
+    let seg = segments[i];
+    if (curr == null) return [];
+    const arrayIter = seg.endsWith('[]');
+    if (arrayIter) seg = seg.slice(0, -2);
+    const nextField = seg.length > 0 ? curr[seg] : curr;
+    if (arrayIter) {
+      if (!Array.isArray(nextField)) return [];
+      const restPath = segments.slice(i + 1).join('.');
+      if (restPath === '') {
+        return nextField.map(x => (typeof x === 'string' ? x.trim() : '')).filter(Boolean);
+      }
+      return nextField.flatMap(item => walkSlugPath(item, restPath));
+    }
+    curr = nextField;
+  }
+  if (typeof curr === 'string') return [curr.trim()].filter(Boolean);
+  if (Array.isArray(curr)) return curr.filter(x => typeof x === 'string').map(s => s.trim()).filter(Boolean);
+  return [];
+}
+
+/**
+ * Parse the `vocabulary_checks` textarea option into [{ path, doc }] entries.
+ * Format: one entry per line, `<analysis_json.path[].slug>=<reference_doc_name>`.
+ * Blank lines and `#` comments ignored. Returns [] when empty/missing — in
+ * which case the gate is inert.
+ */
+function parseVocabularyChecks(configStr) {
+  if (!configStr || typeof configStr !== 'string') return [];
+  return configStr
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0 && !line.startsWith('#'))
+    .map(line => {
+      const eq = line.indexOf('=');
+      if (eq < 1) return null;
+      const path = line.slice(0, eq).trim();
+      const doc = line.slice(eq + 1).trim();
+      if (!path || !doc) return null;
+      return { path, doc };
+    })
+    .filter(Boolean);
+}
+
+/**
+ * Resolve a reference doc's content by name from the reference_docs object,
+ * tolerating filename/path/case variation. Returns the content string or
+ * undefined. reference_docs may be `[]` (the manifest default) → treated as none.
+ */
+function resolveReferenceDoc(referenceDocs, docName) {
+  if (!referenceDocs || typeof referenceDocs !== 'object' || Array.isArray(referenceDocs)) return undefined;
+  if (Object.prototype.hasOwnProperty.call(referenceDocs, docName)) return referenceDocs[docName];
+  const lower = String(docName).toLowerCase();
+  const key = Object.keys(referenceDocs).find(k => {
+    const kl = k.toLowerCase();
+    return kl === lower || kl.includes(lower) || lower.includes(kl);
+  });
+  return key ? referenceDocs[key] : undefined;
+}
+
+/**
+ * Extract the set of slug-shaped tokens present in a vocabulary doc. Generic
+ * and format-agnostic: any maximal `[a-z0-9]+(-[a-z0-9]+)*` run (length >= 2,
+ * containing a letter), lowercased. Deliberately lenient — it must NEVER
+ * false-fail a valid slug that appears in the doc; it still catches grossly-
+ * invented multi-word slugs (which won't appear as a token in the doc at all).
+ */
+function extractVocabSlugs(docContent) {
+  const set = new Set();
+  if (typeof docContent !== 'string' || docContent.length === 0) return set;
+  const matches = docContent.toLowerCase().match(/[a-z0-9]+(?:-[a-z0-9]+)*/g);
+  if (matches) {
+    for (const tok of matches) {
+      if (tok.length >= 2 && /[a-z]/.test(tok)) set.add(tok);
+    }
+  }
+  return set;
+}
+
 async function execute(input, options, tools) {
   const { entities } = input;
-  const { ai_model, ai_provider, max_content_chars, prompt: promptTemplate, reference_docs, temperature, max_tokens } = options;
+  const { ai_model, ai_provider, max_content_chars, prompt: promptTemplate, reference_docs, temperature, max_tokens, vocabulary_checks } = options;
   const { logger, progress, ai } = tools;
 
   // Warn if critical reference docs are missing — the prompt relies on {doc:master_categories.md}
@@ -230,6 +326,50 @@ async function execute(input, options, tools) {
 
   const results = [];
   const errors = [];
+
+  // W1.3 pre-flight: when vocabulary_checks is configured, every referenced
+  // vocab doc must resolve to non-empty content BEFORE we spend tokens. A
+  // missing/empty doc means the fidelity gate cannot validate slugs (it would
+  // reject everything), so fail fast with a clear, actionable error. Inert when
+  // vocabulary_checks is empty (generic content types unaffected).
+  const vocabChecks = parseVocabularyChecks(vocabulary_checks);
+  if (vocabChecks.length > 0) {
+    const missingDocs = [...new Set(vocabChecks.map(c => c.doc))].filter(docName => {
+      const content = resolveReferenceDoc(reference_docs, docName);
+      return typeof content !== 'string' || content.trim().length === 0;
+    });
+    if (missingDocs.length > 0) {
+      const errMsg = `vocabulary reference doc(s) missing or empty for content-analyzer: ${missingDocs.join(', ')} — required by vocabulary_checks. Attach the doc(s) in this template's content-analyzer reference documents, or remove the corresponding line(s) from vocabulary_checks.`;
+      logger.error(`content-analyzer refused run: ${errMsg}`);
+      for (const entity of entities) {
+        errors.push(`${entity.name}: ${errMsg}`);
+        results.push({
+          entity_name: entity.name,
+          items: [{
+            entity_name: entity.name,
+            status: 'error',
+            summary_preview: '',
+            word_count: 0,
+            model_used: `${ai_provider}/${ai_model}`,
+            error: errMsg,
+            _dynamic_sections: [{ field: 'error', label: 'Error', display: 'text' }],
+            analysis_json: null,
+          }],
+          meta: { pages_analyzed: 0, status: 'error' },
+        });
+      }
+      if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
+      return {
+        results,
+        summary: {
+          total_entities: entities.length,
+          total_items: 0,
+          description: `0/${entities.length} entities analyzed — refused: ${missingDocs.length} vocabulary doc(s) missing/empty`,
+          errors,
+        },
+      };
+    }
+  }
 
   for (let i = 0; i < entities.length; i++) {
     const entity = entities[i];
@@ -283,6 +423,45 @@ async function execute(input, options, tools) {
           section_analysis: rawText,
           _dynamic_sections: [{ field: 'section_analysis', label: 'Analysis', display: 'prose' }],
         };
+      }
+
+      // W1.3 fidelity gate: every assigned slug at each configured path must
+      // exist in the named vocabulary doc injected for this run. Out-of-
+      // vocabulary slugs mean the model invented values the downstream pipeline
+      // cannot resolve — fail the entity loud instead of passing them through.
+      if (vocabChecks.length > 0 && analysis && typeof analysis === 'object') {
+        const violations = [];
+        for (const { path, doc } of vocabChecks) {
+          const assigned = walkSlugPath(analysis, path);
+          if (assigned.length === 0) continue;
+          const allowed = extractVocabSlugs(resolveReferenceDoc(reference_docs, doc));
+          for (const slug of assigned) {
+            if (!allowed.has(String(slug).toLowerCase())) {
+              violations.push(`"${slug}" (path ${path}, not in ${doc})`);
+            }
+          }
+        }
+        if (violations.length > 0) {
+          const errMsg = `Out-of-vocabulary slug(s) assigned by content-analyzer: ${violations.join('; ')}. The analyzer assigned slug values not present in the injected vocabulary — fix the source/prompt or the vocabulary docs before proceeding.`;
+          logger.error(`${entity.name}: ${errMsg}`);
+          errors.push(`${entity.name}: ${errMsg}`);
+          results.push({
+            entity_name: entity.name,
+            items: [{
+              entity_name: entity.name,
+              status: 'error',
+              summary_preview: '',
+              word_count: totalWords,
+              model_used: `${ai_provider}/${ai_model}`,
+              error: errMsg,
+              _dynamic_sections: [{ field: 'error', label: 'Error', display: 'text' }],
+              analysis_json: analysis,
+            }],
+            meta: { pages_analyzed: items.length, status: 'error' },
+          });
+          if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
+          continue;
+        }
       }
 
       const resultItem = {
@@ -347,3 +526,10 @@ async function execute(input, options, tools) {
 }
 
 module.exports = execute;
+// Exported for test harness use only — not part of the public submodule interface.
+module.exports.__testing = {
+  walkSlugPath,
+  parseVocabularyChecks,
+  resolveReferenceDoc,
+  extractVocabSlugs,
+};
