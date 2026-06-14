@@ -820,3 +820,37 @@ Architectural specs in "pending sign-off" state need active tracking to either a
 **Alignment:** Confirmed. W1.1 honors Rule 13 — the new option, its default, the failure-path strings, and the logic carry zero content-type/iGaming/company-profile assumptions (verified in review). It honors the Plan 2 Workstream-1 intent: establish a loud-failing baseline (the empty-plan guard) BEFORE any Workstream-2 prompt/manifest migration, so a later regression run is attributable to the migration, not a pre-existing silent pass. No scope creep beyond W1.1; W1.2 not started.
 
 **Updated by:** Claude (manual session entry — W1.1 execution + deploy + production verification)
+
+### Session: 2026-06-14 — Verified + tested the per-entity failure-status fix (874c436); ship-gate E2E incl. Wazdan reported successful
+
+**Status:** Verification + regression-test + audit session for an ALREADY-COMMITTED skeleton fix. No new product code authored this session. All work on `content-pipeline-v2` branch `sub-plan-1-multi-card` + `content-pipeline-modules-v2/BACKLOG.md`.
+
+**Context — log is stale vs git (Pattern H):** This CLAUDE.md session log documents Rule 13 only through W1.1, but git on modules `main` shows **W1.2 (`685af34`), W1.3 (`f585d15`), W1.5 (`1728136`), seo-planner v2.2.1 (`3b48ef6`)** all committed since. Those sessions were not logged here. This entry does NOT fabricate them — flagged for a future reconciliation pass. (Grounded next-state: Rule 13 W1.4 + W2.1/W2.2/W2.3 appear open; V5 sub-plan 1 is code-complete on `sub-plan-1-multi-card`, in ship-gate.)
+
+**Accomplished:**
+- **Verify-before-assume:** the task described mirroring `entity_stage_pool.status` to the derived run status as work-to-do, but `git blame` showed it was **already committed today** in `874c436` ("un-mask per-entity submodule failures"). `stageWorker.handleEntityJob` derives status via `deriveEntityRunStatus(result)` (`server/utils/entityRunStatus.js`) and writes that SAME value to both `entity_submodule_runs.status` (success write) and `entity_stage_pool.status` (success-path mirror, ~L877-882). There was never a committed intermediate state with the run status derived but the pool hardcoded `'completed'`.
+- **Confirmed the decision is correct:** mirroring `entityStatus` makes `batchWorker`'s `pipeline_stages.completed_count/failed_count` (derived from pool status) agree with `autoExecutor.evaluateStepResult` (reads `entity_submodule_runs.status`). Keeping `'completed'` re-introduces the "N completed, 0 failed" masking the fix targets.
+- **Full downstream carry-forward audit:** `approve_step_v2` forwards only `status='approved'` pool rows (`sql/migration_move_routing_to_step7.sql:80-94`); approve promotes only `completed`/`pending`→`approved` (`runs.js:390-397`). So a `failed` entity is NOT forwarded — **intended**, consistent with the pre-existing throw-path (`stageWorker.js:723-729` already wrote `failed` to the pool on thrown errors). Non-card same-step reads have no status filter (safe); card-routed retries exclude `failed` by design; skip forwards all rows. **QA verdicts (`qa_pass:false`) stay `completed`** → still forward + route (critical non-regression; `deriveEntityRunStatus` flags only `meta.status==='error'` or all-items-error).
+- **Added the first test in the skeleton repo:** `server/utils/entityRunStatus.test.js` (18 `node:test` cases) + a `test` npm script (`node --test 'server/**/*.test.js'`). Covers the failed/completed/defensive cases and the `qa_pass:false`→completed non-regression, plus a STRUCTURAL guard that reads `stageWorker.js` as text and asserts the success-path pool mirror uses `status: entityStatus` (not a literal), scoped so it cannot match the throw-path update. (stageWorker can't be imported in a unit test — it starts a live BullMQ Worker at load.) **18/18 pass.** Independent code review: **PASS** (0 critical/0 warning); closed its one info-gap (added meta-error + successful-items case).
+- **Ship-gate E2E run reported SUCCESSFUL including Wazdan (user-confirmed, not observed by me this session).** Significance: Wazdan was the previously-failing entity (`fetch failed` ~908s timeout, BACKLOG #25). A clean completion validates the stabilization stack — `d7e8a89` (stream Anthropic responses, ends the undici ~300s wall) fixed the root timeout; `874c436` ensures honest status reporting. Run ID / template / whether it reached Step 7 routing: TBD (to be pinned down).
+- **Backlog:** marked modules `BACKLOG.md` **Item 25** largely resolved by `874c436` (+ resolution paragraph) and added **Item 26** for the residual: pool status is last-writer-wins across submodules at a step, so `pipeline_stages` counts (from the pool) can still disagree with `evaluateStepResult` (any-submodule-failed) in multi-submodule steps. Pre-existing shape; not introduced by `874c436`.
+
+**Decisions:**
+- **Mirror `entityStatus` to the pool = correct (confirmed, already shipped).** The drop-at-approve of `failed` entities is intended de-masking, consistent with throw-path behavior — not a wrongful drop. A failed entity stays fully auditable as `failed` at the step it failed (and, unlike a thrown no-partial error, its `output_data` is preserved).
+- **Did not author a code change** — the fix was present; a no-op edit "to implement" would be theater. Deliverables were the missing test + the audit + backlog hygiene.
+- **No formal brutal-critic/CTO round forced.** The change is architectural by Rule 2 but already committed; my audit + the code-review PASS is one verification pass. An independent adversarial round is optional (consistent with throw-path + tested), not a V5 blocker.
+
+**Blockers/Questions / loose ends:**
+- `8f0b132` (skeleton test + script) committed locally on `sub-plan-1-multi-card`, **not pushed**.
+- modules `BACKLOG.md` (Items 25/26) **edited; commit status: see below**.
+- The cross-reference I proposed (generation-failures should flow forward as `flagged` for human review — ties Item 26 → Items 8/9, since `terminal_state` is only set by routing, so a Step-5 drop never reaches the #9/#10 review queue) — **not yet added**; awaiting your go.
+- Wazdan run details (ID/template/Step-7-reached) needed to pin the ship-gate claim precisely.
+- decision_log (Supabase) not written this session.
+
+**Files touched this session:**
+- `content-pipeline-v2/server/utils/entityRunStatus.test.js` — new, 18 cases. (added, committed `8f0b132`)
+- `content-pipeline-v2/package.json` — `test` script. (modified, committed `8f0b132`)
+- `content-pipeline-modules-v2/BACKLOG.md` — Item 25 resolution note + new Item 26 + index rows. (modified)
+- `content-pipeline-modules-v2/CLAUDE.md` — this entry. (modified)
+
+**Updated by:** Claude (manual session entry — verification/test/audit of 874c436; ship-gate E2E incl. Wazdan reported successful)

@@ -29,6 +29,8 @@ Tasks not yet scheduled for implementation.
 | 22 | New Step 1 submodule: `sonar-deep-research` for LLM-grounded entity discovery (complements scraping) | Medium (new module) | 2026-06-07 |
 | 23 | Template creator dropdown + preset map should order submodules by pipeline-execution sequence (skeleton) | Low (UX) | 2026-06-07 |
 | 24 | Template editor — drag-and-drop reorder for submodules within a step (skeleton) | Medium (UX, ordering matters) | 2026-06-07 |
+| 25 | Per-entity submodule errors masked as `approved` — run reports "N completed, 0 failed" even when a submodule returns error items for some entities (skeleton repo) | **Largely resolved by `874c436` (2026-06-14)** — residual in #26 | 2026-06-14 |
+| 26 | Pool status is last-writer-wins across submodules at a step — `pipeline_stages` counts (from `entity_stage_pool`) can still disagree with `evaluateStepResult` (any-submodule-failed) in multi-submodule steps (skeleton repo) | Low (residual of #25) | 2026-06-14 |
 
 ---
 
@@ -1149,3 +1151,42 @@ Frontend-only change in `client/src/components/pages/TemplateEditor.tsx`:
 ### Why this matters more than #23
 
 #23 is about WHICH ORDER modules appear in the dropdown (the initial signal). This item is about LETTING OPERATORS CHANGE THE ORDER after the fact (the override mechanism). #23 makes the right choice easier; #24 makes wrong choices recoverable without delete-and-readd. Both are needed; #24 is the higher-leverage one because it covers all the cases #23 doesn't (custom orderings the operator wants for content-type-specific reasons).
+
+---
+
+## Item 25 — Per-entity submodule errors are masked as `approved` (skeleton repo)
+
+**Added:** 2026-06-14 | **Priority:** Low-medium (annoyance, NOT a root cause)
+
+**Problem:** When a Step-5+ submodule *completes* (does not throw) but returns result items with `status: 'error'` / `meta.status: 'error'` for *some* entities, auto-execute / batchWorker still marks those entities `approved` and the run summary reports "N completed, 0 failed." A genuine per-entity failure is hidden behind a green checkmark, so an operator cannot tell a clean run from one where an entity produced nothing.
+
+**Confirmed instances (2026-06-13/14 E2E runs, "7th june 17.15" template, Pronet Gaming + Wazdan):**
+- seo-planner returned markdown instead of JSON → error item → shown `approved` (before the v2.2.1 prompt-restore + retry fix).
+- content-analyzer pre-flight refused (missing reference docs) → error items → shown `approved` (run `7271e3a8`).
+- content-writer `fetch failed` (LLM timeout, ~908s) for Wazdan → error item, no `content_markdown` → shown `approved` (run `5999aa8e`); tone-seo-editor then correctly reported "No content_markdown found," also shown `approved`.
+
+**Fix sketch (skeleton, auto-executor / batchWorker per-entity status decision):** treat a submodule result whose item has `status === 'error'` (or `meta.status === 'error'`) as a per-entity `failed`, not `approved`; reflect it in `failed_count` and the run summary; optionally halt per the auto-execute failure threshold. This is the auto-execute/batchWorker layer — **distinct from Item 7** (Step-7 routing cascade-delete) and from Item 8 (Step-8 quality-signal propagation).
+
+**Explicitly NOT this item — the real priority:** the actual Step-5 product failures (content-writer / seo-planner LLM calls failing to produce the deliverable) are the core problem. This item only makes such failures *visible*; it does not make Step 5 reliable. The content-writer LLM-robustness work (e.g. the `fetch failed` timeout on large-input entities) is tracked/handled separately and matters far more — a visible failure is still a failed product.
+
+**Resolution (`874c436`, 2026-06-14):** `stageWorker.handleEntityJob` now derives the per-entity status via `deriveEntityRunStatus(result)` (`server/utils/entityRunStatus.js`) and writes that same value to BOTH `entity_submodule_runs.status` AND `entity_stage_pool.status` (success-path mirror). A result with `meta.status === 'error'` or all-items-`status:'error'` is now `failed`, so it counts in `failed_count` and toward the auto-execute halt threshold; QA verdicts (`qa_pass:false`) remain `completed`. Regression tests: `content-pipeline-v2/server/utils/entityRunStatus.test.js` (18 cases incl. a structural guard that the pool mirror uses `entityStatus`, not a literal). This resolves the **single-submodule-per-entity** case (the three confirmed instances above are all single-submodule failures). The **multi-submodule** residual is split out as Item 26.
+
+---
+
+## Item 26 — Pool status is last-writer-wins across submodules at a step
+
+**Added:** 2026-06-14 | **Priority:** Low (residual of #25) | **Touches:** `content-pipeline-v2/server/workers/stageWorker.js`, `server/workers/batchWorker.js`, `server/services/autoExecutor.js` (`evaluateStepResult`)
+
+**Problem:** `entity_stage_pool` has ONE `status` column per `(run, step, entity)`. When a step runs multiple submodules (e.g. Step 5: content-analyzer → content-writer → seo-planner → tone-seo-editor), each submodule's `stageWorker` write overwrites that single column — so the pool status reflects the **last** submodule to run for the entity, not "did any submodule fail." `874c436` (Item 25) made the per-submodule write correct, but the aggregation across submodules is still last-writer-wins.
+
+**Consequence — two surfaces can disagree in multi-submodule steps:**
+- `batchWorker` derives `pipeline_stages.completed_count/failed_count` from `entity_stage_pool.status` ([batchWorker.js:88-106](../content-pipeline-v2/server/workers/batchWorker.js#L88)) → reflects the last submodule.
+- `autoExecutor.evaluateStepResult` reads `entity_submodule_runs.status` and marks an entity failed if **ANY** submodule failed ([autoExecutor.js:820-837](../content-pipeline-v2/server/services/autoExecutor.js#L820)) → reflects any-failure.
+
+So if content-writer fails but a later seo-planner/tone-seo-editor succeeds for the same entity, the pool status ends `completed` (forwarded at approve) while `evaluateStepResult` still counts the entity failed. The halt threshold (which reads `entity_submodule_runs`) is correct; the headline pool count can under-report. Same shape pre-dates `874c436` for thrown errors — not introduced by it; `874c436` fixes the common single-submodule and last-submodule cases.
+
+**Cross-step note:** because approve forwards only non-`failed` pools (`approve_step_v2` forwards `status='approved'` only — [runs.js:390-397](../content-pipeline-v2/server/routes/runs.js#L390), [migration_move_routing_to_step7.sql:80-94](../content-pipeline-v2/sql/migration_move_routing_to_step7.sql#L80)), last-writer-wins also decides whether a partially-failed entity is carried forward. An entity whose final submodule succeeded is carried forward even if an earlier submodule failed; one whose final submodule failed is dropped. Audited 2026-06-14 — this is consistent with the established throw-path behavior, but the determinant being "last submodule" rather than "any submodule" is the surprising part.
+
+**Fix sketch (not scoped yet):** options include (a) a dedicated per-step aggregation that sets pool status from the worst per-submodule outcome (read `entity_submodule_runs` for the step before approve), or (b) a distinct `flagged`/`partial` pool status that batchWorker counts as failed but approve still forwards (overlaps with Item 8 quality propagation). Decide alongside Item 8 — both are about a single status column carrying more meaning than it can.
+
+**Why low priority:** the halt threshold (the safety-critical surface) reads `entity_submodule_runs` and is already correct. Single-submodule steps (Steps 1-4, 6-10 typically) are unaffected. Only multi-submodule generation steps with a *non-final* submodule failure under-report in the headline count.
