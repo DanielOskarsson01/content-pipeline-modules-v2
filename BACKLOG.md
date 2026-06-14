@@ -404,6 +404,14 @@ Becomes high-severity the moment any auto-distribution is wired up without this 
 
 Step 9 needs the quality signals from `entity_run_meta` (which it can read directly) OR from Step 8 output metadata (which requires Item 8). Decision: gate from `entity_run_meta` directly for Phase 1 of Item 9 (no Item 8 dependency); Item 8 still useful for human inspection of artifacts on disk.
 
+### Open decision (2026-06-14 audit) — generation-failures vs the review queue
+
+The 2026-06-14 carry-forward audit (`874c436` / Item 26) surfaced a gap this gate must own. A **generation-failed** entity (content-writer / seo-planner returns an error result at Step 5) is now marked `failed` in `entity_stage_pool` and **dropped at the Step-5 approve boundary** (`approve_step_v2` forwards only `status='approved'`), so it never reaches Step 9/10. Meanwhile a **QA-flagged** entity (`qa_pass:false`) stays `completed`, forwards, and *does* reach the review queue. Two kinds of "this entity has no good deliverable," treated oppositely.
+
+Worse for this gate specifically: `terminal_state` (which Items 8/9 key off) is set **only by routing** (`apply_entity_routing`, Step 7). A Step-5 drop never reaches routing, so its `terminal_state` stays NULL — it won't appear in the flagged queue even if Step 10 reads `entity_run_meta`.
+
+**Proposed direction (decide here — this is where the review queue gets built):** set `entity_run_meta.terminal_state='failed'` (or a dedicated `'generation_failed'`) at the point a generation failure is detected, so the existing #8/#9/#10 machinery surfaces it for free and the routing-style `entity_run_meta` forwarding can carry it. This is a product call: "failed entities flow forward as flagged for human review" vs the current "failed entities drop, audited only at the step they failed." The current behavior is internally consistent (matches the throw-path) but inconsistent with how QA-flags are handled.
+
 ---
 
 ## Item 10 — Pending-spec tracking: prevent indefinite "pending sign-off" state and implementation drift
@@ -1187,6 +1195,6 @@ So if content-writer fails but a later seo-planner/tone-seo-editor succeeds for 
 
 **Cross-step note:** because approve forwards only non-`failed` pools (`approve_step_v2` forwards `status='approved'` only — [runs.js:390-397](../content-pipeline-v2/server/routes/runs.js#L390), [migration_move_routing_to_step7.sql:80-94](../content-pipeline-v2/sql/migration_move_routing_to_step7.sql#L80)), last-writer-wins also decides whether a partially-failed entity is carried forward. An entity whose final submodule succeeded is carried forward even if an earlier submodule failed; one whose final submodule failed is dropped. Audited 2026-06-14 — this is consistent with the established throw-path behavior, but the determinant being "last submodule" rather than "any submodule" is the surprising part.
 
-**Fix sketch (not scoped yet):** options include (a) a dedicated per-step aggregation that sets pool status from the worst per-submodule outcome (read `entity_submodule_runs` for the step before approve), or (b) a distinct `flagged`/`partial` pool status that batchWorker counts as failed but approve still forwards (overlaps with Item 8 quality propagation). Decide alongside Item 8 — both are about a single status column carrying more meaning than it can.
+**Fix sketch (not scoped yet):** options include (a) a dedicated per-step aggregation that sets pool status from the worst per-submodule outcome (read `entity_submodule_runs` for the step before approve), or (b) a distinct `flagged`/`partial` pool status that batchWorker counts as failed but approve still forwards (overlaps with Item 8 quality propagation). Decide alongside Item 8 — both are about a single status column carrying more meaning than it can. See also **Item 9 → "Open decision (2026-06-14 audit)"** for the related product call on whether generation-failures should flow forward as `flagged` rather than drop.
 
 **Why low priority:** the halt threshold (the safety-critical surface) reads `entity_submodule_runs` and is already correct. Single-submodule steps (Steps 1-4, 6-10 typically) are unaffected. Only multi-submodule generation steps with a *non-final* submodule failure under-report in the headline count.

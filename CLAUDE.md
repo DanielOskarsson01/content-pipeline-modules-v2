@@ -821,6 +821,19 @@ Architectural specs in "pending sign-off" state need active tracking to either a
 
 **Updated by:** Claude (manual session entry — W1.1 execution + deploy + production verification)
 
+### Session(s): 2026-06-12 → 2026-06-14 — Rule 13 W1.2 / W1.3 / W1.5 + seo-planner v2.2.1 (RECONSTRUCTED from git 2026-06-14; not logged at the time)
+
+**Note:** These entries are reconstructed from commit messages on modules `main`, NOT from contemporaneous session records — detail is limited to what each commit states. Flagged during the 2026-06-14 verification session when git was found ahead of this log (Pattern H: current-state verification before citing plan files). Do not treat as a full session record.
+
+- **W1.2 — content-writer v1.6.1** (`685af34`): loud-fail/warn on configured-but-unresolved `allowed_slug_paths` (paths that don't resolve now surface instead of silently passing).
+- **W1.3 — content-analyzer v1.4.1** (`f585d15`): config-driven vocabulary-fidelity gate (every assigned slug must exist in the injected vocabulary).
+- **W1.5 — shared heading-marker parser** (`1728136`): `modules/_shared/marker-parser.js` as the single canonical marker regex, consumed by markdown-output + html-output + the tone-seo-editor preservation gate.
+- **seo-planner v2.2.1** (`3b48ef6`): corrective JSON retry (markdown→JSON safety net) — addresses the "seo-planner returned markdown instead of JSON" failure (a BACKLOG #25 instance).
+
+**Grounded Rule-13 status (2026-06-14):** W1.1–W1.3 + W1.5 shipped on `main`. **W1.4** (citation-coverage-checker template-flag confirm — config only, no code) + **W2.1 / W2.2 / W2.3** (agnosticism) appear open. The seo-planner v2.2.0 / content-writer v1.5.0–1.6.0 commits were the W2 *pilot*, not the full W2 rollout.
+
+**Updated by:** Claude (reconstructed from git history during the 2026-06-14 session; not a contemporaneous record)
+
 ### Session: 2026-06-14 — Verified + tested the per-entity failure-status fix (874c436); ship-gate E2E incl. Wazdan reported successful
 
 **Status:** Verification + regression-test + audit session for an ALREADY-COMMITTED skeleton fix. No new product code authored this session. All work on `content-pipeline-v2` branch `sub-plan-1-multi-card` + `content-pipeline-modules-v2/BACKLOG.md`.
