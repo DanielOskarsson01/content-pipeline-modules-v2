@@ -133,6 +133,18 @@ Production deploy script (`deploy.sh`) sets `MODULES_PATH` correctly. The fail-o
 **Priority:** Medium (blocks `deploy.sh` standard path)
 **Touches:** `content-pipeline-v2/client/`
 
+### Update 2026-06-15 — ARCH correction + Path-B deploy confirmed
+
+The missing optional dep is **architecture-dependent**, and the title's `darwin-arm64` is misleading on this machine. `node` at `/usr/local/bin/node` is an **x64** build (Rosetta on Apple Silicon) → `process.arch === 'x64'` → Rollup needs **`@rollup/rollup-darwin-x64`**, NOT `-darwin-arm64`. A 2026-06-15 deploy attempt pre-checked for `@rollup/rollup-darwin-arm64` (present) and wrongly concluded the build would work; `vite build` then crashed needing `@rollup/rollup-darwin-x64` (absent) and `deploy.sh` aborted at step 1 (set -e), leaving production untouched.
+
+**So any pre-deploy build check MUST match the running node's arch, not a hardcoded one:**
+```bash
+ls client/node_modules/@rollup/rollup-$(node -p "process.platform+'-'+process.arch")  # the dep that must exist
+```
+Root fix unchanged (`cd client && rm -rf node_modules package-lock.json && npm install` installs the optional dep for the running node's arch; or run the build under an arm64 node from `/opt/homebrew`).
+
+**Confirmed 2026-06-15:** the skeleton `routingHandler` fix (`be07509`, server-only) shipped via **Path B** — `rsync server/` (no `--delete`, `client/dist` untouched) + `pm2 restart all` (fork preserved) — bypassing the broken client build entirely. shasum-verified on Hetzner + PM2 4/4 fork. Reconfirms: **the client build is irrelevant to server-only deploys**, so Item 6 (split `deploy.sh` so server-only deploys don't require a client build) would have avoided this entirely.
+
 ### Issue
 
 `./deploy.sh` fails at step 1 (`vite build`) because Rollup cannot find `@rollup/rollup-darwin-arm64`:
