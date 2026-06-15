@@ -32,6 +32,7 @@ Tasks not yet scheduled for implementation.
 | 25 | Per-entity submodule errors masked as `approved` — run reports "N completed, 0 failed" even when a submodule returns error items for some entities (skeleton repo) | **Largely resolved by `874c436` (2026-06-14)** — residual in #26 | 2026-06-14 |
 | 26 | Pool status is last-writer-wins across submodules at a step — `pipeline_stages` counts (from `entity_stage_pool`) can still disagree with `evaluateStepResult` (any-submodule-failed) in multi-submodule steps (skeleton repo) | Low (residual of #25) | 2026-06-14 |
 | 27 | Off-site crawl: `follow_external=true` lets discovery wander entirely onto a linked domain when a seed has no own content (`example.com` → crawled all of `iana.org`). content-analyzer is NOT fabricating — it cited real scraped pages. Edge-case scope note + fixture lesson | Low (config-driven, expected; degenerate-seed edge case) | 2026-06-15 |
+| 28 | **Backward routing never re-executes the target step** — auto-executor resume-safety (`autoExecutor.js:160-167`) skips Steps ≥ earliest_step because the backward path doesn't reset their `pipeline_stages.status` to `active`. Round 2 never runs (skeleton repo) | **HIGH — blocks the entire Round-2 retry mechanism (sub-plan 1 core); ship-gate cannot pass without it** | 2026-06-15 |
 
 ---
 
@@ -1244,3 +1245,43 @@ For a real company whose site links heavily to partners/registries/social, `foll
 ### Fixture lesson (for the ship-gate)
 
 A thin/real-URL seed does **not** deterministically yield `citation:fail` — either the crawler finds real off-site content (this case), or (for a truly empty page) the LLM still produces *some* citations. A reproducible `citation:fail` needs the citation outcome decided by **code, not by scrape+LLM** — i.e. inject content with zero `[#n]` directly at the Step-6 QA boundary (see the ship-gate fixture mechanism).
+
+---
+
+## Item 28 — Backward routing never re-executes the target step (Section-C stage-reset gap)
+
+**Added:** 2026-06-15 | **Priority:** HIGH — blocks the entire backward-routing / Round-2 retry mechanism (the core of Multi-Card / sub-plan 1). The sub-plan-1 ship-gate cannot pass until this is fixed. | **Touches:** `content-pipeline-v2/server/services/autoExecutor.js` (resume-safety check + loop-continuation), `server/routes/runs.js` (routing branch), possibly the routing RPCs.
+
+### The bug
+
+When `loop-router` routes an entity backward (e.g. `citation:fail` → step-5 card), the auto-executor's loop-continuation (`autoExecutor.js:415-456`) does `routingLoops++`, cleans **in-memory** state (`state.steps_completed`, `state.per_step_results`) for steps ≥ `earliest_step`, and re-enters the do-while → inner for-loop from step 0.
+
+But on re-entry, the **resume-safety check** (`autoExecutor.js:160-167`) skips any step whose **DB `pipeline_stages.status`** is `completed`/`approved`/`skipped`:
+```js
+const stageStatus = await getStageStatus(runId, stepIndex);
+if (stageStatus === 'completed' || stageStatus === 'skipped' || stageStatus === 'approved') {
+  // ... continue;  // SKIP
+}
+```
+**Nothing resets the target steps' `pipeline_stages.status` to `active`/`pending` on the backward path.** The only stage→`active` resets in the codebase are the **forward** `all_terminal` branch (`runs.js:515-516`), the **skip** endpoint (`runs.js:678`), and the **manual reopen** endpoint (`runs.js:818-822`). The backward-routing branch (`runs.js`, not-all_terminal) returns `earliest_step` but resets no stage; the routing RPCs reset none either. The loop-continuation cleans only in-memory state, **not** the DB stage status the resume-safety check reads.
+
+**Result:** on re-entry, Steps ≥ `earliest_step` (which are `approved`/`completed`/`skipped` from Round 1) are all silently skipped. **Round 2 never executes.** The run then runs the first not-yet-done forward step and proceeds/halts.
+
+### Evidence (ship-gate run `61c8a8c4`, 2026-06-15)
+
+`routingHandler` wrote a correct card instruction (`citation:fail` → `{step:5, card_id:a8f4…0001, card_round:2, loop_iteration:1}`), `loop_count` 0→1, `routingLoops` fired. But DB after routing: Step 5 `skipped`, Step 6 `completed`, Step 7 `completed` (**none reset to active**). Re-entry skipped 5/6/7; only Step 8 (`pending`) ran → `meta-output` `skipped_no_input` + a 120s timeout → run `halted`. `entity_submodule_runs`: **zero `loop_iteration=1` rows.** Orphan check clean (7 Round-1 rows, 0 orphaned — no cascade-delete), but no Round-2 rows appended.
+
+### NOT a fixture issue (corrects the brief's framing)
+
+The ship-gate brief hypothesized the failure was "Step 5 was skipped, so the route had nowhere to land," and proposed "make Step 5 runnable." That is **insufficient**: a normally-executed Step 5 is `approved` after Round 1, and `autoExecutor.js:162` skips `approved` exactly like `skipped`. **Steps 6 and 7 (`completed`) would also be skipped on re-entry.** So no choice of injection boundary fixes this — it is a code bug, independent of the fixture.
+
+### Same class as the `routingHandler` schema drift (`be07509`) — Pattern I
+
+Section C removed the pre-2026-06-04 cascade-delete (which deleted `entity_submodule_runs`/`submodule_runs` for steps ≥ target and effectively forced re-execution) but **did not add the stage-reset that the new append-only model needs.** The end-to-end Round-2 cycle was never run after the Section C rewrite (the ship-gate is the first attempt), so both this and the schema-drift bug lurked unexercised. The ship-gate is surfacing them one at a time.
+
+### Fix options (for a reviewed code change — Rule 2)
+
+1. **Reset target stages on backward routing.** When routing returns `earliest_step`, set `pipeline_stages.status='active'` (+ re-seed `entity_stage_pool` at the target step, and reset its downstream stages to `pending`) for steps ≥ `earliest_step`, mirroring what the `reopen` endpoint (`runs.js:818-859`) already does for a manual reopen. Then the resume-safety check won't skip them and the card-group re-execution runs.
+2. **Make the resume-safety check loop-aware.** Don't skip a step at line 162 if the entity has a *pending card instruction* for that step in the current loop iteration (a Round-2 pass). Narrower, but must be careful not to defeat genuine resume safety.
+
+Either needs its own dry-run + review discipline (this is the load-bearing retry path, same risk class as routingHandler). Closes the gap that blocks the sub-plan-1 ship-gate.
