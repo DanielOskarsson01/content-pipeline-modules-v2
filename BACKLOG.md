@@ -31,6 +31,7 @@ Tasks not yet scheduled for implementation.
 | 24 | Template editor — drag-and-drop reorder for submodules within a step (skeleton) | Medium (UX, ordering matters) | 2026-06-07 |
 | 25 | Per-entity submodule errors masked as `approved` — run reports "N completed, 0 failed" even when a submodule returns error items for some entities (skeleton repo) | **Largely resolved by `874c436` (2026-06-14)** — residual in #26 | 2026-06-14 |
 | 26 | Pool status is last-writer-wins across submodules at a step — `pipeline_stages` counts (from `entity_stage_pool`) can still disagree with `evaluateStepResult` (any-submodule-failed) in multi-submodule steps (skeleton repo) | Low (residual of #25) | 2026-06-14 |
+| 27 | Off-site crawl: `follow_external=true` lets discovery wander entirely onto a linked domain when a seed has no own content (`example.com` → crawled all of `iana.org`). content-analyzer is NOT fabricating — it cited real scraped pages. Edge-case scope note + fixture lesson | Low (config-driven, expected; degenerate-seed edge case) | 2026-06-15 |
 
 ---
 
@@ -1210,3 +1211,36 @@ So if content-writer fails but a later seo-planner/tone-seo-editor succeeds for 
 **Fix sketch (not scoped yet):** options include (a) a dedicated per-step aggregation that sets pool status from the worst per-submodule outcome (read `entity_submodule_runs` for the step before approve), or (b) a distinct `flagged`/`partial` pool status that batchWorker counts as failed but approve still forwards (overlaps with Item 8 quality propagation). Decide alongside Item 8 — both are about a single status column carrying more meaning than it can. See also **Item 9 → "Open decision (2026-06-14 audit)"** for the related product call on whether generation-failures should flow forward as `flagged` rather than drop.
 
 **Why low priority:** the halt threshold (the safety-critical surface) reads `entity_submodule_runs` and is already correct. Single-submodule steps (Steps 1-4, 6-10 typically) are unaffected. Only multi-submodule generation steps with a *non-final* submodule failure under-report in the headline count.
+
+---
+
+## Item 27 — Off-site crawl wanders onto linked domains for content-less seeds (NOT analyzer fabrication)
+
+**Added:** 2026-06-15 | **Priority:** Low (config-driven, expected behavior; surfaced by a degenerate fixture seed) | **Touches:** discovery config (`follow_external`), `modules/step-1-discovery/{browser-crawler,deep-links}`
+
+### What happened (ship-gate fixture build, run `3e27ba01`)
+
+A synthetic entity seeded with **`https://example.com`** (intended as a thin, no-citable-facts seed to force `citation:fail` at Step 6) instead produced a **full IANA company profile** with 8 citations and PASSED citation coverage. Investigation (Step 1-5 pool trace, DB-verified):
+
+- `example.com`'s ~30-word page links to `iana.org/domains/example`. **browser-crawler** (`follow_external=true`, per the 30-april `pse-v2` card) followed it; **deep-links** extracted **23 `iana.org`/`icann.org` URLs**.
+- Step 2-3 canonicalized, kept, and **scraped all 23** — `iana.org/news` (3214 words), `/protocols` (5316), `/about` (393), `/about/excellence` (217), `/time-zones` (168), `pti.icann.org`, `icann.org`, … Real content, thousands of words.
+- content-analyzer's **9 `source_citations` are exactly those actually-scraped pages**; the key_facts (Paul Eggert = real tz coordinator; "EFQM Committed to Excellence, August 2013" = on the scraped `iana.org/about/excellence`) came from real scraped content.
+
+### Classification — IMPORTANT
+
+**content-analyzer did NOT invent sources.** It cited real, scraped pages. The earlier suspicion ("analyzer fabricates 9 citations from a 30-word page") was wrong: the page wasn't the only input — the crawler had pulled in 23 real `iana.org` pages first. This is **not** a hallucinated-sources correctness bug.
+
+The real mechanism is **off-site crawl**: `follow_external=true` lets discovery leave the seed domain and crawl whatever it links to. For a normal company (its own site has the content), on-site content dominates and this is fine/intended. For a **degenerate seed with no own content** (`example.com` = a placeholder page whose only substance is an off-site link), the crawl goes *entirely* off-target.
+
+### Why low priority
+
+- The behavior is **config-driven** (`follow_external=true`) and **expected** for real entities. No code is misbehaving.
+- It only fully derails on a content-less seed — not a real-run shape.
+
+### Worth a glance for real runs
+
+For a real company whose site links heavily to partners/registries/social, `follow_external=true` could pull a meaningful fraction of off-target content into the analysis. Not investigated here; flagging that the off-site scope is wider than one might assume. A future option: cap external-domain crawling (e.g. depth 1 off-site, or domain allow-list) when precision matters.
+
+### Fixture lesson (for the ship-gate)
+
+A thin/real-URL seed does **not** deterministically yield `citation:fail` — either the crawler finds real off-site content (this case), or (for a truly empty page) the LLM still produces *some* citations. A reproducible `citation:fail` needs the citation outcome decided by **code, not by scrape+LLM** — i.e. inject content with zero `[#n]` directly at the Step-6 QA boundary (see the ship-gate fixture mechanism).
