@@ -33,6 +33,7 @@ Tasks not yet scheduled for implementation.
 | 26 | Pool status is last-writer-wins across submodules at a step — `pipeline_stages` counts (from `entity_stage_pool`) can still disagree with `evaluateStepResult` (any-submodule-failed) in multi-submodule steps (skeleton repo) | Low (residual of #25) | 2026-06-14 |
 | 27 | Off-site crawl: `follow_external=true` lets discovery wander entirely onto a linked domain when a seed has no own content (`example.com` → crawled all of `iana.org`). content-analyzer is NOT fabricating — it cited real scraped pages. Edge-case scope note + fixture lesson | Low (config-driven, expected; degenerate-seed edge case) | 2026-06-15 |
 | 28 | **Backward routing never re-executes the target step** — auto-executor resume-safety (`autoExecutor.js:160-167`) skips Steps ≥ earliest_step because the backward path doesn't reset their `pipeline_stages.status` to `active`. Round 2 never runs (skeleton repo) | **HIGH — blocks the entire Round-2 retry mechanism (sub-plan 1 core); ship-gate cannot pass without it** | 2026-06-15 |
+| 29 | Resumed auto-execute clamps `config.steps` to `[resumePoint..10]` — a backward route to a step BEFORE the resume point is never iterated, so Round 2 there cannot run (skeleton repo). Surfaced by pause-before-7 ship-gate run-control; does NOT affect non-paused production runs | Low-medium (pause + backward-route edge; ship-gate run-control) | 2026-06-16 |
 
 ---
 
@@ -1285,3 +1286,33 @@ Section C removed the pre-2026-06-04 cascade-delete (which deleted `entity_submo
 2. **Make the resume-safety check loop-aware.** Don't skip a step at line 162 if the entity has a *pending card instruction* for that step in the current loop iteration (a Round-2 pass). Narrower, but must be careful not to defeat genuine resume safety.
 
 Either needs its own dry-run + review discipline (this is the load-bearing retry path, same risk class as routingHandler). Closes the gap that blocks the sub-plan-1 ship-gate.
+
+---
+
+## Item 29 — Resumed auto-execute clamps config.steps, blocking backward routes before the resume point
+
+**Added:** 2026-06-16 | **Priority:** Low-medium (only bites a paused run that routes backward before the pause point; non-paused production runs are unaffected) | **Touches:** `content-pipeline-v2/server/routes/runs.js` (auto-execute/resume), `server/services/autoExecutor.js` (do-while re-entry over `config.steps`)
+
+### What happened (ship-gate full-cycle run 48c0e3f4, with the #28 fix deployed)
+
+The #28 fix correctly reopened the loop body on a backward route (Step 5 `skipped`→`active`, Step 6/7 `pending`, pool s5 `pending`). But the run had been **paused before Step 7** (ship-gate run-control) and **resumed**. The resume built the auto-execute config with `steps: [7,8,9,10]` (from the resume point onward), logged verbatim:
+`[auto-execute] Starting run … — steps: 7,8,9,10, skip:`
+
+The auto-executor's backward-route re-entry (autoExecutor.js:415-456) re-iterates the SAME `config.steps`. So when routing reopened **Step 5** (`earliest_step=5 < 7`), the re-entry loop — iterating only `[7..10]` — never reached Step 5. Step 5 stayed `active` but unrun; loop-router re-fired at Step 7 (`iter=0`, decision `flag_manual`), and the run halted waiting on a phantom `loop-router iter=1`. **No `loop_iteration=1` rows; Round 2 never executed.**
+
+### Why it is NOT #28 and NOT a production bug
+
+A NON-paused auto-execute builds `steps: [0..10]`, so the backward-route re-entry reaches Step 5 normally. The clamp only happens on **resume after a pause**. The 30-april template has no pause in production — I added `pause_before_steps:[7]` transiently for ship-gate run-control. So this is a pause × backward-routing interaction exposed by the test harness, not a defect in the #28 fix or in normal routing.
+
+### The deeper conflict it exposes (ship-gate fixture design)
+
+The deterministic citation:fail fixture needs Step 5 **skipped on the forward pass** (to inject zero-`[#n]` content) but **runnable on the backward pass** (so Round 2's content-writer card executes). The only way to flip `skip_steps` mid-run is pause→revert→resume — but the resume ALSO clamps `config.steps`. So the deterministic-skip fixture + pause/resume cannot currently complete the full cycle.
+
+### Options for a green full cycle
+
+1. **Fix the resume/backward-route step range** (cleanest, real fix): on a backward route the re-entry must iterate from `earliest_step` even if `earliest_step < resumePoint`. Either widen the resumed `config.steps` to `[0..10]`, or have the backward-route handler extend the iterated range down to `earliest_step`. Then the deterministic skip-1-5 + pause/resume path completes. Reviewed change (Rule 2).
+2. **Step-5-runnable fixture, NO pause** (skip 1-4, seed content with empty `source_citations` + no source text so content-writer emits zero `[#n]`): a non-paused full auto-execute has `steps:[0..10]`, so the backward route reaches Step 5. Avoids the clamp entirely. Risk: Step-5 Round-1 determinism is shakier (LLM), per the earlier brief — may trip the failure-point gate; report separately if so.
+
+### Status
+
+#28 itself is validated (the reopen works). The full-cycle green run is blocked by this clamp; the gate is not yet green.
