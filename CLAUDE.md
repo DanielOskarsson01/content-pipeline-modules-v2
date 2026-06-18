@@ -871,3 +871,36 @@ Architectural specs in "pending sign-off" state need active tracking to either a
 - `content-pipeline-modules-v2/CLAUDE.md` — this entry. (modified)
 
 **Updated by:** Claude (manual session entry — verification/test/audit of 874c436; ship-gate E2E incl. Wazdan reported successful)
+
+### Session: 2026-06-18 — Park #29 + park-and-pivot recorded; ship-gate parked, four conditions carried to sub-plan 4
+
+**Status:** Execution of a prior session's handoff "do first" actions. Park #29 (skeleton), tidy the floating brief (modules), record the park-and-pivot decision (BACKLOG + this log), then open sub-plan 4. No deploy, no merge, tripwire stub untouched.
+
+**Git-vs-log reconciliation (Pattern H — verify before citing):** This log was behind git again. The prior session's **Track B** commits on skeleton branch `sub-plan-1-multi-card` were never logged here: `be07509` (routingHandler schema-drift fix — `resolveCards`/`validateCards`/`applyRouting` migrated off the legacy `cards`/`target_cards` shape onto the canonical `card_definitions` + `routing_rules[key]=[{step,card_id}]`, confirmed via PHASE_3B §2.1; a real blocker — would have thrown TypeError on the first routing run; reviewed Gemini + code-review agent, tested, deployed Path B, verified) and `4c06d3f` (BACKLOG #28 backward-route stage-reset fix — reopen the loop body so Round 2 re-executes; reviewed, tested, deployed Path B, verified). Both reviewed/tested/deployed/pushed in the prior session. `8f0b132` (entityRunStatus regression tests) likewise. **Now reconciled** — BACKLOG #28 is marked resolved+deployed and this entry records the chain.
+
+**Accomplished this session:**
+- **Parked #29** (skeleton, branch `sub-plan-1-multi-card`): committed the reviewed/tested resume-range-clamp fix as `079f7d1` — exactly three files (`server/services/autoExecutor.js` wiring, `server/utils/stepRange.js` new pure helper, `server/utils/stepRange.test.js` 10 tests), 130 insertions, nothing else. Tagged **`parked-not-deployed`** (annotated). **NOT deployed, NOT merged, NOT pushed** (branch local, ahead 1 of origin). Both skeleton commit gates satisfied: decision_log entry (`3a553e8e`) + Pattern B.1 code-path-trace trailer (`autoExecutor.js` is a routing-class file). The trace was genuinely verified this session, not just repeated from the patch comment: `runs.js:1279` resume endpoint clamps `config.steps` to `[haltedStep..10]` (the exact clamp the fix targets); `runs.js:1202` normal launch builds `[0..10]` unclamped (confirms "production no-op today"); `widenStepRange` runs before the `per_step_results` cleanup (structural test confirms ordering). 10/10 tests pass.
+- **Lockfile drift reported, not committed:** `client/package-lock.json` (skeleton) showed ~609/-549 lines of Babel **dev-dependency** version bumps (7.29.0 → 7.29.7, transitive) — incidental `npm install` drift, **origin unknown**, zero relation to #29 (which adds no dependencies). Left out of the commit; deliberately **NOT reverted** (not ours to discard — it's pre-existing working-tree state, not something this session created). Still sits unstaged in the skeleton working tree. **Recorded here, not floating.**
+- **Tidied the floating brief:** committed the long-untracked `docs/RULE_13_ROLLOUT_BRIEF.md` (230 lines, the canonical Rule-13 rollout brief) to the modules repo in its own commit so it stops surfacing as a loose end across sessions.
+- **Recorded the park-and-pivot** in `BACKLOG.md` (#28 → RESOLVED+deployed; #29 → PARKED; new **Item 30** = ship-gate parked + four carried-forward conditions + principle; index rows updated) and in this session log.
+
+**Decisions:**
+- **Park-and-pivot (the session's conclusion).** The ship-gate kept surfacing bugs (#28, #29) that live in the skip/pause/resume **test scaffolding**, not in routing. Root realization: routing isn't wired into any real template — `30 april` (`3442873e`) is the only one with `routing_rules` + `card_definitions`, and its card is the `writer-v2-placeholder` (sub-plan-1 ship-gate marker). The real escalation card + real routing config are **sub-plan 4**. So the gate has been testing a fixture-shaped version of a feature that isn't built yet.
+- **#28 stays deployed** — trunk prerequisite for any backward routing; dormant/harmless until routing goes live. Do NOT revert.
+- **#29 parked, not deployed** — side-branch; only bites pause + resume + backward-route below the resume point; unreachable until routing config exists. Reviewed/tested patch preserved on-branch tagged `parked-not-deployed`; resurrect when the path is live.
+- **Ship-gate parked.** Its four conditions (1 routing fired / 2 Round 2 executes with marker / 3 terminal state / 4 orphan check clean — the cascade-delete safety) carry forward as **sub-plan 4's acceptance bar**, where the gate becomes meaningful (real card, real trigger, production path — straight-through 0..10, no skip/pause). **Principle:** pre-fix trunk prerequisites, defer side-branch bugs, don't push a scaffolded gate to green (doing so is what manufactured the #29-class entangled bug).
+- **Did not push the parked branch** to origin this session — held as a checkpoint decision (outward-facing); local commit + tag already satisfy "parked on branch."
+
+**Blockers / next (sub-plan 4):**
+- Build the **real escalation card** (a genuine content-writer-v2 with a real prompt/model difference, not the placeholder) and wire `routing_rules` onto a **genuine** template. Then run the four ship-gate conditions on the production path — condition 2 (Round-2 marker) + the orphan check finally prove the product, not the scaffolding.
+- **Open question to settle early:** deterministic `citation:fail` on a real run is hard — thin seeds trip an off-site crawl (BACKLOG #27, `follow_external`), so content gets real citations. Decide whether a high-probability trigger is acceptable, or whether a controlled test mechanism is needed.
+
+**Files touched this session:**
+- `content-pipeline-v2/server/services/autoExecutor.js`, `server/utils/stepRange.js`, `server/utils/stepRange.test.js` — #29 patch (committed `079f7d1`, tag `parked-not-deployed`, branch `sub-plan-1-multi-card`, NOT deployed/merged/pushed).
+- `content-pipeline-modules-v2/docs/RULE_13_ROLLOUT_BRIEF.md` — committed (own commit) to stop the floating-loose-end churn.
+- `content-pipeline-modules-v2/BACKLOG.md` — #28 resolution, #29 resolution/park, new Item 30, index rows.
+- `content-pipeline-modules-v2/CLAUDE.md` — this entry.
+
+**Alignment:** Confirmed. Parking (not deploying) an unreachable side-branch fix while keeping the deployed trunk prerequisite, and refusing to push a scaffolded gate to green, are consistent with the project's "verify-before-assume" discipline and Pattern I (don't ship around an unexercised path). No architectural commitment touched; sub-plan 4 is where the routing product actually gets built.
+
+**Updated by:** Claude (manual session entry — park #29, tidy brief, record park-and-pivot)

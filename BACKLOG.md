@@ -32,8 +32,9 @@ Tasks not yet scheduled for implementation.
 | 25 | Per-entity submodule errors masked as `approved` — run reports "N completed, 0 failed" even when a submodule returns error items for some entities (skeleton repo) | **Largely resolved by `874c436` (2026-06-14)** — residual in #26 | 2026-06-14 |
 | 26 | Pool status is last-writer-wins across submodules at a step — `pipeline_stages` counts (from `entity_stage_pool`) can still disagree with `evaluateStepResult` (any-submodule-failed) in multi-submodule steps (skeleton repo) | Low (residual of #25) | 2026-06-14 |
 | 27 | Off-site crawl: `follow_external=true` lets discovery wander entirely onto a linked domain when a seed has no own content (`example.com` → crawled all of `iana.org`). content-analyzer is NOT fabricating — it cited real scraped pages. Edge-case scope note + fixture lesson | Low (config-driven, expected; degenerate-seed edge case) | 2026-06-15 |
-| 28 | **Backward routing never re-executes the target step** — auto-executor resume-safety (`autoExecutor.js:160-167`) skips Steps ≥ earliest_step because the backward path doesn't reset their `pipeline_stages.status` to `active`. Round 2 never runs (skeleton repo) | **HIGH — blocks the entire Round-2 retry mechanism (sub-plan 1 core); ship-gate cannot pass without it** | 2026-06-15 |
-| 29 | Resumed auto-execute clamps `config.steps` to `[resumePoint..10]` — a backward route to a step BEFORE the resume point is never iterated, so Round 2 there cannot run (skeleton repo). Surfaced by pause-before-7 ship-gate run-control; does NOT affect non-paused production runs | Low-medium (pause + backward-route edge; ship-gate run-control) | 2026-06-16 |
+| 28 | **Backward routing never re-executes the target step** — auto-executor resume-safety (`autoExecutor.js:160-167`) skips Steps ≥ earliest_step because the backward path doesn't reset their `pipeline_stages.status` to `active`. Round 2 never runs (skeleton repo) | **RESOLVED `4c06d3f` (2026-06-18) — deployed; STAYS deployed (trunk prerequisite, dormant until routing live)** | 2026-06-15 |
+| 29 | Resumed auto-execute clamps `config.steps` to `[resumePoint..10]` — a backward route to a step BEFORE the resume point is never iterated, so Round 2 there cannot run (skeleton repo). Surfaced by pause-before-7 ship-gate run-control; does NOT affect non-paused production runs | **PARKED `079f7d1` (tag `parked-not-deployed`) — fix implemented + tested, NOT deployed (unreachable until sub-plan 4)** | 2026-06-16 |
+| 30 | Sub-plan-1 ship-gate PARKED — four acceptance conditions carried forward to sub-plan 4 (real escalation card + `routing_rules` on a genuine template). Park-and-pivot decision record | Carried forward (sub-plan 4 acceptance bar) | 2026-06-18 |
 
 ---
 
@@ -1287,6 +1288,10 @@ Section C removed the pre-2026-06-04 cascade-delete (which deleted `entity_submo
 
 Either needs its own dry-run + review discipline (this is the load-bearing retry path, same risk class as routingHandler). Closes the gap that blocks the sub-plan-1 ship-gate.
 
+### Resolution — FIXED + deployed (2026-06-18)
+
+Fixed by `4c06d3f` (skeleton, branch `sub-plan-1-multi-card`) via fix option 1: the backward-routing branch reopens the loop body — resets the re-entered stages' `pipeline_stages.status` to `active`, clears their stage columns, reopens `entity_stage_pool` at the target — **without deleting any rows** (append-only; no #7 cascade-delete). Reviewed (Gemini + code-review agent), tested, deployed Path B, verified. **STAYS deployed:** it is a trunk prerequisite for any backward routing to work, and is dormant/harmless until routing goes live — no real template carries `routing_rules` + `card_definitions` yet (`30 april`'s card is the `writer-v2-placeholder`; the real card is sub-plan 4). See Item 30 and the 2026-06-18 session log. **Do NOT revert.**
+
 ---
 
 ## Item 29 — Resumed auto-execute clamps config.steps, blocking backward routes before the resume point
@@ -1316,3 +1321,34 @@ The deterministic citation:fail fixture needs Step 5 **skipped on the forward pa
 ### Status
 
 #28 itself is validated (the reopen works). The full-cycle green run is blocked by this clamp; the gate is not yet green.
+
+### Resolution — fix implemented, PARKED not deployed (2026-06-18)
+
+Fix option 1 implemented: `widenStepRange()` (new pure helper `server/utils/stepRange.js`) widens the resumed `config.steps` down to `earliest_step` when a backward route targets a step below the clamped range; called in the autoExecutor routing branch **before** the `per_step_results` cleanup so the cleanup covers the widened range. No-op (same reference) when the target is already in range, and a non-paused run builds `config.steps=[0..10]` (min 0) → **production no-op today**. Reviewed + tested (10/10 unit tests, incl. a structural guard that autoExecutor imports + calls the helper in the routing branch). Committed as `079f7d1` on `sub-plan-1-multi-card`, tagged **`parked-not-deployed`**. **NOT deployed, NOT merged.** The triggering path (pause + resume + backward route below the resume point) is unreachable until `routing_rules` + `card_definitions` are wired onto a real template (sub-plan 4). Resurrect when that path goes live — this commit is the pointer.
+
+---
+
+## Item 30 — Sub-plan-1 ship-gate PARKED; four conditions carried forward to sub-plan 4
+
+**Added:** 2026-06-18 | **Priority:** Carried forward (acceptance bar for sub-plan 4) | **Touches:** sub-plan 4 (real escalation card + `routing_rules` on a genuine template)
+
+### Decision (park-and-pivot)
+
+The sub-plan-1 ship-gate kept surfacing bugs (#28, #29) that live in the skip/pause/resume **test scaffolding**, not in routing itself. Root realization: **routing is not wired into any real template.** `30 april` (`3442873e`) is the only template with `routing_rules` + `card_definitions`, and its card is a placeholder (`writer-v2-placeholder`, marked `sub-plan-1-ship-gate`). The real escalation card + real routing config are **sub-plan 4** work. So the gate has been testing a fixture-shaped version of a feature that isn't built yet.
+
+- **#28** — leave deployed. Trunk prerequisite for any routing; dormant/harmless until routing goes live. Do NOT revert.
+- **#29** — reviewed/tested, PARKED (`079f7d1`, tag `parked-not-deployed`), NOT deployed. Side-branch; only bites pause + resume + backward-route below the resume point — unreachable until routing config exists. Resurrect when the path is live.
+- **Ship-gate** — parked. Not pushed to green against scaffolding (doing so is what manufactured the #29-class entangled bug).
+
+### Four conditions — carry forward as sub-plan 4's acceptance bar
+
+Run on the production path (straight-through 0..10, **no** skip/pause), with a real card + real trigger:
+
+1. **Routing fired** — a backward route is emitted on the QA-fail.
+2. **Round 2 executes with marker** — the re-executed step shows the Round-2 card (`loop_iteration=1` / `card_round:2` rows present).
+3. **Terminal state** — `approved` on QA pass, or `failed` at `max_loops`.
+4. **Orphan check clean** — no cascade-delete; Round-1 rows preserved, Round-2 rows appended.
+
+### Principle
+
+Pre-fix trunk prerequisites (#28), defer side-branch bugs (#29), don't push a scaffolded gate to green. The gate becomes meaningful in sub-plan 4 (real card, real trigger, real path), where condition 2 + the orphan check finally prove the product, not the scaffolding.
