@@ -904,3 +904,38 @@ Architectural specs in "pending sign-off" state need active tracking to either a
 **Alignment:** Confirmed. Parking (not deploying) an unreachable side-branch fix while keeping the deployed trunk prerequisite, and refusing to push a scaffolded gate to green, are consistent with the project's "verify-before-assume" discipline and Pattern I (don't ship around an unexercised path). No architectural commitment touched; sub-plan 4 is where the routing product actually gets built.
 
 **Updated by:** Claude (manual session entry — park #29, tidy brief, record park-and-pivot)
+
+### Session: 2026-06-20 — CTO audit of the park-and-pivot + 3 actioned findings + sub-plan-4 scope lock
+
+**Status:** CTO oversight pass on the prior session's park-and-pivot. Verified all claims against ground truth (git, production SSH, pipeline DB, canonical plan, test suite, Supabase) via a 6-agent workflow + direct re-verification. Bookkeeping all GREEN; surfaced live-state hazards; actioned three findings; locked sub-plan-4 scope. No sub-plan-4 build work.
+
+**Verification (trust-but-verify):**
+- **Bookkeeping GREEN, production-verified:** skeleton HEAD `079f7d1` = exactly 3 files; tag `parked-not-deployed`→`079f7d1` annotated, on origin; modules `main` `78aa932` pushed; CI green; PM2 4/4 fork. **#29 confirmed ABSENT from prod** (no `stepRange.js`, `widenStepRange`=0, prod `autoExecutor` SHA = the `4c06d3f` version); **#28 confirmed PRESENT** (prod `runs.js` byte-identical to `4c06d3f`). Patch tests 10/10; code-path-trace attestation independently re-verified (`runs.js:1279` clamp, `:1202` `[0..10]`, `autoExecutor:437` widen-before-cleanup); 100% pipeline-agnostic; 3 decision_log rows exist.
+- **Caught an error in my own audit's adversarial agent** (trust-but-verify worked): it claimed the synthetic ship-gate entity "passed QA, so routing never fired" by reading run-`status='approved'`. Direct DB read of `output_data` refuted this — `citation-coverage-checker` emitted `qa_pass:false` ("no inline citations [#n]. Automatic fail."). The entity FAILED QA correctly; the blocker is loop-router deciding `flag_manual` (the #29 pause/resume clamp), not a non-deterministic trigger. Recorded in BACKLOG #30 "CTO audit" subsection.
+
+**Three findings actioned:**
+1. **Killed the zombie run.** `36d34311` had been `status='running'` 13 days at step 7 (BullMQ worker long dead). Set `status='abandoned'`, `completed_at=2026-06-20 08:09 UTC` in the pipeline DB. Future state-checks no longer ambiguous. (5 other `running` rows at other steps remain — flagged, not triaged.)
+2. **`deploy.sh` footgun → BACKLOG #31** (skeleton repo, HIGH). Whole-tree `rsync --delete` (excludes only node_modules/.env/.git/.DS_Store) → next full `./deploy.sh` ships parked #29 to prod silently. **Gating decided = Option B (abort if `parked-not-deployed` is an ancestor of HEAD, `DEPLOY_ALLOW_PARKED=1` override).** Rejected per-file `--exclude` (can't handle the modified `autoExecutor.js`) and warning-only (fails open). Copy-paste snippet in #31. Not implemented this session (own reviewed change).
+3. **Corrected citation:fail recipe → BACKLOG #30.** "Deterministic citation:fail is hard" was over-stated. The zero-`[#n]`-content seed produces a deterministic auto-fail (DB-proven on run `48c0e3f4`); #27's crawl problem is specific to the `example.com`-link seed, not seeding generally. Recipe: zero-citation seed + straight-through run (no pause) dodges both #27 and #29.
+
+**Sub-plan-4 scope LOCK (user-confirmed 2026-06-20):** canonical = THREE v2 cards (PSE-v2, content-writer-v2, SEO-writer-v2) on company_profile, entry gate + one-shot harness built FIRST. The earlier "one card" handoff framing is confirmed as **reduced-slice-first** (content-writer-v2 as a vertical slice to prove the mechanism end-to-end, then the other two follow) — **NOT a permanent cut to one card.** Recorded in BACKLOG #30 "Scope lock".
+
+**Decisions:**
+- Park #29 as-is confirmed (user): stays parked, not deployed; resurrection question resolved for now.
+- Zombie kill uses `abandoned` (the established terminal status; 2 prior runs use it), not `failed` (not in vocab).
+- Gating decision recorded in BACKLOG, implementation deferred (touches the deploy path) — honors "stop after these three + scope confirmation."
+
+**Blockers / next (sub-plan 4 — its own session):**
+- Implement BACKLOG #31 deploy.sh gate before any skeleton deploy.
+- Root-cause loop-router `flag_manual`-vs-`route` on a STRAIGHT-THROUGH run + the phantom `loop_count=1` / empty `routing_log` inconsistency.
+- Build the one-shot harness (`scripts/run-submodule-once.js`) + check `merge_sections` markers (both hard prerequisites that don't exist yet).
+- Triage the remaining 5 `running` rows.
+- Two-gate structure (mechanism gate vs quality gate) + disambiguate V5-plan item numbers (27/29/30) vs BACKLOG item numbers (27-31).
+
+**Files touched this session:**
+- pipeline DB `fevxvwqjhndetktujeuu`: `pipeline_runs` row `36d34311` → `abandoned` (zombie kill).
+- `content-pipeline-modules-v2/BACKLOG.md` — Item 30 (CTO audit + citation recipe + scope lock subsections), new Item 31 (deploy.sh footgun + gating decision), index rows.
+- `content-pipeline-modules-v2/CLAUDE.md` — this entry.
+- No skeleton code touched; no deploy; #29 stays parked.
+
+**Updated by:** Claude (CTO agent — audit + zombie kill + footgun/citation-recipe BACKLOG + scope lock)

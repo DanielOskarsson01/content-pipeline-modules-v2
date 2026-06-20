@@ -34,7 +34,8 @@ Tasks not yet scheduled for implementation.
 | 27 | Off-site crawl: `follow_external=true` lets discovery wander entirely onto a linked domain when a seed has no own content (`example.com` → crawled all of `iana.org`). content-analyzer is NOT fabricating — it cited real scraped pages. Edge-case scope note + fixture lesson | Low (config-driven, expected; degenerate-seed edge case) | 2026-06-15 |
 | 28 | **Backward routing never re-executes the target step** — auto-executor resume-safety (`autoExecutor.js:160-167`) skips Steps ≥ earliest_step because the backward path doesn't reset their `pipeline_stages.status` to `active`. Round 2 never runs (skeleton repo) | **RESOLVED `4c06d3f` (2026-06-18) — deployed; STAYS deployed (trunk prerequisite, dormant until routing live)** | 2026-06-15 |
 | 29 | Resumed auto-execute clamps `config.steps` to `[resumePoint..10]` — a backward route to a step BEFORE the resume point is never iterated, so Round 2 there cannot run (skeleton repo). Surfaced by pause-before-7 ship-gate run-control; does NOT affect non-paused production runs | **PARKED `079f7d1` (tag `parked-not-deployed`) — fix implemented + tested, NOT deployed (unreachable until sub-plan 4)** | 2026-06-16 |
-| 30 | Sub-plan-1 ship-gate PARKED — four acceptance conditions carried forward to sub-plan 4 (real escalation card + `routing_rules` on a genuine template). Park-and-pivot decision record | Carried forward (sub-plan 4 acceptance bar) | 2026-06-18 |
+| 30 | Sub-plan-1 ship-gate PARKED — four acceptance conditions carried forward to sub-plan 4 (real escalation card + `routing_rules` on a genuine template). Park-and-pivot decision record. **+ CTO audit 2026-06-20: corrected diagnosis, deterministic citation:fail recipe, scope lock** | Carried forward (sub-plan 4 acceptance bar) | 2026-06-18 |
+| 31 | **`deploy.sh` footgun (skeleton repo) — whole-tree rsync ships parked code.** Next full `./deploy.sh` rsyncs the working tree (incl. parked `#29`) to prod with no exclusion, silently breaking the park. Gating decided: abort if the `parked-not-deployed` commit is an ancestor of HEAD | **HIGH — silent production hazard; gate before any skeleton deploy** | 2026-06-20 |
 
 ---
 
@@ -1352,3 +1353,58 @@ Run on the production path (straight-through 0..10, **no** skip/pause), with a r
 ### Principle
 
 Pre-fix trunk prerequisites (#28), defer side-branch bugs (#29), don't push a scaffolded gate to green. The gate becomes meaningful in sub-plan 4 (real card, real trigger, real path), where condition 2 + the orphan check finally prove the product, not the scaffolding.
+
+### CTO audit (2026-06-20) — empirical ship-gate reality + corrected diagnosis
+
+A CTO verification pass queried the live pipeline DB (`fevxvwqjhndetktujeuu`) directly (the bookkeeping audits hadn't). Findings, all DB-verified:
+
+- **The synthetic ship-gate entity DID fail QA correctly — it did NOT "pass and skip routing".** On the latest ship-gate run `48c0e3f4` (entity `ship-gate-citation-fail`), `citation-coverage-checker` emitted `qa_pass:false`, `citation_score:0`, *"Content contains no inline citations [#n]. Automatic fail."* (An interim adversarial agent claimed the entity passed QA by reading the run-`status='approved'`; that conflates step-approval status with the `output_data.qa_pass` verdict. Corrected here.)
+- **The real blocker is loop-router deciding `flag_manual` instead of routing backward.** loop-router saw `qa_citation:"fail"` but emitted `decision:"flag_manual"`, no `routing_log` row, no `loop_iteration=1`, no `card_id`. This is the **#29 pause/resume clamp** (run `48c0e3f4` was paused-before-7 then resumed → `config.steps` clamped to `[7..10]` → backward route to step 5 unreachable → flag-manual). So "the gate isn't green" is a **resume-clamp** artifact, not a trigger problem.
+- **Phantom state:** `entity_run_meta.loop_count=1` with empty `routing_log`, NULL `terminal_state`/`routing_applied_at`/`last_qa_scores`. A counter advanced without the corresponding re-execution — **root-cause this in sub-plan 4 before building on it.**
+- **DB cleanup done:** run `36d34311` had been `status='running'` for 13 days at step 7 (a zombie) — killed (set `status='abandoned'`, `completed_at`) on 2026-06-20 so future state-checks aren't ambiguous. NOTE: 5 other `running` rows remain (at other steps) — not triaged this pass; check before sub-plan 4.
+
+### Deterministic citation:fail recipe (verified — corrects "citation:fail is hard")
+
+**Do not inherit the "deterministic citation:fail is hard" framing.** That was over-stated. BACKLOG #27 (off-site crawl producing real citations) is specific to the **`example.com`-link seed** approach, NOT seeding in general. The **zero-`[#n]`-content seed already produces a deterministic auto-fail** — proven on run `48c0e3f4`: content with no inline citations → `citation-coverage-checker` returns `qa_pass:false` ("Automatic fail"), regardless of LLM nondeterminism (the checker counts `[#n]` markers; zero sources → zero markers → fail).
+
+**Sub-plan-4 ship-gate recipe (cheapest validated path):** seed an entity at Step 5 with no source text so content-writer emits zero `[#n]`, and **run straight-through (no pause)**. Straight-through keeps `config.steps=[0..10]`, so the #29 clamp never applies and the backward route reaches Step 5 for Round 2. This dodges **both** #27 (don't use the off-site seed) **and** #29 (don't pause). A code-decided QA-verdict toggle is a *fallback only* if seeding proves flaky — no injection infrastructure needed up front.
+
+### Scope lock (2026-06-20)
+
+**Canonical sub-plan-4 scope = THREE v2 cards** (PSE-v2, content-writer-v2, SEO-writer-v2) on the **company_profile** template, with the **entry gate + one-shot harness built first**. The earlier handoff's "one real escalation card" framing is **narrower than canonical** and is confirmed as **reduced-slice-first, NOT a permanent cut**: build **content-writer-v2 as a vertical slice** to prove the v2-card mechanism end-to-end on the real path (the four conditions above), **then** PSE-v2 + SEO-writer-v2 follow. File the remaining two cards as explicit named carry-forward (not vague debt) so the slice can't quietly become "sub-plan 4 = one card, done."
+
+---
+
+## Item 31 — `deploy.sh` footgun: whole-tree rsync silently ships parked code (skeleton repo)
+
+**Added:** 2026-06-20 | **Priority:** HIGH — silent production hazard | **Touches:** `content-pipeline-v2/deploy.sh`
+
+### The hazard
+
+`deploy.sh` (lines 28-33) deploys the skeleton via `rsync -azP --delete` of the **entire working tree**, excluding only `node_modules`/`.env`/`.git`/`.DS_Store`. The parked **#29** files (`server/utils/stepRange.js`, `stepRange.test.js`) physically exist on disk at branch HEAD, and working-tree `autoExecutor.js` carries `widenStepRange`. **The next full `./deploy.sh` ships parked #29 to production with no gate**, silently breaking the "do not deploy #29" park decision. The park is currently protected *only* by nobody running `deploy.sh` — and the #28 deploy was actually done by a **manual single-file rsync** (mtime forensics: prod `runs.js` mtime Jun 16, prod `autoExecutor.js` mtime Jun 3), not by `deploy.sh`. The two deploy paths have opposite footgun profiles.
+
+### Gating decision (decided — implement before any skeleton deploy)
+
+Options considered:
+- **(A) `--exclude` the parked files in the rsync** — REJECTED as structurally insufficient. It can exclude the two new files, but it **cannot** handle a parked commit that *modifies an existing deployed file* (`autoExecutor.js` carries both real history AND the parked `widenStepRange` hunk; excluding the whole file would break the deploy). Per-filename excludes also rot.
+- **(C) Loud pre-deploy warning only** — REJECTED as primary. Warnings get routed around (the Pattern B.1 credibility argument); fails open.
+- **(B) Abort-gate keyed off the `parked-not-deployed` tag** — **CHOSEN.** Fails closed, robust to modified-file parks, can't rot per-filename, and forces a conscious override. Add near the top of `deploy.sh`:
+
+```bash
+# Guard: never deploy a parked commit (BACKLOG #31).
+PARKED_TAG="parked-not-deployed"
+if git -C "$LOCAL_APP" rev-parse -q --verify "refs/tags/$PARKED_TAG" >/dev/null 2>&1; then
+  PARKED_COMMIT="$(git -C "$LOCAL_APP" rev-list -n1 "$PARKED_TAG")"
+  if git -C "$LOCAL_APP" merge-base --is-ancestor "$PARKED_COMMIT" HEAD 2>/dev/null; then
+    if [ "${DEPLOY_ALLOW_PARKED:-0}" != "1" ]; then
+      echo "❌ ABORT: HEAD contains parked commit $PARKED_COMMIT (tag $PARKED_TAG)."
+      echo "   A whole-tree rsync would ship parked code to prod, breaking the park."
+      echo "   Resolve the park, or set DEPLOY_ALLOW_PARKED=1 to override deliberately."
+      exit 1
+    fi
+    echo "⚠️  DEPLOY_ALLOW_PARKED=1 — shipping parked commit $PARKED_COMMIT consciously."
+  fi
+fi
+```
+
+Lifecycle: the gate fires on every skeleton deploy while `079f7d1` is an ancestor of HEAD (the desired behavior — forces the #29 resurrection decision at first sub-plan-4 deploy). When #29 is deliberately unparked, delete the `parked-not-deployed` tag and the gate stops firing. **Not implemented this session** (it modifies the deploy path — wants its own small reviewed change); the snippet above is copy-paste ready.
