@@ -938,4 +938,6 @@ Architectural specs in "pending sign-off" state need active tracking to either a
 - `content-pipeline-modules-v2/CLAUDE.md` — this entry.
 - No skeleton code touched; no deploy; #29 stays parked.
 
-**Updated by:** Claude (CTO agent — audit + zombie kill + footgun/citation-recipe BACKLOG + scope lock)
+**Follow-up (same session, post-push request):** filed the two flagged loose ends as durable records, not log sentences — (a) the 5 remaining stale `running` rows (`23a6267d` s4/28.7d, `1e834cb6` s3/21.7d, `99b8f268` s1/14.6d, `7dcc4794` s2/13.4d, `aa81daa2` s6/13.0d) logged in BACKLOG #30 as "UNTRIAGED, check at sub-plan-4 start"; (b) the two deferred v2 cards filed as **named BACKLOG items #32 (PSE-v2) + #33 (SEO-writer-v2)**, marked "carry-forward, NOT optional", so the content-writer-v2 slice can't close as "sub-plan 4 done at one card."
+
+**Updated by:** Claude (CTO agent — audit + zombie kill + footgun/citation-recipe BACKLOG + scope lock + carry-forward items #32/#33)
