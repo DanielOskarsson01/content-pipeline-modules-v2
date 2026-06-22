@@ -941,3 +941,17 @@ Architectural specs in "pending sign-off" state need active tracking to either a
 **Follow-up (same session, post-push request):** filed the two flagged loose ends as durable records, not log sentences — (a) the 5 remaining stale `running` rows (`23a6267d` s4/28.7d, `1e834cb6` s3/21.7d, `99b8f268` s1/14.6d, `7dcc4794` s2/13.4d, `aa81daa2` s6/13.0d) filed in **BACKLOG #34** (DB hygiene — split out of #30 on 2026-06-20 so the ship-gate record isn't conflated with DB cleanup) as "UNTRIAGED, check at sub-plan-4 start"; (b) the two deferred v2 cards filed as **named BACKLOG items #32 (PSE-v2) + #33 (SEO-writer-v2)**, marked "carry-forward, NOT optional", so the content-writer-v2 slice can't close as "sub-plan 4 done at one card."
 
 **Updated by:** Claude (CTO agent — audit + zombie kill + footgun/citation-recipe BACKLOG + scope lock + carry-forward items #32/#33)
+
+### Session: 2026-06-22 — Two quick wins before sub-plan 4: deploy.sh gate (#31) + DB-hygiene triage (#34)
+
+**Status:** Two pre-sub-plan-4 quick wins, both done. Sub-plan 4 deliberately NOT opened (multi-week thread, its own session). No skeleton deploy.
+
+**#31 — deploy.sh parked-commit guard IMPLEMENTED (skeleton `250fe6a`, pushed as backup; not deployed):** Added a `[0/6]` pre-flight guard to `content-pipeline-v2/deploy.sh` that aborts the deploy if the `parked-not-deployed` commit is an ancestor of HEAD, unless `DEPLOY_ALLOW_PARKED=1`. Closes the hole where the whole-tree `rsync --delete` would silently ship parked #29. Treated as a reviewed change (not an unreviewed paste): functionally tested both branches (aborts on current parked HEAD; override warns+continues; `bash -n` clean), independent `/code-review` = **PASS** (0 critical/0 warning; confirmed the `set -e` × `merge-base --is-ancestor` interaction is safe because it sits in an `if`-condition; annotated tag dereferences to the commit via `rev-list -n1`). decision_log `2ed0a8a9`. Active locally immediately (deploy.sh runs locally); the gate itself ships on the next conscious deploy (which it gates). Scoped to the app-repo rsync; modules-repo rsync intentionally uncovered.
+
+**#34 — DB hygiene RESOLVED:** Triaged the 5 stale `running` rows (`23a6267d`/`1e834cb6`/`99b8f268`/`7dcc4794`/`aa81daa2`, 13–29 days) → all set `abandoned` (one guarded UPDATE, `status='running'` precondition; RETURNING confirmed the 5 IDs). **Baseline clean: 0 `running` rows.** Observed in passing: `pipeline_runs` shrank 17→10 rows between 06-20 and 06-22 (external live churn, not from this triage) — noted, not acted on.
+
+**Flag carried to the sub-plan-4 session (load-bearing, not a checklist tick):** task 2 — root-cause the loop-router `flag_manual`-vs-`route` decision + the phantom `loop_count=1`/empty `routing_log` on a **straight-through** run — is the "does the mechanism actually work" question. Do it EARLY and honestly: if it surfaces a real routing defect (not just the #29 resume-clamp artifact), it reshapes the v2-card work. Ready for it to change the plan.
+
+**Files touched:** skeleton `deploy.sh` (`250fe6a`, pushed); pipeline DB `pipeline_runs` (5 rows → abandoned); modules `BACKLOG.md` (#31 → resolved/implemented, #34 → resolved, index rows); modules `CLAUDE.md` (this entry).
+
+**Updated by:** Claude (CTO agent — #31 deploy.sh gate implemented + reviewed, #34 DB-hygiene triage)
