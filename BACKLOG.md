@@ -38,6 +38,7 @@ Tasks not yet scheduled for implementation.
 | 31 | **`deploy.sh` footgun (skeleton repo) — whole-tree rsync ships parked code.** Next full `./deploy.sh` rsyncs the working tree (incl. parked `#29`) to prod with no exclusion, silently breaking the park. Gating decided: abort if the `parked-not-deployed` commit is an ancestor of HEAD | **HIGH — silent production hazard; gate before any skeleton deploy** | 2026-06-20 |
 | 32 | **Sub-plan-4 deferred card: PSE-v2** (V5 item 27) — Step-1 curated-search card, broader curated list + different query template. Carry-forward AFTER the content-writer-v2 vertical slice; gated by the entry gate + one-shot harness | Carry-forward (sub-plan-4 scope; NOT optional) | 2026-06-20 |
 | 33 | **Sub-plan-4 deferred card: SEO-writer-v2** (V5 item 30) — Step-5 card, stricter meta requirements (e.g. meta_title 50–60 chars + primary keyword). Carry-forward AFTER the content-writer-v2 vertical slice; gated by the entry gate + one-shot harness | Carry-forward (sub-plan-4 scope; NOT optional) | 2026-06-20 |
+| 34 | **DB hygiene: stale/zombie `pipeline_runs` rows** (pipeline DB) — zombie `36d34311` killed (→`abandoned`); 5 other stale `running` rows untriaged, check at sub-plan-4 start. Split out of #30 | Low-medium (do before sub-plan-4 validation) | 2026-06-20 |
 
 ---
 
@@ -1363,8 +1364,7 @@ A CTO verification pass queried the live pipeline DB (`fevxvwqjhndetktujeuu`) di
 - **The synthetic ship-gate entity DID fail QA correctly — it did NOT "pass and skip routing".** On the latest ship-gate run `48c0e3f4` (entity `ship-gate-citation-fail`), `citation-coverage-checker` emitted `qa_pass:false`, `citation_score:0`, *"Content contains no inline citations [#n]. Automatic fail."* (An interim adversarial agent claimed the entity passed QA by reading the run-`status='approved'`; that conflates step-approval status with the `output_data.qa_pass` verdict. Corrected here.)
 - **The real blocker is loop-router deciding `flag_manual` instead of routing backward.** loop-router saw `qa_citation:"fail"` but emitted `decision:"flag_manual"`, no `routing_log` row, no `loop_iteration=1`, no `card_id`. This is the **#29 pause/resume clamp** (run `48c0e3f4` was paused-before-7 then resumed → `config.steps` clamped to `[7..10]` → backward route to step 5 unreachable → flag-manual). So "the gate isn't green" is a **resume-clamp** artifact, not a trigger problem.
 - **Phantom state:** `entity_run_meta.loop_count=1` with empty `routing_log`, NULL `terminal_state`/`routing_applied_at`/`last_qa_scores`. A counter advanced without the corresponding re-execution — **root-cause this in sub-plan 4 before building on it.**
-- **DB cleanup done:** run `36d34311` had been `status='running'` for 13 days at step 7 (a zombie) — killed (set `status='abandoned'`, `completed_at`) on 2026-06-20 so future state-checks aren't ambiguous.
-- **5 other `running` rows — UNTRIAGED, check at sub-plan-4 start.** All stale (13–29 days, almost certainly zombies too) but NOT killed this pass: `23a6267d` (step 4, 28.7d, the abandoned pre-Section-C run), `1e834cb6` (step 3, 21.7d), `99b8f268` (step 1, 14.6d), `7dcc4794` (step 2, 13.4d), `aa81daa2` (step 6, 13.0d, the Jun-7 baseline run). Triage + likely `abandoned` before any sub-plan-4 validation run, so they don't pollute the baseline.
+- **DB hygiene surfaced by this audit (zombie kill + 5 untriaged `running` rows) → split out to [[Item 34]]** (2026-06-20), so this item stays scoped to the ship-gate. That cleanup is `pipeline_runs` table hygiene, not ship-gate-specific.
 
 ### Deterministic citation:fail recipe (verified — corrects "citation:fail is hard")
 
@@ -1427,3 +1427,14 @@ Named carry-forward so the reduced-slice-first start (content-writer-v2 only) **
 **Added:** 2026-06-20 | **Priority:** Carry-forward (sub-plan-4 canonical scope; **NOT optional**) | **Touches:** Step-5 generation card on the `company_profile` template; gated by the sub-plan-4 entry gate + one-shot harness
 
 Named carry-forward (companion to Item 32) so neither deferred card silently vanishes when the content-writer-v2 slice ships. SEO-writer-v2 = a Step-5 card with stricter meta requirements (e.g. `meta_title` 50–60 chars AND contains the primary keyword from keyword-research output). Sequencing: follows the content-writer-v2 vertical slice; same entry gate (draft stricter-meta prompt → validate v2 beats v1 on 3 reference entities via the harness, before coding). Cross-ref: canonical 3-card scope per `noble-wandering-graham.md` §Sub-plan 4 + BACKLOG #30 "Scope lock"; companion [[Item 32]] PSE-v2. **Numbering caution:** BACKLOG Item 33 = the plan's "item 30" (V5 numbering) — different axis from BACKLOG #30 (ship-gate park record).
+
+---
+
+## Item 34 — DB hygiene: stale/zombie `pipeline_runs` rows (pipeline DB)
+
+**Added:** 2026-06-20 | **Priority:** Low-medium (state-clarity; do before any sub-plan-4 validation run) | **Touches:** pipeline DB `fevxvwqjhndetktujeuu`, `pipeline_runs`
+
+Split out of [[Item 30]] (2026-06-20) so the ship-gate carry-forward record isn't conflated with DB cleanup — different concern.
+
+- **Done:** run `36d34311` had been `status='running'` for 13 days at step 7 (a zombie; BullMQ worker long dead) — killed 2026-06-20 (set `status='abandoned'`, `completed_at`) so state-checks aren't ambiguous.
+- **UNTRIAGED — check at sub-plan-4 start:** 5 other stale `running` rows (13–29 days, almost certainly zombies too), NOT killed this pass: `23a6267d` (step 4, 28.7d, the abandoned pre-Section-C run), `1e834cb6` (step 3, 21.7d), `99b8f268` (step 1, 14.6d), `7dcc4794` (step 2, 13.4d), `aa81daa2` (step 6, 13.0d, the Jun-7 baseline run). Triage + likely set `abandoned` before any sub-plan-4 validation run, so they don't pollute the baseline.
