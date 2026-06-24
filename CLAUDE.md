@@ -955,3 +955,31 @@ Architectural specs in "pending sign-off" state need active tracking to either a
 **Files touched:** skeleton `deploy.sh` (`250fe6a`, pushed); pipeline DB `pipeline_runs` (5 rows → abandoned); modules `BACKLOG.md` (#31 → resolved/implemented, #34 → resolved, index rows); modules `CLAUDE.md` (this entry).
 
 **Updated by:** Claude (CTO agent — #31 deploy.sh gate implemented + reviewed, #34 DB-hygiene triage)
+
+### Session: 2026-06-25 — SESSION CLOSE: backlog reconciliation + impact analysis + delegation decision (autonomous #21/W2, sub-plan 4 stays attended)
+
+**Scope:** Closing entry for the 06-24 → 06-25 reconciliation work + the impact-analysis Q&A + the delegation decision. The detailed park-and-pivot / CTO-audit / quick-wins work is already logged in the 06-18, 06-20, 06-22 entries above; this entry covers what came after them and sets up the next (autonomous) phase.
+
+**Accomplished:**
+- **DB hygiene closed out (#34):** abandoned the last step-7 leftover `3e27ba01` (synthetic `ship-gate-citation-fail` run, project `ship-gate-2026-06-15`, paused, no routing artifacts). No non-terminal runs remain at the step-7 routing boundary.
+- **Retention finding recorded (#34):** `pipeline_runs` auto-purges terminal runs (table churned 17→10→3 rows over 06-20→06-24). Consequence captured: sub-plan-4 task 2 must **capture ship-gate evidence promptly before purge** — this is how the `48c0e3f4` forensic specimen was lost.
+- **#30 evidence note:** the CTO-audit specimen `48c0e3f4` (+ `61c8a8c4`) was deleted by that churn; the diagnosis stands (recorded while it existed) but task 2 must **reproduce the citation-fail scenario fresh, not hunt for old runs**.
+- **#7 verified RESOLVED/SUPERSEDED (in deployed code):** Section C removed the automatic routing cascade-delete — `routingHandler.applyRouting()` is append-only (READ + `append_card_instruction` RPC, no run-table `.delete()`); `runs.js:539` backward-route branch explicitly refuses to delete; the only run-table deletes left (`runs.js:820-859`) are the **manual reopen** endpoint; `apply_entity_routing` dropped. Risk is **structurally closed, not just untracked**; orphan-check (#30 cond. 4) **retained as a regression guard** so it can't silently return.
+- **Index reconciled:** added missing rows #17/#18/#19 → BACKLOG index now **contiguous 1–34**; noted #18's "tripwire fires at Step 7" framing is stale (rewrite shipped `be07509`, tripwire dropped).
+- **Impact analysis (verified against prod):** confirmed `aiStream.js` (Wazdan streaming-timeout fix), `entityRunStatus.js` + `stageWorker.js` (honest failure status), and `routingHandler.js` (canonical schema) are all byte-identical in prod. Established that a re-run of the same two companies (Wazdan + Pronet) would complete straight-through much like run `5512e8b5` — **the routing/Round-2 machinery stays dormant because real companies pass QA** (only the synthetic zero-`[#n]` seed deterministically fails). DB-confirmed the backward-routing mechanism has executed **zero** times ever (0 routing_log / 0 loop_iteration>0 / 0 card_id / 0 terminal_state).
+
+**Decisions:**
+- **Delegation scope for the next (autonomous) phase:** run **#21 (Anthropic prompt caching)** + **Rule 13 W2** (content-analyzer agnostic rewrite, tone-seo-editor #20, hallucination-detector code-lock) **autonomously**, gated behind tests + `/code-review`, **commit but DO NOT deploy** → keeps them 100% git-revertable.
+- **Sub-plan 4 stays ATTENDED — not on autopilot.** Reasons (recorded so it isn't re-litigated): (1) its acceptance gate is **human qualitative judgment** ("v2 beats v1 on 3 reference entities, brutal-critic" — no automated metric), so auto-accepting would defeat the gate; (2) it touches **production state** (live template `routing_rules`, live pipeline runs) which git can't cleanly revert; (3) its load-bearing task 2 should **halt-and-reshape** on a discovered defect, not barrel past it. Autonomy-safe PREP only (build the one-shot harness, run the task-2 investigation, draft v2 prompts), stopping at the human gate.
+- **Revert rule that makes "return to now" clean:** *commit everything, deploy nothing, don't touch the live pipeline DB or production templates.* A **checkpoint tag** (`checkpoint-2026-06-25`) on both repos is the literal return point; `git reset --hard <checkpoint>` restores this exact state.
+
+**Blockers/Questions:**
+- **Thread-scheduling is the user's calendar call** — sub-plan 4 (multi-week, attended) vs the bounded autonomous threads. Resolved this session: do the bounded threads autonomously now.
+- **Lockfile drift** (`client/package-lock.json`, skeleton) remains deliberately untouched (Babel dev-dep churn, origin unknown) — NOT to be blanket-committed.
+- **#31 deploy.sh gate** active locally but not yet deployed to prod; ships on the next conscious deploy (which it gates).
+
+**Files touched (06-24 → 06-25):** modules `BACKLOG.md` (#30 evidence note, #34 closeout + retention finding, #7 resolution, index rows 17/18/19) committed `c5f1892` + `1654c55`; pipeline DB `pipeline_runs` (`3e27ba01` → abandoned); modules `CLAUDE.md` (this closing entry).
+
+**Alignment:** Confirmed. The reconciliation honors the session's record-accuracy discipline (verify-before-assert: #7 checked in deployed code before declaring dead; index made to match bodies). The delegation decision honors the project's core architectural caution — refusing to push a human-judgment gate (sub-plan 4) to green on autopilot is the same principle as "don't push a scaffolded gate to green" that drove the whole park-and-pivot.
+
+**Updated by:** session-closer skill
