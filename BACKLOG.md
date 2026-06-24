@@ -14,7 +14,7 @@ Tasks not yet scheduled for implementation.
 | 4 | Local client build broken — Rollup darwin-arm64 optional-dep bug (skeleton repo) | Medium | 2026-05-25 |
 | 5 | Docs/tooling commits not deployed to production (skeleton + modules) | Low | 2026-05-25 |
 | 6 | `deploy.sh` hardcodes client build as prerequisite for any deploy (skeleton repo) | Low-medium | 2026-05-25 |
-| 7 | **Phase 3 routing cascade-delete is wrong by design** (skeleton repo) — **spec validated 2026-05-26, awaiting adoption decision** | **High — blocks Phase 3 validation** | 2026-05-25 |
+| 7 | **Phase 3 routing cascade-delete is wrong by design** (skeleton repo) — automatic routing path deleting run rows | **RESOLVED/SUPERSEDED — Section C removed it (verified in deployed code 2026-06-24); append-only model replaces delete-and-rebuild. Orphan-check retained as a regression guard (#30 cond. 4)** | 2026-05-25 |
 | 8 | Quality signals don't propagate to Step 8 output (modules repo) | Medium | 2026-05-25 |
 | 9 | Step 9 distribution gate doesn't exist in current template (skeleton + template config) | Medium | 2026-05-25 |
 | 10 | Pending-spec tracking: prevent indefinite "pending sign-off" state and implementation drift | Low-medium (process) | 2026-05-26 |
@@ -24,6 +24,9 @@ Tasks not yet scheduled for implementation.
 | 14 | Sub-plan 1 ship-gate is single-run happy-path + Wazdan-shape — post-ship stress validation (concurrency, malformed data, network errors) needed for true Pattern H criterion 3 | Medium (post-ship validation, not sub-plan 1 blocker) | 2026-06-02 |
 | 15 | Add `DUPLICATE_INSTRUCTION` to `SKIP_REASONS` vocabulary (skeleton repo) — replace placeholder `QA_PASSED_ON_RECHECK` reuse in `cardGroups.expandCardGroups` duplicate-handling path | Low (defensive; well-formed state never hits it post Brutal-critic Fix #1) | 2026-06-02 |
 | 16 | Pre-flight cross-section dependency mapping — Section A pre-flight didn't capture route handler + migration as in-scope prerequisites for autoExecutor to function (caught by independent code-review 2026-06-03; same shape as item 12 pre-flight overshoot) | Low-medium (process) | 2026-06-03 |
+| 17 | schema.sql bootstrap not in Supabase migrations history — blocks branch-level dry-runs of migrations (skeleton repo) | Medium (recurring migration tax) | 2026-06-03 |
+| 18 | Section C: routingHandler.js rewrite (was load-bearing for Step 7 advancement) | **LARGELY RESOLVED — rewrite SHIPPED (`be07509`, deployed); `apply_entity_routing` tripwire stub already DROPPED (CTO audit 2026-06-20). The "tripwire fires at Step 7" framing is STALE** | 2026-06-03 |
+| 19 | meal-api recovery decision (own session; decoupled from content-pipeline deploys) | Low | 2026-06-04 |
 | 20 | tone-seo-editor: `tone_style` dropdown is redundant with prompt textarea + reference_docs mechanism | Low (cleanup) | 2026-06-07 |
 | 21 | Anthropic prompt caching not enabled in skeleton `ai.complete` — large reference docs paid for per call instead of cached | Medium (cost) | 2026-06-07 |
 | 22 | New Step 1 submodule: `sonar-deep-research` for LLM-grounded entity discovery (complements scraping) | Medium (new module) | 2026-06-07 |
@@ -251,7 +254,20 @@ Workaround documented (Path B from 2026-05-25 deploy: `ssh hetzner 'pm2 restart 
 **Priority:** High — blocks Phase 3 multi-card validation. Needed before Batch 8a/8b can proceed.
 **Touches:** `content-pipeline-v2/server/services/routingHandler.js` (primary), schema (verify), `apply_entity_routing` RPC
 
-### Issue
+### ✅ RESOLVED / SUPERSEDED — verified in deployed code 2026-06-24
+
+Section C (the `routingHandler.js` rewrite, 2026-06-04) **structurally removed** the automatic routing cascade-delete. Verified against the deployed code, not just asserted:
+
+- **`routingHandler.js` is append-only.** Its header documents the change ("Cascade-delete of entity_submodule_runs + submodule_runs → REMOVED"); `applyRouting()` READS loop-router output and writes pending instructions via the `append_card_instruction` RPC to `entity_run_meta.card_instructions`. There is **no `.delete()` of any run table** in the routing path.
+- **The automatic backward-route branch refuses to delete.** `runs.js:533-545` (the #28 fix) comments explicitly: "DO NOT delete entity_submodule_runs/submodule_runs: that would re-introduce the BACKLOG #7 cascade-delete." It resets STAGE columns only; Round-1 rows are preserved, Round-2 appended.
+- **The only remaining run-table deletes are the MANUAL reopen endpoint** (`runs.js:820-859`, `POST /:runId/steps/:stepIndex/reopen`) — a deliberate human "redo this step" action, NOT the automatic routing path. Out of scope for #7.
+- **The `apply_entity_routing` RPC** (the partial-delete failure path in the original repro) was dropped entirely (`sql/drop_apply_entity_routing_tripwire.sql`; confirmed gone from prod in the CTO audit 2026-06-20).
+
+**The risk is structurally closed, not merely untracked.** The append-only Multi-Card model replaced delete-and-rebuild; `loop_iteration` now tracks rounds instead of rows being destroyed. (The PHASE_3B spec that #7 was "awaiting adoption" on is moot — the Multi-Card pattern that shipped supersedes it.)
+
+**Orphan-check stays as a regression guard — on purpose.** Cascade-delete was the named risk behind all the routing rigor, so the guard is retained even though the bug is gone: BACKLOG #30 ship-gate **condition 4** ("no cascade-delete; Round-1 rows preserved, Round-2 rows appended") must be checked on every future routing run. The bug is removed from the code; the guard ensures it can't silently return.
+
+### Issue (historical — the original bug, now removed)
 
 When `loop-router` produces a routing decision for an entity that needs to retry an earlier step, `routingHandler.js:297-340` **deletes** `entity_submodule_runs` (per entity) and `submodule_runs` (per stage, cross-entity) for steps from `target_step` onward. This contradicts the schema's intent and destroys the "last good state" of Round 1 work.
 
