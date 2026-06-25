@@ -899,6 +899,19 @@ Migration plan should be drafted alongside the code change.
 **Scope:** skeleton repo — `content-pipeline-v2/server/workers/stageWorker.js` (the `ai.complete` tool the modules use)
 **Related:** content-analyzer cost analysis on 2026-06-07; Item 2 (Step 5 flexibility)
 
+### Status — ENABLING change shipped (skeleton branch, NOT deployed), adoption is the follow-up (2026-06-26)
+
+The skeleton enabling change is done on branch `auto-21-w2-2026-06-25` (skeleton commit `bef48ec`, pushed as backup, **NOT deployed**, behind `checkpoint-2026-06-25`):
+- `ai.complete` gains an **optional `cache_prefix`** param. When present, the user content becomes `[{text:cache_prefix, cache_control:ephemeral}, {text:prompt}]` so the API caches the stable prefix (~10% input cost on re-read within 5 min). Pure helper `server/services/promptCache.js::buildCachedUserContent` does the split; **assembled text is byte-identical** to `cachePrefix+prompt` (the model sees the same input — caching changes billing only). No `cache_prefix` → plain string content, byte-identical to before.
+- `parseAnthropicSSE` now surfaces `cache_creation_input_tokens`/`cache_read_input_tokens`; the result gains `cache_write_tokens`/`cache_read_tokens` + a log note. No beta header needed (ephemeral caching is GA; `anthropic-version` unchanged).
+- Tests 10/10 new + 14/14 existing aiStream + 50/50 full suite. `/code-review` PASS (0 critical/0 warning).
+
+**Remaining = module adoption (the part that realizes the $ savings).** No module passes `cache_prefix` yet. Each LLM module must split its prompt into (stable reference-doc prefix → `cache_prefix`, variable per-entity content → `prompt`). Highest value first: **content-analyzer** (~20K-token `master_categories`+`master_tags` prefix). Adoption is byte-safe (output unchanged) but the *value* (cache hits) can only be confirmed by a live run watching `cache_read_tokens > 0` — so it belongs in a session that can deploy + observe, not a blind one.
+
+**Carry-forward note (from `/code-review`):** once caching is live, `tokens_in` is the **uncached remainder** — any cost/usage consumer must sum `tokens_in + cache_write_tokens + cache_read_tokens` for true input volume. There is no such consumer in the skeleton today (verified by grep), but a future cost dashboard must account for this.
+
+**Prefix threshold:** a prefix below the model minimum silently won't cache (Sonnet 4.5 = 1024, Haiku 4.5 / Opus 4.6 = 4096 tokens). Only pass large stable prefixes; the 20K reference docs clear all thresholds.
+
 ### Issue
 
 The skeleton's `ai.complete` tool ([stageWorker.js:146-198](../content-pipeline-v2/server/workers/stageWorker.js#L146-L198)) sends every Anthropic API call as a single `{role: 'user', content: prompt}` message with **no `cache_control` markers**. Every entity in a batch pays full input cost for the same large reference docs (`master_categories.md` ~17K tokens, `master_tags.md` ~3K tokens, `format_spec.md`, `tone_guide.md`, etc.) on top of any inline closed-vocabulary lookup tables operators add to their prompts.

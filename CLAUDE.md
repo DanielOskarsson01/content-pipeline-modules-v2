@@ -983,3 +983,25 @@ Architectural specs in "pending sign-off" state need active tracking to either a
 **Alignment:** Confirmed. The reconciliation honors the session's record-accuracy discipline (verify-before-assert: #7 checked in deployed code before declaring dead; index made to match bodies). The delegation decision honors the project's core architectural caution — refusing to push a human-judgment gate (sub-plan 4) to green on autopilot is the same principle as "don't push a scaffolded gate to green" that drove the whole park-and-pivot.
 
 **Updated by:** session-closer skill
+
+### Session: 2026-06-25/26 — Autonomous run: #21 prompt-caching ENABLING shipped (branch); W2 scoped + de-risked, module edits deferred
+
+**Status:** Delegated autonomous run (#21 + Rule 13 W2) with the revert rule "commit everything, deploy nothing, don't touch live DB/templates." All work on branch `auto-21-w2-2026-06-25` in both repos; **nothing deployed**; revert anchor = tag `checkpoint-2026-06-25` on both repos (`git reset --hard checkpoint-2026-06-25`). Skeleton branch pushed (backup); modules branch pushed (backup, NOT main → no CI deploy).
+
+**#21 — Anthropic prompt caching ENABLING change DONE** (skeleton `bef48ec`, branch, NOT deployed):
+- Optional `cache_prefix` on `ai.complete` → splits stable prefix into a `cache_control:ephemeral` block; pure helper `promptCache.js::buildCachedUserContent`; assembled text byte-identical to `cachePrefix+prompt`. No `cache_prefix` → unchanged string content. `parseAnthropicSSE` surfaces `cache_creation_input_tokens`/`cache_read_input_tokens`. Consulted the `claude-api` skill for the caching spec (block structure, per-model min thresholds, no beta header for ephemeral).
+- Tests 10/10 new + 14/14 existing aiStream + 50/50 full `npm test`; independent `/code-review` PASS (0 critical/0 warning; 1 forward note: cost consumers must sum `tokens_in+cache_write+cache_read`). Recorded in BACKLOG #21.
+- **Remaining = module adoption** (the $ realization): each LLM module splits its prompt (reference-doc prefix → `cache_prefix`). Byte-safe, but cache hits can only be confirmed on a live run — belongs in a deploy-capable session, not a blind one.
+
+**Rule 13 W2 — scoped from the canonical plan + LIVE-DE-RISKED, but module edits DEFERRED:**
+- **W2.3 (hallucination-detector code-lock):** confirmed SAFE — Supabase check shows 6 templates carry a hallucination-detector preset but **0 override the prompt** (`overrides_hd_prompt:false` for all). Code-lock (manifest-removal of the `prompt` option + inline const + neutral-example swap of "Malta is a popular iGaming jurisdiction") changes nothing in production. Attempted the manifest edit via `node`/JSON.stringify → **reverted** because it reformatted the whole file (75-line diff for an ~11-line intent). Targeted format-preserving edit deferred.
+- **W2.1 (content-analyzer agnostic default prompt):** low production risk (templates supply their own prompt via preset; the manifest default is the fallback, and the W1.3 vocab-fidelity gate is the safety) — but the plan wants it validated against the locked Casino Platforms baseline, which needs data/runs.
+- **W2.2 (tone-seo-editor #20, remove redundant TONE_STYLES dropdown):** the marker gate (W1.5) already ships; but the plan requires a pre-migration **template inventory** (which templates set `tone_style`) before removing the option.
+
+**Decision (the session's discipline):** **stop the autonomous module-edit work and checkpoint** rather than push 3 module rewrites through a degraded context. The noisy JSON diff was the warning sign. Each W2 module edit deserves a focused session with clean diffs + (W2.1) baseline validation + (W2.2) the template inventory. Same "don't push to green carelessly" discipline that drove the park-and-pivot. #21 enabling — fully testable without a deploy — was the right autonomous deliverable; the W2 rewrites + #21 module-adoption are not (they need live validation).
+
+**Next (focused continuation):** W2.3 first (smallest, fully de-risked — targeted manifest edit preserving format + inline const + neutral example + structural test + `/code-review`), then W2.2 (after template inventory), then W2.1 (after baseline validation). Then #21 module adoption (content-analyzer) on a deploy-capable run watching `cache_read_tokens>0`. Merge to main / deploy stays the user's call; revert = `git reset --hard checkpoint-2026-06-25`.
+
+**Files touched (branch `auto-21-w2-2026-06-25`):** skeleton — `server/services/promptCache.js` (+test), `server/services/aiStream.js`, `server/workers/stageWorker.js` (committed `bef48ec`, pushed). modules — `BACKLOG.md` (#21 status), `CLAUDE.md` (this entry). No module code edited (the hallucination-detector manifest edit was reverted). Nothing deployed.
+
+**Updated by:** Claude (autonomous run — #21 enabling shipped on branch; W2 scoped/de-risked/deferred; checkpoint)
