@@ -44,6 +44,8 @@ Content-analyzer is classified as **expensive** because it sends the full scrape
 
 The `max_content_chars` option exists specifically for cost control. At the default 200,000 characters (~33,000 words), even large companies fit comfortably. Companies with very long pages may need higher limits (up to 500,000), but the cost scales linearly. For cost-sensitive draft runs, lower to 30,000-50,000.
 
+**Prompt caching (Anthropic).** The portion of the prompt *before* `{entity_content}` — the instructions plus the reference-doc vocabulary (`master_categories.md` / `master_tags.md`, identical on every entity in a run) — is sent as a cached prefix. On batches of 2+ entities within the 5-minute cache window, that stable prefix (~20K tokens) is re-read at ~10% input cost instead of re-charged in full. This is **billing-only** — the model sees byte-identical input (verified by `test-cache-split.js`); on the rare entity whose scraped text contains `$`-replacement sequences (`$$`, `$&`) the split safely falls back to no-caching for that entity. Requires the skeleton `ai.complete` `cache_prefix` support to be deployed (it is, as of the #21 rollout).
+
 ### Reference Documents
 
 Content-analyzer supports **reference documents** via the doc_selector option. The most important reference docs are:

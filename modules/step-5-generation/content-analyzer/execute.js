@@ -29,24 +29,67 @@ function assembleEntityContent(items, maxChars) {
 }
 
 /**
+ * Resolve {doc:filename} reference-doc placeholders + strip any that go unmatched.
+ * Shared by buildPrompt and buildCachedPrompt so both produce identical bytes.
+ */
+function resolveDocs(text, referenceDocs) {
+  let out = text;
+  // Replace {doc:filename} placeholders with actual doc content
+  if (referenceDocs && typeof referenceDocs === 'object') {
+    for (const [filename, content] of Object.entries(referenceDocs)) {
+      out = out.replace(new RegExp(`\\{doc:${escapeRegex(filename)}\\}`, 'g'), String(content));
+    }
+  }
+  // Clean up any unreplaced {doc:...} placeholders
+  return out.replace(/\{doc:[^}]+\}/g, '');
+}
+
+/**
  * Replace prompt placeholders with actual content.
  * - {entity_content} → assembled scraped content
  * - {doc:filename} → reference doc content (from resolved options)
  */
 function buildPrompt(promptTemplate, entityContent, referenceDocs) {
-  let prompt = promptTemplate.replace(/\{entity_content\}/g, entityContent);
+  return resolveDocs(promptTemplate.replace(/\{entity_content\}/g, entityContent), referenceDocs);
+}
 
-  // Replace {doc:filename} placeholders with actual doc content
-  if (referenceDocs && typeof referenceDocs === 'object') {
-    for (const [filename, content] of Object.entries(referenceDocs)) {
-      prompt = prompt.replace(new RegExp(`\\{doc:${escapeRegex(filename)}\\}`, 'g'), String(content));
-    }
+/**
+ * Cache-aware variant (BACKLOG #21). Splits the assembled prompt at {entity_content}
+ * so the STABLE head (instructions + reference-doc vocabulary, ~20K tokens for the
+ * company-profile template) can be sent as an Anthropic prompt-cache block, and the
+ * VARIABLE per-entity tail is the uncached remainder. Returns { prompt, cachePrefix }
+ * where `prompt` is the variable tail and `cachePrefix` is the cacheable head;
+ * `cachePrefix + prompt` is BYTE-IDENTICAL to buildPrompt() output (the model sees
+ * the same input — caching changes billing only). Splits only when {entity_content}
+ * occurs exactly once (the normal template shape); 0 or >1 occurrences fall back to
+ * the full single prompt with an empty prefix (no caching, identical bytes). A prefix
+ * below the model's cache minimum (Sonnet 4.5 1024 / Haiku 4.5 Opus 4.6 4096 tokens)
+ * silently won't cache — harmless; the 20K reference docs clear it.
+ *
+ * DEPLOY-ORDER DEPENDENCY: the skeleton `ai.complete` must support `cache_prefix`
+ * (skeleton #21) BEFORE this is live. An OLD skeleton ignores `cache_prefix` and
+ * would send only the variable tail — DROPPING the reference-doc vocabulary, so the
+ * model invents slugs. Deploy skeleton #21 first / together; never ship this alone.
+ */
+function buildCachedPrompt(promptTemplate, entityContent, referenceDocs) {
+  const full = buildPrompt(promptTemplate, entityContent, referenceDocs);
+  const parts = promptTemplate.split('{entity_content}');
+  if (parts.length === 2) {
+    const cachePrefix = resolveDocs(parts[0], referenceDocs);
+    const prompt = resolveDocs(entityContent + parts[1], referenceDocs);
+    // BULLETPROOF GUARD: only cache-split when it reassembles to the EXACT
+    // single-prompt bytes. Caching is billing-only — it must never change what
+    // the model sees. Two assembly paths can otherwise diverge: (a) entity
+    // content with $-replacement-pattern sequences ($$, $&, $`, $') that
+    // String.prototype.replace interprets in buildPrompt but plain
+    // concatenation here does not; (b) a template nesting {entity_content}
+    // inside a {doc:...} token. Both fall back to the full prompt (no caching,
+    // identical bytes). [Separate latent bug: buildPrompt's $-mangling of
+    // scraped content — tracked for a deliberate follow-up, not changed here.]
+    if (cachePrefix + prompt === full) return { prompt, cachePrefix };
   }
-
-  // Clean up any unreplaced {doc:...} placeholders
-  prompt = prompt.replace(/\{doc:[^}]+\}/g, '');
-
-  return prompt;
+  // 0 or >1 {entity_content}, or a divergent split → no caching, identical bytes.
+  return { prompt: full, cachePrefix: '' };
 }
 
 /**
@@ -395,12 +438,16 @@ async function execute(input, options, tools) {
       // Assemble all page content
       const entityContent = assembleEntityContent(items, max_content_chars);
 
-      // Build prompt with placeholders replaced
-      const prompt = buildPrompt(promptTemplate, entityContent, reference_docs);
+      // Build prompt; split the stable reference-doc prefix for Anthropic prompt
+      // caching (BACKLOG #21). cachePrefix + prompt is byte-identical to the old
+      // single-prompt output. Requires skeleton #21 (ai.complete cache_prefix
+      // support) live — see buildCachedPrompt's DEPLOY-ORDER note.
+      const { prompt, cachePrefix } = buildCachedPrompt(promptTemplate, entityContent, reference_docs);
 
       // Call AI
       const response = await ai.complete({
         prompt,
+        cache_prefix: cachePrefix || undefined,
         model: ai_model,
         provider: ai_provider,
         temperature,
@@ -526,6 +573,9 @@ async function execute(input, options, tools) {
 }
 
 module.exports = execute;
+// Exported for unit tests (BACKLOG #21 cache-split byte-identity proof).
+module.exports.buildPrompt = buildPrompt;
+module.exports.buildCachedPrompt = buildCachedPrompt;
 // Exported for test harness use only — not part of the public submodule interface.
 module.exports.__testing = {
   walkSlugPath,
