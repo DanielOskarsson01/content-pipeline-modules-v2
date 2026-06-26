@@ -1005,3 +1005,21 @@ Architectural specs in "pending sign-off" state need active tracking to either a
 **Files touched (branch `auto-21-w2-2026-06-25`):** skeleton — `server/services/promptCache.js` (+test), `server/services/aiStream.js`, `server/workers/stageWorker.js` (committed `bef48ec`, pushed). modules — `BACKLOG.md` (#21 status), `CLAUDE.md` (this entry). No module code edited (the hallucination-detector manifest edit was reverted). Nothing deployed.
 
 **Updated by:** Claude (autonomous run — #21 enabling shipped on branch; W2 scoped/de-risked/deferred; checkpoint)
+
+### Session: 2026-06-26 — #21 DEPLOYED + savings PROVEN + made durable (content-analyzer merged to main)
+
+**Status:** User authorized the full #21 deploy + verification (superseding the earlier "defer adoption" stance). #21 is now live in production, the cache savings are proven on a real run, and the content-analyzer adoption is merged to modules `main` so routine CI deploys can't revert it.
+
+**content-analyzer adoption (modules `ff28469`):** `buildCachedPrompt` splits the prompt at `{entity_content}` (stable vocab head → `cache_prefix`, variable tail → `prompt`) with a runtime self-check (`cachePrefix+prompt === buildPrompt(...)`) that guarantees byte-identity and falls back to no-cache on the two divergence cases a `/code-review` caught: `$`-replacement sequences in scraped entity text (`$$`/`$&`) and `{entity_content}` nested in a `{doc:}` token. 23/23 tests. README updated.
+
+**Deploy (Path B):** file-scoped rsync of the 3 skeleton #21 files (`promptCache.js`, `aiStream.js`, `stageWorker.js`) + content-analyzer `execute.js` to Hetzner; all 4 shasum-verified byte-identical prod==local; `pm2 restart all` → 4/4 fork. **#29 stayed parked** (stepRange absent, `widenStepRange` 0 in prod). The #31 gate is inside `deploy.sh`, which Path B doesn't invoke — confirmed it didn't (and wouldn't wrongly) block.
+
+**PROOF (real Anthropic calls through the deployed code):** two calls, same ~49K-token vocab prefix, different entities → **call 1 `cache_WRITE=49,050` / `cache_READ=0`; call 2 `cache_WRITE=0` / `cache_READ=49,050`** (uncached `tokens_in` 20 / 17). Cache hit confirmed; the stable prefix re-reads at ~10% input cost. Savings proven, not assumed.
+
+**Durability:** content-analyzer adoption merged `auto-21-w2` → modules `main` (this entry's commit), fast-forward, pushed → CI docs deploy. Verified post-merge that prod content-analyzer `execute.js` shasum is unchanged (the merge made it permanent without changing running code).
+
+**Skeleton #21 — follow-up (NOT done this pass, by design):** merging the skeleton `auto-21-w2` branch → skeleton `main` is **NOT a clean merge** — that branch sits on `sub-plan-1-multi-card` and would drag the entire unmerged V5 routing work + **parked #29** onto `main`. The durable path for skeleton #21 is to **cherry-pick `bef48ec` onto skeleton `main`** (or a clean branch off main), not a full merge. Lower urgency: skeleton deploys manually (not CI-on-push), so prod's Path-B #21 won't auto-revert. Near-term follow-up.
+
+**Revert anchor:** `checkpoint-2026-06-25` stays until the skeleton #21 cherry-pick is also confirmed.
+
+**Updated by:** Claude (#21 deployed + proven + content-analyzer merged to main; skeleton cherry-pick is the remaining follow-up)
