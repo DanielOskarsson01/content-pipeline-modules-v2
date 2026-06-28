@@ -42,6 +42,7 @@ Tasks not yet scheduled for implementation.
 | 32 | **Sub-plan-4 deferred card: PSE-v2** (V5 item 27) — Step-1 curated-search card, broader curated list + different query template. Carry-forward AFTER the content-writer-v2 vertical slice; gated by the entry gate + one-shot harness | Carry-forward (sub-plan-4 scope; NOT optional) | 2026-06-20 |
 | 33 | **Sub-plan-4 deferred card: SEO-writer-v2** (V5 item 30) — Step-5 card, stricter meta requirements (e.g. meta_title 50–60 chars + primary keyword). Carry-forward AFTER the content-writer-v2 vertical slice; gated by the entry gate + one-shot harness | Carry-forward (sub-plan-4 scope; NOT optional) | 2026-06-20 |
 | 34 | **DB hygiene: stale/zombie `pipeline_runs` rows** (pipeline DB) — zombie `36d34311` + 5 other stale `running` rows all killed (→`abandoned`); baseline clean (0 `running`). Split out of #30 | **RESOLVED 2026-06-22** | 2026-06-20 |
+| 35 | **citation-coverage-checker passes generic unsupported prose** (modules repo) — uncited-claim detector is narrow regexes (numbers/dates/locations); blind to qualitative padding/marketing claims, which score 1.0. Affects every place the pipeline trusts citation-coverage as a quality signal (Step 7 `citation:fail` routing, Step 8 propagation, QA pass rates) | Medium (real gap; nothing actively broken) | 2026-06-28 |
 
 ---
 
@@ -1474,3 +1475,36 @@ Split out of [[Item 30]] (2026-06-20) so the ship-gate carry-forward record isn'
 - **TRIAGED 2026-06-22 → all 5 set `abandoned`:** the 5 other stale `running` rows (13–29 days, all zombies) — `23a6267d` (step 4, the pre-Section-C run), `1e834cb6` (step 3), `99b8f268` (step 1), `7dcc4794` (step 2), `aa81daa2` (step 6, the Jun-7 baseline run) — set to `abandoned` with `completed_at`. **Baseline now clean: 0 `running` rows.**
 - **2026-06-24 → last step-7 leftover abandoned:** `3e27ba01` (project `ship-gate-2026-06-15`, synthetic entity `ship-gate-citation-fail`, was `paused` at step 7, no routing artifacts) set `abandoned`. **No non-terminal runs remain at the step-7 routing boundary** — clean baseline for sub-plan-4 task 2.
 - **Retention finding (explains the churn — useful for sub-plan 4):** `pipeline_runs` shrank 17 → 10 → **3** rows (06-20 → 06-22 → 06-24). The deletions are **not random**: terminal runs (`abandoned`/`halted`/`completed`) are actively purged by a retention process; `paused`/recent runs linger. Consequences for sub-plan-4 task 2: (a) `abandon`-ing a run effectively queues it for deletion (good — self-cleaning); (b) **capture any ship-gate run's evidence (routing_log, loop_iteration rows, qa output) PROMPTLY** while the run is alive — a completed/abandoned run will be purged, exactly how the `48c0e3f4` specimen was lost.
+
+---
+
+## Item 35 — citation-coverage-checker passes generic unsupported prose (padding-blind QA signal)
+
+**Added:** 2026-06-28 | **Priority:** Medium (real gap; nothing actively broken — no current pipeline silently shipped bad content because of it) | **Touches:** `modules/step-6-qa/citation-coverage-checker/execute.js` (`FACTUAL_CLAIM_PATTERNS`); consumers of the citation-coverage signal (Step 7 `loop-router` `citation:fail` routing, Step 8 quality propagation [[Item 8]], reported QA pass rates).
+
+### The gap
+
+citation-coverage-checker only counts a sentence as an **uncited claim** if it matches one of a narrow set of regexes — large numbers, percentages, currency, "founded in YYYY", "based in", "licensed by", "headquartered in", employee counts, "acquired by", "partnership with" (`FACTUAL_CLAIM_PATTERNS`, execute.js:30-60). **Qualitative/marketing unsupported prose matches none of these** and is therefore invisible to the uncited-claim count.
+
+Consequence: a profile padded with sentences like *"trusted by leading operators across the industry"*, *"the iGaming compliance landscape is rapidly evolving"*, *"an innovative, award-winning provider"* — none backed by any source — scores **`citation_score` = 1.0, `uncited_claims_count` = 0, `qa_pass` = true**, as long as it contains ≥1 valid `[#n]` and no broken citations. The checker confirms "the few pattern-matching facts are cited" but **cannot detect that the surrounding prose asserts unsupported things**.
+
+### Why it matters beyond the content-writer-v2 gate
+
+This is a **production QA-signal gap**, not a test artifact. Citation-coverage is trusted as a quality gate in several places:
+- **Step 7 routing** — `loop-router` routes `citation:fail` to a retry card. Padded-but-pattern-free output never trips `citation:fail`, so it's never routed for improvement.
+- **Step 8 / [[Item 8]] quality propagation** — a `citation_score: 1.0` artifact is treated as clean.
+- **QA pass-rate reporting** — inflates the apparent citation quality of generated content.
+
+So the pipeline can pass marketing-padded, partially-unsupported profiles through citation QA with a perfect score. Nothing is *actively* broken today (no live content type is known to be shipping such output), hence Medium, not High — but it is a real blind spot in a load-bearing quality signal.
+
+### How it surfaced
+
+content-writer-v2 entry gate (2026-06-28, `~/Downloads/cw-v2-entry-gate-2026-06-28/`). The gate tried to use citation_score to show v2 (citation-required) beats v1 on thin-source entities. The metric **saturated at 1.0 for both** — it could not see v1's interpretive padding vs v2's tightness — which is what forced the gate to ITERATE and to stop treating citation-coverage-checker as "the objective judge." The brutal-critic named this directly: *"the instrument pegged at the top of its range… structurally blind to the exact failure mode."*
+
+### Possible directions (not prescriptive)
+
+1. **Broaden uncited-claim detection** beyond the current regexes — e.g. flag declarative sentences containing unsupported superlatives/claim-words ("trusted", "leading", "innovative", "award-winning", "best", "fastest", market/industry assertions) that lack a `[#n]`. Risk: false positives on legitimately-cited praise; needs care.
+2. **Pair citation-coverage with an LLM faithfulness check** (a small "does any sentence assert a fact not in the cited sources?" pass) — the more robust arbiter, at LLM cost. This is also the judge the content-writer-v2 gate now needs.
+3. **Reframe citation-coverage-checker as a FLOOR, not the arbiter** — document that a 1.0 means "present citations are valid", NOT "all claims are supported", and don't over-trust it in routing/propagation decisions.
+
+Lowest-risk first step is (3) (documentation + stop over-trusting), with (1)/(2) as the real fix when a content type depends on it.

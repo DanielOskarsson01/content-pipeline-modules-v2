@@ -1023,3 +1023,38 @@ Architectural specs in "pending sign-off" state need active tracking to either a
 **Revert anchor:** `checkpoint-2026-06-25` stays until the skeleton #21 cherry-pick is also confirmed.
 
 **Updated by:** Claude (#21 deployed + proven + content-analyzer merged to main; skeleton cherry-pick is the remaining follow-up)
+
+### Session: 2026-06-28 17:00 UTC — Bright Data key renewed + Cloudflare detection widened (skeleton); + committed two earlier-session artifacts
+
+**Status:** Short, focused infra/scraping session (skeleton repo). Renewed the Bright Data Web Unlocker API key in production, then widened the Cloudflare challenge/block detection that gates the unlocker fallback. Reviewed, deployed (Path B), pushed. NOT my work but committed alongside to stop them floating: BACKLOG #35 + the Task-2 PROVEN state from the earlier 2026-06-28 session (see RESUME.md).
+
+**Accomplished (this session):**
+- **Diagnosed Bright Data usage across both repos.** Confirmed it is used in exactly TWO places, both in the **skeleton** (`content-pipeline-v2`), never in any submodule (modules-v2) — including the job-search ones (Rule 3: submodules use `tools.http`/`tools.browser`/`tools.unlocker`, never raw fetch): `webUnlockerFetch()` (the API call to `api.brightdata.com/request`) and `browserFetch()`'s Cloudflare-challenge fallback. No submodule calls the direct `tools.unlocker` path; submodules only reach it transitively via `tools.browser.fetch` → `browserFetch`.
+- **Established the architecture boundary** (in response to "why are scrapers in the skeleton"): scrapers are NOT in the skeleton — the **scraping logic** lives in modules-v2 submodules; the **transport layer** (CDP Chrome pool, proxy config, Bright Data) lives in the skeleton and is exposed to submodules via the `tools` object built in `stageWorker.js::buildTools()`. Centralized for: shared warm browser pool, single secret/fallback policy, submodule portability.
+- **Renewed the Bright Data API key in production.** Updated `BRIGHT_DATA_API_KEY` in `/opt/content-pipeline-v2/.env` over SSH (backup at `.env.bak.brightdata`; zone var untouched), `pm2 restart all` (4/4 online), and **live auth-tested**: POST to `api.brightdata.com/request` returned HTTP 200 with real `example.com` content. Key is valid and live.
+- **Widened Cloudflare detection** in `server/services/browserPool.js`: `CHALLENGE_MARKERS` 3 → 9 (added `Enable JavaScript and cookies to continue`, `Sorry, you have been blocked`, `Attention Required! | Cloudflare`, `/cdn-cgi/challenge-platform/`, `cf_chl_opt`, `__cf_chl_`). Previously most CF block shapes were silently recorded as failed/low_content scrapes instead of routing to the (paid) unlocker. `hasCloudflareChallenge()` signature now accepts the result object or a body string (back-compat); single caller updated; the old `result.body &&` guard removed (function handles empty body).
+- **Code-reviewed (`/code-review`) → WARN, all 3 findings tightened before commit.** Independent reviewer flagged false-positive vectors that would bill paid unlocker calls on normal pages: removed `Verify you are human` (matches embedded captcha widgets on normal 200 pages; real CF challenges carry the `cf_chl` tokens anyway); narrowed `challenge-platform` → path-specific `/cdn-cgi/challenge-platform/`; dropped the `(403/503) && /cloudflare/i` status rule (matched the "by Cloudflare" footer the author had explicitly excluded, and the unlocker can't fix app-level 403/geo/auth blocks). Documented the exclusions inline so nobody re-adds them.
+- **Committed skeleton `effa4e7`** (branch `auto-21-w2-2026-06-25`, 1 file, +25/-8), deployed **Path B** (file-scoped rsync of `browserPool.js`; prod ≡ local shasum byte-identical; `pm2 restart all` → 4/4), and **pushed** the branch (`f0891a5..effa4e7`). `client/package-lock.json` Babel dev-dep drift left unstaged (pre-existing, unrelated). decision_log entry written for the skeleton commit (REST API, HTTP 201).
+
+**Decisions:**
+- **Don't reflexively hold the deploy.** The change was reviewed, tightened, single-caller, syntax-clean, and the key it depends on was already live — there was no real reason to hold, so it shipped immediately.
+- **Keep CF markers deliberately specific** to protect the pay-per-successful-request cost model. A false positive = a real paid Bright Data request (and for app-level 403/geo blocks the unlocker won't even help). Broad signals (`cf-ray`, bare `cloudflare`, status-only) explicitly rejected.
+- **Renew vs hold (the user's call):** renewing is low-regret IF the plan is pay-as-you-go with no monthly minimum (idle ≈ free, asymmetric upside). The one caveat flagged to the user: a fixed monthly commitment would break the "free when idle" logic. User chose to renew.
+- **Committed two non-session artifacts to stop them floating** (recurring loose-end pattern in this repo): BACKLOG #35 (citation-coverage-checker padding-blind QA gap, surfaced by the content-writer-v2 entry gate) and the Task-2 PROVEN state — both from the earlier 2026-06-28 session, both complete/dated, attributed here so they aren't mis-credited to this session.
+
+**Blockers/Questions:**
+- **Spend cap not set** — flagged to the user as a follow-up they must do in the Bright Data dashboard (protects against a runaway crawl now that the fallback fires on more block types). Not a code task.
+- **API key exposed in chat history** — the renewed key was pasted into the conversation; worth rotating down the line if that matters. (Functional now; this is a hygiene note.)
+- **Skeleton #21 cherry-pick to `main`** still pending (carry-forward from 2026-06-26) — the `auto-21-w2-2026-06-25` branch can't be clean-merged (drags V5 routing + parked #29); cherry-pick `bef48ec` is the durable path. This CF change (`effa4e7`) rode the same branch and inherits the same "not on main" status; prod has it via Path B regardless.
+- **No live validation that the new markers actually catch a real CF block** — they're logic-correct and reviewed, but the next real scrape that hits a Cloudflare wall is the true confirmation; watch PM2 logs for `[browserPool] Cloudflare challenge detected` followed by a successful `[webUnlocker]` unlock.
+
+**Files touched this session:**
+- `content-pipeline-v2/server/services/browserPool.js` — widened CF detection (committed `effa4e7`, deployed Path B, pushed).
+- `content-pipeline-v2/.env` (prod, Hetzner) — `BRIGHT_DATA_API_KEY` renewed (not in any repo; backup `.env.bak.brightdata`).
+- `content-pipeline-modules-v2/CLAUDE.md` — this entry.
+- `content-pipeline-modules-v2/RESUME.md` — position pointer refresh.
+- `content-pipeline-modules-v2/BACKLOG.md` — Item 35 (NOT this session's work; committed to stop it floating).
+
+**Alignment:** Confirmed. The change honors the modules architectural boundary (transport stays in the skeleton; submodules untouched and still reach it only via `tools`) and Rule 13 by analogy (no content-type assumptions — pure infra). The cost-protective marker tightening is consistent with the project's "don't ship around an unexercised path / verify-before-assume" discipline.
+
+**Updated by:** session-closer skill
