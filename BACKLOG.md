@@ -44,6 +44,10 @@ Tasks not yet scheduled for implementation.
 | 34 | **DB hygiene: stale/zombie `pipeline_runs` rows** (pipeline DB) — zombie `36d34311` + 5 other stale `running` rows all killed (→`abandoned`); baseline clean (0 `running`). Split out of #30 | **RESOLVED 2026-06-22** | 2026-06-20 |
 | 35 | **citation-coverage-checker passes generic unsupported prose** (modules repo) — uncited-claim detector is narrow regexes (numbers/dates/locations); blind to qualitative padding/marketing claims, which score 1.0. Affects every place the pipeline trusts citation-coverage as a quality signal (Step 7 `citation:fail` routing, Step 8 propagation, QA pass rates) | Medium (real gap; nothing actively broken) | 2026-06-28 |
 | 36 | **Research-driven discovery + synthesis architecture** (design note, modules repo) — four composable patterns: (a) tiered Step 1 discovery [cheap Google/SERP vs expensive LLM-search-as-retriever, same URL output shape, tier = config]; (b) LLM question-expansion pre-step [1 vague question → N angled questions, recall lever]; (c) analysis-driven competitor loop [Step 5 USP analysis → new question → routed re-discovery → comparative writing]; (d) research/write split [Perplexity/Claude `web_search` researches → Claude writes]. Supersedes/absorbs [[Item 22]]. Builds on [[Item 2]], [[Item 21]], [[Item 35]] | Medium (design; informs sub-plan-2 / new content types) | 2026-06-29 |
+| 37 | **Global cards as copy-on-use library** (resolved V5 amendment, corrected scope; skeleton + modules) — clone-from-library starting points where edits localize; NOT live-shared resolution (what V5's E3 correctly killed). Resolved axis: **config-free clones** (curated source lists, reference corpora — the value travels unchanged, used as-is, fork-drift low in practice though not structurally prevented) are **global-safe**; **config-carrying clones** (humanizer tone [[Item 20]], citation-discipline `[#n]` [[Item 35]]) are the caveated localize-after-clone case. Full rule: **config-free AND not a name-addressed routing target = fully global-safe** (discovery/input clones qualify; escalation clones don't). Foundation = template-scoped cards (B052 + save-path validations). Cross-ref V5 E3 removal + [[Item 32]] (config-free example) / [[Item 33]] (config-carrying) | **Resolved (corrected scope) — build on real recurrence need** | 2026-06-29 |
+| 38 | **Card-aware READ not implemented for `run_submodule_config.options`** (skeleton repo; Phase-3 landmine) — `submoduleRuns.js:248` reads `(run_id, step_index, submodule_id).maybeSingle()` with NO `card_id` filter. B052 made the WRITE path card-safe; this READ is not. Once card rows exist (>1 row per submodule at a step) `.maybeSingle()` breaks (ambiguous / throws). Must land WITH card-write enablement (the card-UI session) — enabling writes without it is the trap. Surfaced by CTO review of B052; spec amended (PHASE_3B §6.4 read-side note) | **High — gates card-write enablement (not a B052 defect; B052 stays correct)** | 2026-06-29 |
+| 39 | **Stricter card-save validation deferred past §9** (skeleton repo; for the card-UI session) — `validateExecutionPlan` (executionPlanUtils.js) implements all 9 PHASE_3B §9 HTTP-400 rules + 3 defensive hardenings; these are the §9-faithful omissions a /code-review flagged for later: (a) `card_name` required per §1.2 but NOT in the §9 table — not enforced; (b) QA-check-name → manifest `qa_outputs` **warning** (§2.2) deferred until `qa_outputs` manifests exist (§6.6 — 0 today); (c) cosmetic: non-numeric `submodules_per_step` step-key yields a "does not match placement step" message rather than "invalid step key". Wire (a)/(b) when the card UI + qa_outputs land | Low (validation gate is sound for §9; these are nice-to-haves) | 2026-06-29 |
+| 40 | **`npm test` silently skips 11 `.mjs` test suites — 3 currently FAILING** (skeleton repo; test-gate integrity) — the canonical gate `node --test 'server/**/*.test.js'` matches only `.test.js`, so all 11 `server/tests/*.test.mjs` never run. 3 fail today (`modes` needs a live server = expected-fail offline; `routingHandler.test.mjs` + `section_c_ac4a_merge_chain.test.mjs` are STALE vs the `be07509` schema migration — drifted unseen because the gate doesn't run them). 8 of 11 have no `.js` equivalent (incl. `data-operations` 36-case dedup suite). Real risk: future code that breaks an orphaned suite passes `npm test` green. Fix: rename real unit suites `.mjs`→`.test.js` (or widen the glob to `*.test.{js,mjs}`), delete stale duplicates superseded by `.js` versions (`routingHandler.test.mjs` ← `routingHandler.test.js` 12/12), route live-server integration behind a separate script. Surfaced by CTO oversight 2026-06-29 | **Medium (latent quality hole; predates this session — highest-value finding of the CTO pass)** | 2026-06-29 |
 
 ---
 
@@ -1575,3 +1579,125 @@ Every box is a small generic submodule; the cheap/expensive/loop decisions live 
 - Whether a **shared structured vendor data layer** (Supabase table both the review pipeline and content pipeline read/write) is the right home for findings — flagged in the 2026-06-28 strategy workflow; decide separately.
 - Exact structured-findings **schema** between research and write (the seam that makes "Perplexity researches, Claude writes" composable) — to be drafted when a content type commits to this path.
 - Sequencing vs [[Item 2]] (content-analyzer/content-writer multi-content-type flexibility) — this design assumes that flexibility work; they should land together.
+
+---
+
+## Item 37 — Global cards as a copy-on-use library (resolved V5 amendment, corrected scope)
+
+**Added:** 2026-06-29 | **Status:** **Resolved with corrected scope** (config-free clones are global-safe; config-carrying are the caveated case) — design decided; build triggered on real recurrence need | **Priority:** Deferred; trigger-gated | **Touches:** new global storage layer (skeleton DB table outside any template's `execution_plan`) + clone-from-global operation + library surfacing in the template editor
+
+> **Lineage (so the reasoning isn't re-derived):** filed 2026-06-29 oversold (scoped to a "transform-card class" with the wrong members) → a brutal-critic pass broke 2 of 3 claims and it was briefly downgraded → **re-scoped 2026-06-29 to the correct axis below, which resolves the break.** The critic's axis was right; the original just populated it with config-*carrying* examples (humanizer, citation-discipline) and mislabelled them "agnostic." The corrected scope below supersedes both the oversold version and the flat downgrade. Read alongside the V5 stance it amends (ITERATION_PLAN_V5 lines 40 / 209–212 / 244–246: "E3 preset bundles REMOVED… cross-template preset sharing either too generic to be useful or creates silent coupling… template duplication is the cross-template reusability mechanism").
+
+### The principle (resolved): config-free clones vs config-carrying clones
+
+Copy-on-use = a global card is a **library starting point you clone INTO a template**; once cloned it's an ordinary template-scoped card and edits localize. No live link, no runtime resolver (the opposite of E3 / `option_presets` live resolution). The eligibility question is **not** "transform vs content card" (that line is fuzzy — it cuts through the transform class). The real axis is **config-free vs config-carrying**:
+
+- **Config-free (global-safe).** The clone's config is a **self-contained payload that IS the value and travels UNCHANGED across templates** — a curated source list, a fixed reference-doc set, a reference corpus. It's normally used **as-is**, so fork-drift is **low in practice**. ⚠️ This is a *behavioral* property, **not a structural guarantee**: after clone it is an ordinary template-scoped card, so nothing structurally *prevents* someone editing the cloned list and drifting it. So the critic's (c) concern is **reduced, not eliminated** — which is why provenance (below) is recommended even here. Examples: **curated source lists** (PSE-v2 and any discovery submodule), fixed **reference-doc sets** fed to an analyzer. This is the original item's real target — and likely the **common case** (the ~20–30 curated-list instances across templates).
+- **Config-carrying (the weaker, caveated case).** Config interacts with template-specific context (tone, format, domain) and **needs localizing per template**: humanizer (tone — [[Item 20]]; V5 L209 names "tone guides" as the un-shareable thing), citation-discipline (the `[#n]` format + claim conventions — [[Item 35]]). Global can still offer a **starting default**, but it's expected to be localized after clone, so it carries the fork-drift + provenance concerns the critic raised. Useful, but not "global-safe" — caveated.
+
+**So the original wasn't wrong that a global-safe class exists — it named the wrong members.** Config-free is the real global-safe class; the transform examples it picked (humanizer, citation-discipline) are actually config-*carrying*.
+
+### The one generalizing condition (the critic's surviving dent): not a name-addressed routing target
+
+Routing references cards **by snapshotted name** (V5 L215 "targets identify cards by name"; `card_name` snapshotted into per-entity instructions, PHASE_3B §3.1). So a clone that is *also a routing target* can re-introduce silent **name-aliasing** across templates even if its config is config-free. The clean rule:
+
+> **Fully global-safe = config-free AND not a name-addressed routing target.**
+
+Discovery/input clones (curated source lists, reference corpora) generally **aren't** routing targets — they seed Step 1/Step 5 inputs, they aren't escalation destinations — so they meet both conditions and are fully global-safe. **Escalation clones** (the retry-card class routing fails into) **are** name-addressed → they fall under the caveated case regardless of config (and any clone that can be a routing target must mint a fresh `card_name`/namespace, not just a fresh `card_id`).
+
+### Build requirements (carried from the gap analysis + the review, now scoped correctly)
+- **Global storage layer** — a table outside any template's `execution_plan` holding library cards as **clone sources only**. Hard non-goal: it MUST NOT be reachable by any runtime resolver (a "resolve global card at run time" shortcut is the E3 regression — forbidden).
+- **Clone-from-global operation** — deep-copy into a template's `execution_plan`, minting a fresh template-local `card_id`; mint a fresh/namespaced `card_name` for anything routing-eligible.
+- **Library surfacing in the template editor** — browse/insert from the library (distinct from the per-step "+" that adds a blank scoped card).
+- **Provenance (recommended for ALL clones; mandatory for config-carrying)** — record `cloned_from_library_card_id` + `library_version_at_clone` so a localized clone's staleness is detectable. Config-carrying clones REQUIRE it (they're expected to be edited). Config-free clones are normally used as-is so drift is low — but since editing isn't structurally prevented, provenance is cheap insurance and recommended even here (behavioral "no fork" ≠ structural guarantee).
+
+Template-scoped cards (B052 save-path health + the PHASE_3B card validations) are the **foundation**; don't build global before template-scoped is solid.
+
+### Trigger (when — do NOT build speculatively)
+Build when **real usage** shows config-free clones (curated lists, corpora) **recurring across templates** and per-template duplication becoming concrete, repeated pain (the same curated source list hand-copied into N templates). The ~20–30 curated-list instances are the likely first trigger. Until then this stays a resolved-but-unbuilt design.
+
+### Relationship to other items
+- Amends the V5 E3 decision (see lineage quote). Foundation: B052 + the card save-path validations.
+- [[Item 32]] (PSE-v2) is the canonical **config-free** example (a curated source list) — the first likely member of the global-safe class. [[Item 33]] (SEO-writer-v2) is **config-carrying** (template-specific meta/SEO) — stays template-scoped, caveated case. [[Item 20]] (humanizer tone) and [[Item 35]] (`[#n]` format) are why those two transform cards are config-carrying, not config-free.
+
+---
+
+## Item 38 — Card-aware READ not implemented for `run_submodule_config.options` (Phase-3 landmine)
+
+**Added:** 2026-06-29 | **Status:** Open — gates card-write enablement | **Priority:** High (must land WITH the card-UI write path) | **Touches:** skeleton `content-pipeline-v2/server/routes/submoduleRuns.js:248` (options resolution read); related write path was B052
+
+### The gap
+
+B052 fixed the **write** path: `run_submodule_config` upserts now resolve against a plain `(run_id, step_index, submodule_id, card_id) NULLS NOT DISTINCT` index, so card rows (non-NULL `card_id`) and the legacy/default-group row (NULL `card_id`) can coexist at one `(run, step, submodule)`.
+
+The **read** that resolves a submodule's options at execution time was NOT updated and is not card-aware:
+
+```js
+// submoduleRuns.js:248 — current
+const { data: optConfig } = await db
+  .from('run_submodule_config')
+  .select('options')
+  .eq('run_id', runId).eq('step_index', stepIdx).eq('submodule_id', submoduleId)
+  .maybeSingle();              // ← no card_id filter
+```
+
+Today this is safe because every row has `card_id IS NULL` (no code writes `card_id` yet — there is exactly one row per `(run, step, submodule)`). **The moment card rows exist**, this query matches the legacy NULL row **plus** one row per card → `.maybeSingle()` returns an ambiguous-result error (or silently wrong options). The submodule then runs with wrong or no per-run options.
+
+### Why it's filed separately (not a B052 defect)
+
+B052 is correct and complete for what it scopes (the write path). The read gap is a **pre-existing** non-implementation of PHASE_3B §8.2's card-aware read — it was never built. B052 simply makes the write side card-ready *first*, which is the right order; surfacing this ensures the card-UI session does not assume "B052 made config card-ready" (it made *writes* card-ready, not *reads*).
+
+### The fix (for the card-UI / card-write-enablement session)
+
+Make the read card-aware, mirroring the write key:
+
+```js
+let q = db.from('run_submodule_config').select('options')
+  .eq('run_id', runId).eq('step_index', stepIdx).eq('submodule_id', submoduleId);
+q = cardId ? q.eq('card_id', cardId) : q.is('card_id', null);
+const { data: optConfig } = await q.maybeSingle();
+```
+
+**Binding sequencing:** this read fix MUST land in the same change that first writes `card_id` rows (the card-UI write path). Enabling card writes without it is the trap. Cross-ref PHASE_3B §6.4 (amended 2026-06-29) read-side note; surfaced by the CTO architectural review of B052.
+
+---
+
+## Item 39 — Stricter card-save validation deferred past §9 (for the card-UI session)
+
+**Added:** 2026-06-29 | **Status:** Open — deferred nice-to-haves | **Priority:** Low (the §9 gate is sound) | **Touches:** skeleton `content-pipeline-v2/server/services/executionPlanUtils.js` (`validateExecutionPlan`)
+
+The card save-path validator (`validateExecutionPlan`, wired into templates.js POST `/` + PUT `/:id`) implements **all 9 PHASE_3B §9 HTTP-400 rules** + 3 defensive hardenings (non-object `card_definitions`, non-object round-override values, routing target missing `card_id`). A `/code-review` (2026-06-29) confirmed completeness vs §9 and flagged three **§9-faithful omissions** to pick up when the card-authoring UI (V5 items 16/17) is built:
+
+1. **`card_name` required (§1.2 line 76) is NOT enforced.** §1.2 marks it "Yes" required, but the §9 acceptance table does not list it as an HTTP-400 rule, and it's cosmetic (identity is always by `card_id`). Add a required-non-empty-string check when the UI starts authoring names.
+2. **QA-check-name → manifest `qa_outputs` warning (§2.2, non-blocking) deferred.** Returned via the validator's `warnings[]` once buildable. Currently **0** module manifests declare `qa_outputs` (§6.6 unbuilt), so there is nothing to match against — implementing now is a guaranteed no-op. Wire it when `qa_outputs` manifests ship.
+3. **Cosmetic message:** a non-numeric `submodules_per_step` step-key (e.g. `"abc"`) currently produces a "card … has step N, does not match placement step abc" message (it still *errors* correctly via `Number("abc")` → NaN) rather than a cleaner "invalid step key". Unreachable from a real UI; tidy if convenient.
+
+None of these gate the current validation unit; they're hardenings for when cards are actually authored through a UI.
+
+---
+
+## Item 40 — `npm test` silently skips 11 `.mjs` test suites (3 currently failing)
+
+**Added:** 2026-06-29 | **Status:** Open | **Priority:** Medium (latent test-gate integrity hole; predates this session) | **Touches:** skeleton `content-pipeline-v2` — `package.json` `test` script + `server/tests/*.test.mjs`
+
+### The hole
+
+The canonical gate is `"test": "node --test 'server/**/*.test.js'"`. The glob matches only `.test.js`. **All 11 `server/tests/*.test.mjs` files never run under `npm test`** — they only run if invoked explicitly (`node --test server/tests/<file>`). Surfaced by the CTO oversight pass 2026-06-29 (the session had moved its two new tests to `.test.js` so they'd be in the gate; that's what exposed the gap).
+
+### Why it matters (worse than "some tests don't run")
+
+**3 of the 11 fail right now**, unseen:
+- `modes.test.mjs` — integration test, needs a live server (`data.filter is not a function` offline). Expected-fail offline, not a regression — but it shouldn't be in the same bucket as unit tests.
+- `routingHandler.test.mjs` — **STALE**: last touched `78c216c`, but `routingHandler.js` was migrated to the canonical schema in `be07509` afterwards. The test drifted and nobody saw it because the gate doesn't run it. **Superseded** by `server/services/routingHandler.test.js` (12/12, IS in the gate) → safe to delete.
+- `section_c_ac4a_merge_chain.test.mjs` — fails on a malformed-record assertion; also stale vs the schema migration.
+
+**8 of the 11 have no `.js` equivalent** — so they're the *only* coverage for what they test, and it's all dark: `data-operations.test.mjs` (36-case multi-source dedup — the B054 fix's regression guard!), `cardGroups`, `cardInstructions`, `executionPlanUtils.test.mjs` (covers `resolveStepEntry`/`detectExecutionPlanFormat` — NOT this session's `validateExecutionPlan`, which has its own `.test.js` in the gate), `aiStream`, `columnAliases`, `phase3-routing`, `entityRunStatus.test.mjs` (likely superseded by the `.js` version).
+
+The real risk is **future drift**: any change that breaks one of the 8 orphaned suites passes `npm test` green. The `data-operations` dedup guard going dark is the scariest — that's the B054 contract.
+
+### Fix (when scheduled)
+1. Widen the gate glob to `'server/**/*.test.{js,mjs}'` (one-line, lowest-effort) **OR** rename the real unit suites `.mjs`→`.test.js`.
+2. Either way, first triage the 11: delete stale duplicates superseded by `.js` versions (`routingHandler.test.mjs`, probably `entityRunStatus.test.mjs`); fix the 2 genuinely-stale suites (`routingHandler` already covered, `section_c_ac4a_merge_chain`) or delete if obsolete; route live-server integration (`modes`) behind a separate `test:integration` script so it doesn't fail the unit gate offline.
+3. Re-run and confirm the gate is green with all real unit suites included.
+
+Not a blocker for the current B052 + validations work (those are in the gate and pass), but it undermines confidence in *every* `npm test` green going forward.
