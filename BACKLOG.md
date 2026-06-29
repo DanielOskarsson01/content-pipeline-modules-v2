@@ -43,6 +43,7 @@ Tasks not yet scheduled for implementation.
 | 33 | **Sub-plan-4 deferred card: SEO-writer-v2** (V5 item 30) — Step-5 card, stricter meta requirements (e.g. meta_title 50–60 chars + primary keyword). Carry-forward AFTER the content-writer-v2 vertical slice; gated by the entry gate + one-shot harness | Carry-forward (sub-plan-4 scope; NOT optional) | 2026-06-20 |
 | 34 | **DB hygiene: stale/zombie `pipeline_runs` rows** (pipeline DB) — zombie `36d34311` + 5 other stale `running` rows all killed (→`abandoned`); baseline clean (0 `running`). Split out of #30 | **RESOLVED 2026-06-22** | 2026-06-20 |
 | 35 | **citation-coverage-checker passes generic unsupported prose** (modules repo) — uncited-claim detector is narrow regexes (numbers/dates/locations); blind to qualitative padding/marketing claims, which score 1.0. Affects every place the pipeline trusts citation-coverage as a quality signal (Step 7 `citation:fail` routing, Step 8 propagation, QA pass rates) | Medium (real gap; nothing actively broken) | 2026-06-28 |
+| 36 | **Research-driven discovery + synthesis architecture** (design note, modules repo) — four composable patterns: (a) tiered Step 1 discovery [cheap Google/SERP vs expensive LLM-search-as-retriever, same URL output shape, tier = config]; (b) LLM question-expansion pre-step [1 vague question → N angled questions, recall lever]; (c) analysis-driven competitor loop [Step 5 USP analysis → new question → routed re-discovery → comparative writing]; (d) research/write split [Perplexity/Claude `web_search` researches → Claude writes]. Supersedes/absorbs [[Item 22]]. Builds on [[Item 2]], [[Item 21]], [[Item 35]] | Medium (design; informs sub-plan-2 / new content types) | 2026-06-29 |
 
 ---
 
@@ -1508,3 +1509,69 @@ content-writer-v2 entry gate (2026-06-28, `~/Downloads/cw-v2-entry-gate-2026-06-
 3. **Reframe citation-coverage-checker as a FLOOR, not the arbiter** — document that a 1.0 means "present citations are valid", NOT "all claims are supported", and don't over-trust it in routing/propagation decisions.
 
 Lowest-risk first step is (3) (documentation + stop over-trusting), with (1)/(2) as the real fix when a content type depends on it.
+
+---
+
+## Item 36 — Research-driven discovery + synthesis architecture (design note)
+
+**Added:** 2026-06-29 | **Priority:** Medium (design / architecture; informs [[Item 2]] multi-content-type work and any new content type that needs vendor/competitor research) | **Touches:** new Step 1 discovery module(s), a Step 0/1 question-expansion module, the existing research pre-step (seo-planner), content-analyzer ([[Item 2]]), and the routing layer (loop-router / multi-card). Supersedes/absorbs [[Item 22]] (`sonar-deep-research`) by placing it inside a fuller picture.
+
+### Context — why this exists
+
+Surfaced from a design conversation (2026-06-28/29) triggered by the responsible-gaming Perplexity test (`SEO/guides/responsible gaming perplexity summary/`). That test produced **raw per-vendor page dumps** (0.5–2.2 MB each, up to 204K words of aggregator junk for `playage-gaming`), not structured research — and revealed two real problems any research-backed content type hits: (1) the OnlyiGaming directory tags are **contaminated** (2 of 6 "responsible-gaming" companies — Sok Studio [design agency], Playage Gaming [turnkey platform] — are mis-tagged), and (2) the high-value half (discovering vendors *missing* from the directory + category/regulatory context) was never run. See also the strategy workflow output (cheap-scrape → shared vendor data layer) referenced in that folder's analysis.
+
+**Key reframing that makes the pieces compose:** an LLM-search (Perplexity Sonar / Claude `web_search`) used as a **retriever** — harvest its `citations`/`search_results` URLs, discard the prose — is a clean Step 1 module (produces URLs), and re-synthesis happens downstream from freshly-scraped content. This dissolves the "double-pay on synthesis" objection to running Perplexity twice.
+
+### The four patterns
+
+**(a) Tiered Step 1 discovery — cost/curation knob, same output shape.**
+- **Cheap:** Google / SERP (via existing **Bright Data SERP** — already wired in skeleton, see 2026-06-28 session) — keyword query → many noisy URLs.
+- **Expensive:** LLM-search-as-retriever (Sonar / Claude `web_search`) — question → fewer, pre-curated, semantically-relevant URLs.
+- Both emit URLs into the pool, so they're interchangeable submodules; tier = template config (Rule 13), not code. Can run both and union.
+- **Cost caveat (non-obvious):** total cost = search + scrape + cleanup. Google front-loads cheapness but pushes cost downstream into scraping + Step 4 junk-removal. For thin-web-presence iGaming vendors the noise is severe (the Playage 204K-word aggregator bloat is *exactly* what un-curated Google URLs produce), so "Google is cheaper" can **invert** once scrape+cleanup is counted. Domain-dependent.
+
+**(b) LLM question-expansion pre-step — recall lever.**
+- A cheap LLM call (no search): 1 vague question → N *angled* questions (e.g. "AI behavioral-detection vendors", "self-exclusion/deposit-limit tooling", "UKGC affordability-check providers", "RG vendors acquired by platforms 2023–26"). Union the per-question URL sets.
+- Fixes the "LLM-retriever is high-precision but recall-capped per call" limitation.
+- Prior art: seo-planner's `research_queries` textarea does this **template-authored**; this makes it **LLM-generated** (adapts angles to what the entity actually is). Keep the expansion prompt as config (Rule 13).
+
+**(c) Analysis-driven competitor loop — the engine for comparative article classes.**
+- Flow: scraped content → content-analyzer extracts "what X does + USPs" → *that insight becomes a new question* ("who competes with X on [USP]?") → routed re-discovery → new content → Claude writes "how X stands out".
+- It's a **feedback loop** (Step 5 analysis spawns a fresh Step 1 search) — **in-bounds** because the architecture treats step numbers as scaffolding and the real model is routing / ID-based composition (same machinery as loop-router / multi-card). **Needs a termination condition** (one competitor pass, not infinite competitor-of-competitor spiral) + `_partialItems` discipline.
+- This is the literal mechanism for the 4 **strong-vendor-data-dependency** article classes (pillar, head-to-head, newcomers, best-for) — all comparative; a single-entity profile doesn't need it, comparative content requires it.
+
+**(d) Research / write split — Perplexity researches, Claude writes.**
+- Treat research-engine output (Sonar Deep Research *or* Claude `web_search`) as **structured research data** (facts, vendors, classifications, citations), NOT as the article. Claude content-writer composes from that data + templates + voice + SEO/schema rules.
+- **This is already the pipeline's pattern:** seo-planner (v2.2.1) calls Perplexity as a research pre-step; content-writer consumes it. This deepens the research *input* (keyword-research → deep vendor/competitor research) while keeping Claude as the writer — evolutionary, not new.
+- **"Deep search" tier disambiguation:** "Sonar" is a product line — base `sonar` (cheap/fast), Sonar Pro, Sonar Reasoning, **Sonar Deep Research** (the agentic multi-search→report mode, ~100× the per-query cost; the "deep search" reputation belongs to *this* tier). Use a **cheap tier for the Step 1 retriever**; reserve Deep Research for the Step 5 synthesis role (where it overlaps — and where its facts still need gating, see below). Verify current Perplexity API tiers + pricing before committing — names/pricing/Deep-Research-via-API have all shifted since the Jan-2026 cutoff; the cheap-vs-deep gap drives the 73-category economics.
+
+### Cross-cutting requirements
+
+- **Provider-agnostic (Rule 13):** `search_provider` config option (`google_serp` | `claude_web_search` | `perplexity_sonar` | `perplexity_deep_research`); the "use Deep Research for iGaming vendor categories" decision lives in the **template**, not in module code. No `perplexity-deep-research` specialized module.
+- **Cheap-scrape keeps two jobs even when Deep Research brings its own corpus:** (1) **ground the question** — directory candidate set + entity disambiguation (solves the "wrong BetComply" problem by handing Deep Research the disambiguating context learned cheaply); (2) **fact-check anchor** — verify research-engine claims against scraped ground truth before they reach the article (W1.3 vocabulary-fidelity gate + citation-coverage-checker; note [[Item 35]] — citation-coverage is padding-blind, so an LLM faithfulness pass is the more robust arbiter here).
+- **Directory tags are a hypothesis, not truth:** the research step must *correct* the vendor list (drop mis-tagged, add missing specialists), not just describe whatever was tagged.
+
+### Resulting shape
+
+```
+question-expansion   1 vague Q → N angled Qs            (cheap LLM, recall)        [pattern b]
+   ↓
+discovery (tiered)   Google/SERP  OR  LLM-search → URLs  (config: cost vs curation) [pattern a]
+   ↓
+scrape + clean       existing Step 3/4
+   ↓
+analyze              USPs, "what it does"               (content-analyzer)
+   ↓  ┌─ comparative article: new question → routed re-discovery (terminating)      [pattern c]
+   ↓  └─ else: straight through
+research + verify     research engine → structured findings → gate vs scraped truth [pattern d + #35]
+   ↓
+write                 Claude content-writer: findings + templates + voice + SEO
+```
+
+Every box is a small generic submodule; the cheap/expensive/loop decisions live in template config + routing, not code — consistent with the architecture's grain and the routing layer already built (sub-plan 1).
+
+### Not in scope here / open questions
+
+- Whether a **shared structured vendor data layer** (Supabase table both the review pipeline and content pipeline read/write) is the right home for findings — flagged in the 2026-06-28 strategy workflow; decide separately.
+- Exact structured-findings **schema** between research and write (the seam that makes "Perplexity researches, Claude writes" composable) — to be drafted when a content type commits to this path.
+- Sequencing vs [[Item 2]] (content-analyzer/content-writer multi-content-type flexibility) — this design assumes that flexibility work; they should land together.
