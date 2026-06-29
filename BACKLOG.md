@@ -47,7 +47,8 @@ Tasks not yet scheduled for implementation.
 | 37 | **Global cards as copy-on-use library** (resolved V5 amendment, corrected scope; skeleton + modules) — clone-from-library starting points where edits localize; NOT live-shared resolution (what V5's E3 correctly killed). Resolved axis: **config-free clones** (curated source lists, reference corpora — the value travels unchanged, used as-is, fork-drift low in practice though not structurally prevented) are **global-safe**; **config-carrying clones** (humanizer tone [[Item 20]], citation-discipline `[#n]` [[Item 35]]) are the caveated localize-after-clone case. Full rule: **config-free AND not a name-addressed routing target = fully global-safe** (discovery/input clones qualify; escalation clones don't). Foundation = template-scoped cards (B052 + save-path validations). Cross-ref V5 E3 removal + [[Item 32]] (config-free example) / [[Item 33]] (config-carrying) | **Resolved (corrected scope) — build on real recurrence need** | 2026-06-29 |
 | 38 | **Card-aware READ not implemented for `run_submodule_config.options`** (skeleton repo; Phase-3 landmine) — `submoduleRuns.js:248` reads `(run_id, step_index, submodule_id).maybeSingle()` with NO `card_id` filter. B052 made the WRITE path card-safe; this READ is not. Once card rows exist (>1 row per submodule at a step) `.maybeSingle()` breaks (ambiguous / throws). Must land WITH card-write enablement (the card-UI session) — enabling writes without it is the trap. Surfaced by CTO review of B052; spec amended (PHASE_3B §6.4 read-side note) | **High — gates card-write enablement (not a B052 defect; B052 stays correct)** | 2026-06-29 |
 | 39 | **Stricter card-save validation deferred past §9** (skeleton repo; for the card-UI session) — `validateExecutionPlan` (executionPlanUtils.js) implements all 9 PHASE_3B §9 HTTP-400 rules + 3 defensive hardenings; these are the §9-faithful omissions a /code-review flagged for later: (a) `card_name` required per §1.2 but NOT in the §9 table — not enforced; (b) QA-check-name → manifest `qa_outputs` **warning** (§2.2) deferred until `qa_outputs` manifests exist (§6.6 — 0 today); (c) cosmetic: non-numeric `submodules_per_step` step-key yields a "does not match placement step" message rather than "invalid step key". Wire (a)/(b) when the card UI + qa_outputs land | Low (validation gate is sound for §9; these are nice-to-haves) | 2026-06-29 |
-| 40 | **`npm test` silently skips 11 `.mjs` test suites — 3 currently FAILING** (skeleton repo; test-gate integrity) — the canonical gate `node --test 'server/**/*.test.js'` matches only `.test.js`, so all 11 `server/tests/*.test.mjs` never run. 3 fail today (`modes` needs a live server = expected-fail offline; `routingHandler.test.mjs` + `section_c_ac4a_merge_chain.test.mjs` are STALE vs the `be07509` schema migration — drifted unseen because the gate doesn't run them). 8 of 11 have no `.js` equivalent (incl. `data-operations` 36-case dedup suite). Real risk: future code that breaks an orphaned suite passes `npm test` green. Fix: rename real unit suites `.mjs`→`.test.js` (or widen the glob to `*.test.{js,mjs}`), delete stale duplicates superseded by `.js` versions (`routingHandler.test.mjs` ← `routingHandler.test.js` 12/12), route live-server integration behind a separate script. Surfaced by CTO oversight 2026-06-29 | **Medium (latent quality hole; predates this session — highest-value finding of the CTO pass)** | 2026-06-29 |
+| 40 | **`npm test` silently skipped 11 `.mjs` test suites — 3 failing unseen** (skeleton repo; test-gate integrity) — the gate `node --test 'server/**/*.test.js'` matched only `.test.js`, so all 11 `server/tests/*.test.mjs` never ran. **RESOLVED 2026-06-29:** widened glob to run `.js` + `.mjs`; added `test:integration`; migrated 2 stale-fixture routing suites to canonical schema (test-only); deleted 2 hollow/duplicate suites; separated `modes` as integration. Gate now 108/108 green over 16 suites. **Hollow-green found + closed:** `applyRouting` had NO passing gated test (its only suites were the 2 failing ones) — now genuinely covered. | **RESOLVED 2026-06-29** | 2026-06-29 |
+| 41 | **Canonical specs live OUTSIDE git** (hygiene; root cause behind the PHASE_3B flag) — PHASE_3B + other `Content-Pipeline/specs/*.md` are only Dropbox-versioned; the only git root over them is the 892-item `/Projects` mega-repo, where they're untracked. This is WHY specs drift (e.g. `noble-wandering-graham.md` vs PHASE_3B repeatedly out of sync). Move canonical specs into proper version control — a clean dedicated sub-repo, NOT the mega-repo. Leave PHASE_3B Dropbox-versioned until this is done deliberately (do not quick-fix by `git add`-ing into the mega-repo). | Medium (hygiene; prevents spec drift) | 2026-06-29 |
 
 ---
 
@@ -1701,3 +1702,37 @@ The real risk is **future drift**: any change that breaks one of the 8 orphaned 
 3. Re-run and confirm the gate is green with all real unit suites included.
 
 Not a blocker for the current B052 + validations work (those are in the gate and pass), but it undermines confidence in *every* `npm test` green going forward.
+
+### RESOLVED 2026-06-29 (skeleton commit, not deployed)
+
+Gate widened to `node --test 'server/**/*.test.js' 'server/**/*.test.mjs'`; added `test:integration` script. **Unit gate now 108/108 green across 16 suites.** No source code was touched — every routing failure was a stale TEST fixture (pre-`be07509` schema), so the "stop if a fix needs source change" condition never fired.
+
+Per-suite triage of all 11 `.mjs`:
+
+| suite | bucket | action |
+|---|---|---|
+| aiStream, cardGroups, cardInstructions, columnAliases, data-operations, executionPlanUtils | UNIQUE, passing | kept — now run in the gate (incl. the B054 `data-operations` dedup guard, no longer dark) |
+| `routingHandler.test.mjs` | UNIQUE (only real `applyRouting`/`validateCards` suite), was FAILING | **fixed (test-only):** migrated fixtures `cards`→`card_definitions`, `{target_cards:[X]}`→`[{step,card_id:X}]`. Now passes → `applyRouting` genuinely covered |
+| `section_c_ac4a_merge_chain.test.mjs` | UNIQUE (merge chain), was FAILING | **fixed (test-only):** same canonical-schema fixture migration. Passes |
+| `entityRunStatus.test.mjs` | STALE DUPLICATE of `entityRunStatus.test.js` (real-import, 185 lines ⊇ 75) | **deleted** |
+| `phase3-routing.test.mjs` | HOLLOW (tested inline reimplementations of resolveCards/validateCards, not source) | **deleted** — real coverage is in `routingHandler.test.js` (real import) |
+| `modes.test.mjs` | INTEGRATION (needs a live server) | **renamed** → `modes.integration.mjs`, behind `npm run test:integration` (out of the unit gate so it can't silently fail offline) |
+
+**Hollow-green check result (the real finding):**
+- **`applyRouting`** (routingHandler.js — the routing *executor*: writes card instructions, increments loop_count, marks skipped, per-entity try/catch) had **NO passing gated test**. Its only two suites (`routingHandler.test.mjs`, `section_c`) were failing AND un-run. So the routing path's execution orchestrator was effectively unguarded while routing was called "proven." Now genuinely green (the failures were stale fixtures, not bugs — `applyRouting` is correct).
+- **`resolveCards` / `validateCards`**: NOT hollow — `routingHandler.test.js` (real import, 12/12) genuinely covers them.
+- **`expandCardGroups`**: NOT hollow — `cardGroups.test.mjs` (real import) covers it.
+- **`phase3-routing.test.mjs` was a green-but-hollow test** (asserted against inline copies) — deleted.
+- **Follow-up to verify (not blocking):** card-aware round-override *options merge* was nominally exercised only by the hollow `phase3-routing`; confirm a real-import suite (`cardGroups`/`cardInstructions`/autoExecutor) covers it, else add one.
+
+---
+
+## Item 41 — Canonical specs live outside git (root cause behind the PHASE_3B flag)
+
+**Added:** 2026-06-29 | **Status:** Open — hygiene, deliberate move (not now) | **Priority:** Medium (prevents spec drift) | **Touches:** `Content-Pipeline/specs/*.md` (PHASE_3B and others), repo topology
+
+The deeper issue the PHASE_3B commit-3 flag surfaced: **canonical specs are not in version control at all** — they're only Dropbox-versioned. The only git root above them is the `/Projects` mega-repo (892 untracked/modified items), where they sit untracked. That's *why* they drift: there's no diff, no history, no review gate — which is how `noble-wandering-graham.md` (a `.claude/plans` file, tracked) and `PHASE_3B` (untracked spec) repeatedly fell out of sync, and why the §6.4 two-constraint design sat un-runnable for weeks.
+
+**Do (later, deliberately):** move canonical specs into proper version control — a **clean dedicated sub-repo** (e.g. `content-pipeline-specs`), not the mega-repo. Then spec edits get diffs + history + the same review discipline as code.
+
+**Do NOT (explicit non-goal):** quick-fix by `git add`-ing PHASE_3B into the 892-item `/Projects` mega-repo. Leave PHASE_3B Dropbox-versioned until the sub-repo move is done on purpose. The 2026-06-29 §6.4/§9 amendments are saved on disk regardless.
