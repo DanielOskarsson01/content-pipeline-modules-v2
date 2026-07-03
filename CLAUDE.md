@@ -1058,3 +1058,27 @@ Architectural specs in "pending sign-off" state need active tracking to either a
 **Alignment:** Confirmed. The change honors the modules architectural boundary (transport stays in the skeleton; submodules untouched and still reach it only via `tools`) and Rule 13 by analogy (no content-type assumptions — pure infra). The cost-protective marker tightening is consistent with the project's "don't ship around an unexercised path / verify-before-assume" discipline.
 
 **Updated by:** session-closer skill
+
+### Session: 2026-07-03 — All 20 unbuilt submodule briefs rewritten pipeline-agnostic (Rule 13) + BACKLOG #43–46 filed (worktree `charming-lamport-4b708c`)
+
+**Status:** Docs/planning session. No module code touched, nothing deployed. Work on worktree branch `claude/charming-lamport-4b708c` (this thread's own worktree — honors #42 one-thread-one-worktree).
+
+**Accomplished:**
+- Gap analysis: of 32 research briefs in `Content-Pipeline/specs/submodule-briefs/`, 12 are built, 20 are not (incl. seo-keyword-researcher, partially superseded by seo-planner v2).
+- **All 20 unbuilt briefs rewritten in place** (4 parallel research agents, live web research on 2026-07 provider landscape). Originals preserved at `specs/submodule-briefs/_originals-2026-07-03/`. Every brief now: Rule-13 agnostic (vertical flavor moved to "Example template configurations"), full module contract (item_key / data_operation_default / pool_precondition / cost), provider tables with researched pricing + source URLs, credentials & testing section keyed to the user-approved existing .env keys.
+- **Consolidation: 20 briefs → 10 new generic modules** (`search-discovery` canonical for 6 discovery briefs; `ai-discovery-scout`; `url-heuristics` (né learned-validator); `api-fetcher`; `dataset-fetcher` (LinkedIn-company = one provider config); `transcript-fetcher`; `media-generator` (ONE module for tts/image/video); Step-9 family `cms-publisher`/`doc-exporter`/`sheet-logger`) + 1 extension (seo-keyword-researcher → seo-planner provider layer) + 1 card (human-rewriter → tone-seo-editor card) + rest = configs of built modules (api-search, rss-feeds, csv-discovery, page-links). Catalog 37→47 instead of →56.
+- **Dead providers confirmed by research** (originals were unbuildable as written): Google Custom Search JSON API (closed to new customers, sunset 2027-01), Bing Search API (retired 2025-08), Clearbit Logo (dead 2025-12), Proxycurl (LinkedIn injunction, dead 2025-07), Crunchbase free API + OpenCorporates free keys (eliminated), Sora API (shuts 2026-09-24), YouTube captions.download (owner-OAuth-only).
+- **Live-testable today with existing keys:** Perplexity (search-discovery), Anthropic (ai-discovery-scout, human-rewriter), Gemini (TTS/image/Veo video/YouTube transcription), Leonardo + OpenAI (image), Pixabay/Unsplash (stock), GSC service account (real keyword data; sheet-logger after API enablement), plus zero-credential paths (url-heuristics, iTunes Search, podcast RSS/transcripts, Wikidata, webhooks). Bright Data Datasets: one $0.003 call verifies key scope.
+- **BACKLOG #43–46 filed** (skeleton capability gaps surfaced by the redesign): #43 tools.http verb/binary/multipart gaps; #44 no asset persistence for generated media; #45 Step-10→Step-9 execute trigger + terminal_state readability (extends #8/#9); #46 api-search header-auth (modules, small).
+- **Durability snapshot:** all 20 revised briefs + 20 originals committed to this repo at `docs/submodule-briefs-rev-2026-07-03/` (canonical copies remain in `Content-Pipeline/specs/submodule-briefs/`, which is untracked in any repo — the #41 gap; snapshot is the mitigation, NOT a canonical move).
+
+**Cross-thread notes (per session working rules):**
+- `BACKLOG.md` + this `CLAUDE.md` are shared docs — this session appended items #43–46 and this entry only; #42 (card-write thread, filed earlier today on main) was picked up via fast-forward before numbering.
+- The revised briefs live in `Content-Pipeline/specs/` (inside the `/Projects` mega-repo but untracked). Deliberately NOT committed there (#41's explicit non-goal + other thread's territory). Backup dir `_originals-2026-07-03/` created there.
+- Credentials decision (user, this session): existing .env keys ARE approved for reuse by future modules; briefs prefer providers with existing keys. No production credentials were read (SSH env check was denied and not retried; local .env read was NAMES only).
+
+**Blockers/Questions:**
+- Skeleton gaps #43–45 gate parts of the build-out (media video mode, Step-9 execute, several delivery providers). #46 is a small modules-repo fix.
+- Open verifications parked in this worktree's RESUME.md: Bright Data Datasets key scope ($0.003 test), Gemini YouTube-ingestion billing status, Workspace Shared Drive availability (gates Google Docs delivery — service-account My-Drive pattern is broken as of mid-2026).
+
+**Updated by:** Claude (brief-revision session, worktree charming-lamport-4b708c)

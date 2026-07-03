@@ -50,6 +50,10 @@ Tasks not yet scheduled for implementation.
 | 40 | **`npm test` silently skipped 11 `.mjs` test suites — 3 failing unseen** (skeleton repo; test-gate integrity) — the gate `node --test 'server/**/*.test.js'` matched only `.test.js`, so all 11 `server/tests/*.test.mjs` never ran. **RESOLVED 2026-06-29:** widened glob to run `.js` + `.mjs`; added `test:integration`; migrated 2 stale-fixture routing suites to canonical schema (test-only); deleted 2 hollow/duplicate suites; separated `modes` as integration. Gate now 108/108 green over 16 suites. **Hollow-green found + closed:** `applyRouting` had NO passing gated test (its only suites were the 2 failing ones) — now genuinely covered. | **RESOLVED 2026-06-29** | 2026-06-29 |
 | 41 | **Canonical specs live OUTSIDE git** (hygiene; root cause behind the PHASE_3B flag) — PHASE_3B + other `Content-Pipeline/specs/*.md` are only Dropbox-versioned; the only git root over them is the 892-item `/Projects` mega-repo, where they're untracked. This is WHY specs drift (e.g. `noble-wandering-graham.md` vs PHASE_3B repeatedly out of sync). Move canonical specs into proper version control — a clean dedicated sub-repo, NOT the mega-repo. Leave PHASE_3B Dropbox-versioned until this is done deliberately (do not quick-fix by `git add`-ing into the mega-repo). | Medium (hygiene; prevents spec drift) | 2026-06-29 |
 | 42 | **Multi-window / shared-working-directory state contention** (process; recurring, cross-repo) — concurrent Claude windows over one working dir + one shared session/project dir + reliance on **unpushed local state** and a **single shared `RESUME.md`** cause cross-thread clobbering and lost work. **Confirmed costs:** wrong-branch cross-repo push (2026-05-31); a wrong-thread session report; repeated `RESUME.md` overwrites by a parallel window; a lost session of client work; and the **2026-07-03 card-write landing kit itself now unfindable** (sandbox-verified kit couldn't be located to land — searched Downloads/repo/branches/stashes/claude-sync/OnlyiGaming-tree by name+content). Fix: one-thread-one-worktree; per-thread RESUME in each thread's own repo; push-immediately; handoff kits to a versioned+pushed location (never loose Downloads / unpushed local). | **High — actively costing lost work** | 2026-07-03 |
+| 43 | **`tools.http` verb + binary gaps** (skeleton repo) — GET/HEAD/POST only, responses binary-unsafe, no multipart upload. Blocks: OpenAI TTS (raw binary), Strapi v5/Ghost/Contentful updates (PUT), Airtable upsert (PATCH), S3/WebDAV, large-audio STT upload. Surfaced by the 2026-07-03 brief revision — affects media-generator, cms-publisher, doc-exporter, sheet-logger, transcript-fetcher briefs. | Medium-high (gates several planned modules) | 2026-07-03 |
+| 44 | **No asset persistence for generated media** (skeleton repo) — no `tools.storage`; provider asset URLs expire (BFL ~10 min, Veo ~2 days) and base64 payloads have nowhere durable to land. Hard blocker for media-generator video mode; TTS/image can ship first via non-expiring paths (Leonardo CDN, base64-in-JSON). | Medium (blocks video mode; sequencing constraint) | 2026-07-03 |
+| 45 | **Step-10 approval → Step-9 `execute` trigger + terminal_state readability** (skeleton repo; extends #8/#9) — the Step-9 delivery-family briefs (cms-publisher / doc-exporter / sheet-logger) stage payloads and fire only post-approval, but no skeleton mechanism exists for Step-10 approval to trigger execute mode, and modules cannot read `entity_run_meta.terminal_state` for flagged-entity gating. | Medium (prerequisite for any Step-9 module) | 2026-07-03 |
+| 46 | **api-search header-auth support** (modules repo, small) — api-search only supports bearer-token auth; providers needing custom headers (Pexels `Authorization: <key>`, PodcastIndex key+hash headers) can't be configured. Add a per-provider `headers` map to provider config. | Low-medium (small; unblocks 2+ planned provider configs) | 2026-07-03 |
 
 ---
 
@@ -1761,3 +1765,43 @@ The deeper issue the PHASE_3B commit-3 flag surfaced: **canonical specs are not 
 - Avoid `cd` in compound bash (cwd-persistence footgun) — use absolute paths.
 
 **Not a code change** — workflow discipline. Filed because the pattern has now cost five distinct incidents, including blocking the very task predicated on it.
+
+---
+
+## Item 43 — `tools.http` verb + binary gaps (skeleton repo)
+
+**Added:** 2026-07-03 | **Status:** Open | **Priority:** Medium-high (gates several planned modules) | **Touches:** skeleton `stageWorker.js::buildTools` (tools.http)
+
+Surfaced by the 2026-07-03 submodule-brief revision (all 20 unbuilt briefs rewritten pipeline-agnostic; snapshot in `docs/submodule-briefs-rev-2026-07-03/`). `tools.http` supports only GET/HEAD/POST, is binary-unsafe on response bodies (raw binary corrupts), and has no multipart upload. This blocks, concretely: OpenAI TTS (returns raw binary — Gemini TTS's base64-in-JSON is the workaround), Strapi v5 / Ghost / Contentful entry updates (PUT), Airtable native upsert (PATCH), S3/WebDAV file delivery, and large-audio multipart upload for STT providers.
+
+**Do:** extend tools.http with PUT/PATCH/DELETE, a binary-safe response mode (e.g. `responseType: 'arraybuffer'` → base64), and multipart/form-data request bodies. Pipeline-agnostic by construction (pure transport). Affected briefs: media-generator (×3 files), cms-publisher, doc-exporter, sheet-logger, transcript-fetcher.
+
+---
+
+## Item 44 — No asset persistence for generated media (skeleton repo)
+
+**Added:** 2026-07-03 | **Status:** Open | **Priority:** Medium (blocks media-generator video mode) | **Touches:** skeleton tools surface (would be a new `tools.storage` or equivalent)
+
+Modules emit JSON items into the pool; there is no facility to persist a binary asset. Generated-media provider URLs expire (Black Forest Labs FLUX ~10 min; Veo files deleted after ~2 days; OpenAI images return base64 that has nowhere durable to land). The media-generator briefs therefore sequence: TTS + image modes first via non-expiring paths (Leonardo CDN URLs never expire; Gemini base64-in-JSON payloads stored inline), video mode LAST — it becomes "just another provider config" once persistence exists.
+
+**Do (design question, deliberately open):** decide the persistence primitive — Supabase Storage bucket via skeleton (likely), local disk + static serve, or S3-compatible. Must be provider-agnostic and quota-guarded. See briefs: step5-video-generator.md (hard blocker), step5-audio-tts-generator.md, step5-image-generator.md.
+
+---
+
+## Item 45 — Step-10 approval → Step-9 `execute` trigger + terminal_state readability (skeleton repo; extends #8/#9)
+
+**Added:** 2026-07-03 | **Status:** Open | **Priority:** Medium (prerequisite for any Step-9 module) | **Touches:** skeleton approve/routing flow; pool-item enrichment (ties to #8)
+
+The revised Step-9 delivery-family briefs (cms-publisher, doc-exporter, sheet-logger) all use `mode: stage|execute` — stage builds + validates payloads onto pool items; the actual send fires only after the Step-10 human gate. Two skeleton capabilities don't exist yet: (1) a mechanism by which Step-10 approval triggers an execute-mode run of the staged Step-9 submodules; (2) modules cannot read `entity_run_meta.terminal_state`, so the briefs' fail-closed `flagged_policy` gating (hold/stage-with-warning for QA-flagged entities — the #8/#9 close-out) needs the skeleton to inject flag state onto pool items (exactly BACKLOG #8's propagation) or expose it via tools.
+
+**Do:** design alongside #8/#9 when the first Step-9 module is scheduled — this is the "distribution gate" #9 has always pointed at, now with a concrete module-side contract to design against.
+
+---
+
+## Item 46 — api-search header-auth support (modules repo, small)
+
+**Added:** 2026-07-03 | **Status:** Open | **Priority:** Low-medium (small; unblocks 2+ planned provider configs) | **Touches:** `modules/step-1-discovery/api-search/execute.js` + manifest (provider config schema)
+
+api-search provider configs support bearer-token auth only. Providers needing custom header shapes cannot be configured: Pexels (`Authorization: <key>`, no "Bearer" prefix — key EXISTS in .env), PodcastIndex (key + hash + timestamp headers). Revised briefs step1-image-logo-search.md and step1-youtube-podcast-discovery.md route stock-image and podcast providers through api-search and hit this.
+
+**Do:** add an optional per-provider `headers` object (values support `{env:VAR_NAME}` interpolation, consistent with existing env handling) alongside the existing bearer option. Backwards-compatible; pipeline-agnostic.
