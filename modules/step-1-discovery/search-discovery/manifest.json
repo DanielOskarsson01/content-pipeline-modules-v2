@@ -1,0 +1,139 @@
+{
+  "id": "search-discovery",
+  "name": "Search Discovery",
+  "description": "Generic web-search discovery. Composes queries from templates per entity and runs them against pluggable search providers (Perplexity, Serper, Brave, SerpAPI, ...). Two modes: open web search, or site-restricted fan-out over a configured domain list. Adding a provider = JSON config, not code.",
+  "version": "1.0.0",
+  "step": 1,
+  "category": "search",
+  "cost": "medium",
+  "data_operation_default": "add",
+  "pool_precondition": "empty_ok",
+  "sort_order": 2,
+  "depends_on": [],
+  "requires_columns": ["name"],
+  "usage_notes": "Configure at least one provider (JSON config; see README for schemas and ready-made provider blocks). All vertical flavor — directory site lists, news whitelists, qualifier terms — belongs in template presets, not module defaults. site_restricted mode multiplies queries (templates x sites x entities); the max_queries_per_entity cap is the cost guard.",
+
+  "options": [
+    {
+      "name": "providers",
+      "type": "json",
+      "label": "Search providers",
+      "presets_enabled": true,
+      "description": "Array of provider config objects. kind 'serp': query-based engine (endpoints per vertical, results_path, field_map, auth via env var). kind 'lookup': deterministic URL template per entity, HEAD-verified. No providers = loud no-op. See README for schema and examples.",
+      "default": []
+    },
+    {
+      "name": "search_mode",
+      "type": "select",
+      "label": "Search mode",
+      "description": "open: each query template runs as-is per entity. site_restricted: each template fans out per domain in the site list (site: operator, or the provider's domain-filter param).",
+      "default": "open",
+      "values": ["open", "site_restricted"]
+    },
+    {
+      "name": "site_list",
+      "type": "textarea",
+      "label": "Site list",
+      "presets_enabled": true,
+      "description": "One domain per line; # lines are comments. Used only in site_restricted mode.",
+      "default": ""
+    },
+    {
+      "name": "site_list_doc",
+      "type": "doc_selector",
+      "label": "Site list document",
+      "description": "Reference-doc alternative to the site list textarea (one domain per line). If both are set, the document wins.",
+      "default": []
+    },
+    {
+      "name": "query_templates",
+      "type": "json",
+      "label": "Query templates",
+      "presets_enabled": true,
+      "description": "Array of query strings. Placeholders: {entity_name}, {alt_names}, {website_domain}, {site}. Templates whose placeholder has no value for an entity are skipped for that entity with a warning.",
+      "default": ["\"{entity_name}\""]
+    },
+    {
+      "name": "result_type",
+      "type": "select",
+      "label": "Result type",
+      "description": "SERP vertical. Providers without an endpoint for the selected vertical are skipped with a warning.",
+      "default": "web",
+      "values": ["web", "news", "images"]
+    },
+    {
+      "name": "date_range",
+      "type": "select",
+      "label": "Date range",
+      "description": "Recency filter, mapped per provider via its date_param config. Providers without date_param ignore it.",
+      "default": "any",
+      "values": ["any", "day", "week", "month", "year"]
+    },
+    {
+      "name": "max_results_per_query",
+      "type": "number",
+      "label": "Max results per query",
+      "description": "Passed to the provider via its num_param.",
+      "default": 10,
+      "min": 1,
+      "max": 100
+    },
+    {
+      "name": "max_queries_per_entity",
+      "type": "number",
+      "label": "Max queries per entity",
+      "description": "Hard cost cap on templates x sites per entity (applies per provider). Excess combinations are dropped with a loud log line.",
+      "default": 20,
+      "min": 1,
+      "max": 500
+    },
+    {
+      "name": "requests_per_minute",
+      "type": "number",
+      "label": "Rate limit (requests/min)",
+      "description": "Global rate limit across all providers and entities.",
+      "default": 30,
+      "min": 1,
+      "max": 120
+    },
+    {
+      "name": "verify_liveness",
+      "type": "boolean",
+      "label": "Verify result liveness",
+      "description": "HEAD-check result URLs; drops hard-dead links (404/410) but keeps bot-walled ones (403 etc.). Lookup providers are always verified regardless of this option.",
+      "default": false
+    }
+  ],
+
+  "options_defaults": {
+    "providers": [],
+    "search_mode": "open",
+    "site_list": "",
+    "site_list_doc": [],
+    "query_templates": ["\"{entity_name}\""],
+    "result_type": "web",
+    "date_range": "any",
+    "max_results_per_query": 10,
+    "max_queries_per_entity": 20,
+    "requests_per_minute": 30,
+    "verify_liveness": false
+  },
+
+  "item_key": "url",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": false,
+    "url": "string (required)",
+    "title": "string",
+    "snippet": "string",
+    "domain": "string",
+    "source": "string",
+    "result_type": "string",
+    "pub_date": "string",
+    "image_url": "string",
+    "query_used": "string",
+    "found_via": "string",
+    "entity_name": "string"
+  }
+}
