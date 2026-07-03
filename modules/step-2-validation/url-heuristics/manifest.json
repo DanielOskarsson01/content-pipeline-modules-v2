@@ -1,0 +1,120 @@
+{
+  "id": "url-heuristics",
+  "name": "URL Heuristics",
+  "description": "Zero-cost rule-based URL scoring. Rejects pagination, archives, auth pages and other web cruft before expensive scraping/LLM steps. Three-way decisions (allow / allow_hint / reject) with reasons. Shadow mode annotates without dropping anything.",
+  "version": "1.0.0",
+  "step": 2,
+  "category": "filtering",
+  "sort_order": 4,
+  "cost": "cheap",
+  "data_operation_default": "remove",
+  "pool_precondition": "requires_items",
+  "depends_on": [],
+  "usage_notes": "Run after url-filter and before url-relevance to shrink the LLM batch at zero cost. Start in shadow mode (annotates only, drops nothing) and audit the flagged rejects in the UI; promote to enforce per template once rejects look trustworthy. All rule lists are template-configurable; defaults are generic web cruft only.",
+
+  "requires_columns": ["url"],
+
+  "options": [
+    {
+      "name": "mode",
+      "type": "select",
+      "label": "Mode",
+      "description": "shadow: annotate every item with decision/score/reasons, drop nothing. enforce: drop items whose decision is reject (allow_hint items are kept in both modes).",
+      "default": "shadow",
+      "values": ["shadow", "enforce"]
+    },
+    {
+      "name": "reject_url_patterns",
+      "type": "textarea",
+      "label": "Reject URL patterns",
+      "presets_enabled": true,
+      "description": "One case-insensitive regex per line, matched against the full URL. Any match rejects the URL outright. Lines starting with # are comments. Defaults cover generic web cruft (pagination, archives, auth, legal, feeds).",
+      "default": "/page/\\d+\n/category/\n/tag/\n/author/\n/search([/?]|$)\n[?&]s=\n/login([/?]|$)\n/register([/?]|$)\n/signin([/?]|$)\n/signup([/?]|$)\n/account([/?]|$)\n/cart([/?]|$)\n/checkout([/?]|$)\n/privacy(-policy)?([/?]|$)\n/terms(-of-(service|use)|-and-conditions)?([/?]|$)\n/cookie-policy([/?]|$)\n/wp-admin\n/wp-login\n/feed([/?]|$)\n/rss([/?]|$)\n\\.xml(\\?|$)\n/sitemap([_./?]|$)"
+    },
+    {
+      "name": "hint_url_patterns",
+      "type": "textarea",
+      "label": "Hint URL patterns",
+      "presets_enabled": true,
+      "description": "One case-insensitive regex per line. Matches are marked allow_hint (kept in the pool, flagged as list-like-but-possibly-useful). Lines starting with # are comments.",
+      "default": "/news/?$\n/blog/?$"
+    },
+    {
+      "name": "title_reject_patterns",
+      "type": "textarea",
+      "label": "Title/snippet reject patterns",
+      "description": "One case-insensitive regex per line, matched against item title and snippet when present. A match applies one -0.5 score penalty (list-page tells). Items without title/snippet are unaffected.",
+      "default": "Page \\d+ of\nBrowse all\nArchive\nAccess denied\n404\nSearch results"
+    },
+    {
+      "name": "max_depth",
+      "type": "number",
+      "label": "Max path depth",
+      "description": "Path segments before a -0.25 penalty. 0 disables the check.",
+      "default": 6,
+      "min": 0,
+      "max": 20
+    },
+    {
+      "name": "max_query_params",
+      "type": "number",
+      "label": "Max query params",
+      "description": "Query parameters before a -0.25 penalty. 0 disables the check.",
+      "default": 3,
+      "min": 0,
+      "max": 20
+    },
+    {
+      "name": "reject_threshold",
+      "type": "number",
+      "label": "Reject threshold",
+      "description": "Score below this becomes reject.",
+      "default": 0.3,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "hint_threshold",
+      "type": "number",
+      "label": "Hint threshold",
+      "description": "Score below this (but at or above the reject threshold) becomes allow_hint.",
+      "default": 0.6,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "needs_render_domains",
+      "type": "textarea",
+      "label": "Needs-render domains",
+      "description": "One domain per line. Matching items get needs_render: true as a hint for browser-based scraping in Step 3. Subdomains match. Lines starting with # are comments.",
+      "default": ""
+    }
+  ],
+
+  "options_defaults": {
+    "mode": "shadow",
+    "reject_url_patterns": "/page/\\d+\n/category/\n/tag/\n/author/\n/search([/?]|$)\n[?&]s=\n/login([/?]|$)\n/register([/?]|$)\n/signin([/?]|$)\n/signup([/?]|$)\n/account([/?]|$)\n/cart([/?]|$)\n/checkout([/?]|$)\n/privacy(-policy)?([/?]|$)\n/terms(-of-(service|use)|-and-conditions)?([/?]|$)\n/cookie-policy([/?]|$)\n/wp-admin\n/wp-login\n/feed([/?]|$)\n/rss([/?]|$)\n\\.xml(\\?|$)\n/sitemap([_./?]|$)",
+    "hint_url_patterns": "/news/?$\n/blog/?$",
+    "title_reject_patterns": "Page \\d+ of\nBrowse all\nArchive\nAccess denied\n404\nSearch results",
+    "max_depth": 6,
+    "max_query_params": 3,
+    "reject_threshold": 0.3,
+    "hint_threshold": 0.6,
+    "needs_render_domains": ""
+  },
+
+  "item_key": "url",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": true,
+    "url": "string (required)",
+    "decision": "string",
+    "score": "number",
+    "reasons": "string",
+    "needs_render": "boolean",
+    "validator_version": "string",
+    "entity_name": "string",
+    "flagged_when": { "decision": ["reject"] }
+  }
+}
