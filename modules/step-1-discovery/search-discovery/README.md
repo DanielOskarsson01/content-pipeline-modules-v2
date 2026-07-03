@@ -42,7 +42,16 @@ Serper.dev (Google SERP; needs new `SEARCH_PROVIDER_SERPER_KEY`; **not yet live-
 }
 ```
 
+The Serper block's API shape (endpoint, `X-API-KEY` header, `q`/`num` body, `organic[].{title,link,snippet}` response, `/news` + `/images` endpoints) is **doc-verified against Serper's current API 2026-07-03**; a live call is pending a key (`SEARCH_PROVIDER_SERPER_KEY`, free tier 2,500 credits).
+
 Schema notes: `endpoints` per vertical (missing vertical → provider skipped for that `result_type`, warned); `results_path` string or per-vertical object, dot-notation; `field_map` values are dot-paths or fallback arrays; `method` GET (params → query string) or POST (params → JSON body); `auth.type` = `header` | `bearer` | `query_param` (missing env var → provider skipped, warned); optional `date_param`, `site_filter`, `extra_params`.
+
+### Curated-site search over Google (replacing Google PSE)
+
+Google's own Programmable Search Engine (Custom Search JSON API) — where a `cx` engine held a curated site list — is closed to new customers (sunset 2027-01). Searching Google restricted to a curated list of domains is still fully possible via Serper, two ways:
+
+- **`site_restricted` mode + `site_list`** — fans out one `"{entity}" site:{domain}` query per domain. Clean and explicit; cost = one Serper credit per domain per template per entity (a 15-domain list = 15 credits/entity). Bounded by `max_queries_per_entity`.
+- **`open` mode + an OR'd `site:` template** — one query covers the whole list, the closest equivalent to the old PSE `cx`. Put the list in the template: `"{entity_name}" (site:askgamblers.com OR site:thepogg.com OR site:casino.org)`. One credit per entity. Practical up to ~10–20 domains before the query gets unwieldy.
 
 ### kind `lookup` — deterministic URL templates
 
