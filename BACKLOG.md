@@ -49,6 +49,7 @@ Tasks not yet scheduled for implementation.
 | 39 | **Stricter card-save validation deferred past §9** (skeleton repo; for the card-UI session) — `validateExecutionPlan` (executionPlanUtils.js) implements all 9 PHASE_3B §9 HTTP-400 rules + 3 defensive hardenings; these are the §9-faithful omissions a /code-review flagged for later: (a) `card_name` required per §1.2 but NOT in the §9 table — not enforced; (b) QA-check-name → manifest `qa_outputs` **warning** (§2.2) deferred until `qa_outputs` manifests exist (§6.6 — 0 today); (c) cosmetic: non-numeric `submodules_per_step` step-key yields a "does not match placement step" message rather than "invalid step key". Wire (a)/(b) when the card UI + qa_outputs land | Low (validation gate is sound for §9; these are nice-to-haves) | 2026-06-29 |
 | 40 | **`npm test` silently skipped 11 `.mjs` test suites — 3 failing unseen** (skeleton repo; test-gate integrity) — the gate `node --test 'server/**/*.test.js'` matched only `.test.js`, so all 11 `server/tests/*.test.mjs` never ran. **RESOLVED 2026-06-29:** widened glob to run `.js` + `.mjs`; added `test:integration`; migrated 2 stale-fixture routing suites to canonical schema (test-only); deleted 2 hollow/duplicate suites; separated `modes` as integration. Gate now 108/108 green over 16 suites. **Hollow-green found + closed:** `applyRouting` had NO passing gated test (its only suites were the 2 failing ones) — now genuinely covered. | **RESOLVED 2026-06-29** | 2026-06-29 |
 | 41 | **Canonical specs live OUTSIDE git** (hygiene; root cause behind the PHASE_3B flag) — PHASE_3B + other `Content-Pipeline/specs/*.md` are only Dropbox-versioned; the only git root over them is the 892-item `/Projects` mega-repo, where they're untracked. This is WHY specs drift (e.g. `noble-wandering-graham.md` vs PHASE_3B repeatedly out of sync). Move canonical specs into proper version control — a clean dedicated sub-repo, NOT the mega-repo. Leave PHASE_3B Dropbox-versioned until this is done deliberately (do not quick-fix by `git add`-ing into the mega-repo). | Medium (hygiene; prevents spec drift) | 2026-06-29 |
+| 42 | **Multi-window / shared-working-directory state contention** (process; recurring, cross-repo) — concurrent Claude windows over one working dir + one shared session/project dir + reliance on **unpushed local state** and a **single shared `RESUME.md`** cause cross-thread clobbering and lost work. **Confirmed costs:** wrong-branch cross-repo push (2026-05-31); a wrong-thread session report; repeated `RESUME.md` overwrites by a parallel window; a lost session of client work; and the **2026-07-03 card-write landing kit itself now unfindable** (sandbox-verified kit couldn't be located to land — searched Downloads/repo/branches/stashes/claude-sync/OnlyiGaming-tree by name+content). Fix: one-thread-one-worktree; per-thread RESUME in each thread's own repo; push-immediately; handoff kits to a versioned+pushed location (never loose Downloads / unpushed local). | **High — actively costing lost work** | 2026-07-03 |
 
 ---
 
@@ -1736,3 +1737,27 @@ The deeper issue the PHASE_3B commit-3 flag surfaced: **canonical specs are not 
 **Do (later, deliberately):** move canonical specs into proper version control — a **clean dedicated sub-repo** (e.g. `content-pipeline-specs`), not the mega-repo. Then spec edits get diffs + history + the same review discipline as code.
 
 **Do NOT (explicit non-goal):** quick-fix by `git add`-ing PHASE_3B into the 892-item `/Projects` mega-repo. Leave PHASE_3B Dropbox-versioned until the sub-repo move is done on purpose. The 2026-06-29 §6.4/§9 amendments are saved on disk regardless.
+
+---
+
+## Item 42 — Multi-window / shared-working-directory state contention
+
+**Added:** 2026-07-03 | **Status:** Open — actively costing lost work | **Priority:** High | **Touches:** process/workflow (not code) — working-directory discipline, `RESUME.md`, handoff-kit delivery, git worktrees
+
+**Problem.** Multiple concurrent Claude windows operate over the same working directory and share one project/session dir (the card-write thread and the job-search thread both ran under the `content-pipeline-modules-v2` session `227b3f6e-…`). Combined with reliance on **unpushed local state** and a **single shared `RESUME.md`**, this produces cross-thread clobbering and outright lost work.
+
+**Confirmed costs to date (each independently observed):**
+1. **Wrong-branch cross-repo push** (2026-05-31) — `cwd` persisted across bash calls after a `cd` into `/JobSearch/CVs`; a later `git push origin main` ran from the wrong repo and pushed 3 unrelated commits.
+2. **Wrong-thread session report** — a session working card-write reported against the job-search thread because the shared `RESUME.md` was tracking job-search.
+3. **Repeated `RESUME.md` overwrites** — a parallel window rewrote `RESUME.md` between one window's read and its next write (observed twice), the "wrong-thread confusion" root cause.
+4. **A lost session of client work** (user-reported).
+5. **The card-write landing kit is now unfindable (2026-07-03).** A sandbox-verified kit (`cardPlanEditor.ts` + test, `types/step.ts` rewrite, the item-3 from-run fix with `mergeCardWorkFromSourcePlan`, `LANDING_INSTRUCTIONS.md`) was "prepared outside this session" but could not be located to land — searched `Downloads` (name + content), the skeleton repo working tree / branches / stashes, `claude-sync` (tasks / file-history / projects), and the whole `OnlyiGaming` tree by content for `setCardPlacement` / `mergeCardWorkFromSourcePlan` / `LANDING_INSTRUCTIONS`; the only hits were this session's own search commands echoed in the synced transcript. Most likely another unpushed-local-state / cross-window casualty.
+
+**Fix (proposed):**
+- **One thread = one git worktree** (`git worktree add`); never two concurrent windows over the same working dir.
+- **Per-thread `RESUME.md` in that thread's own repo** — card-write → `content-pipeline-v2`; job-search → `hello-lily-jobsearch`. Stop sharing one RESUME across threads.
+- **Push-immediately** after any commit representing real work (the 2026-06-25 "lost to unpushed local state" lesson).
+- **Handoff kits delivered to a versioned + pushed location** (a branch/commit, or a Dropbox path that is then committed) — never loose in `Downloads/` or unpushed local state.
+- Avoid `cd` in compound bash (cwd-persistence footgun) — use absolute paths.
+
+**Not a code change** — workflow discipline. Filed because the pattern has now cost five distinct incidents, including blocking the very task predicated on it.
