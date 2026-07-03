@@ -42,7 +42,7 @@ Serper.dev (Google SERP; needs new `SEARCH_PROVIDER_SERPER_KEY`; **not yet live-
 }
 ```
 
-The Serper block's API shape (endpoint, `X-API-KEY` header, `q`/`num` body, `organic[].{title,link,snippet}` response, `/news` + `/images` endpoints) is **doc-verified against Serper's current API 2026-07-03**; a live call is pending a key (`SEARCH_PROVIDER_SERPER_KEY`, free tier 2,500 credits).
+The Serper block is **live-verified (2026-07-03)** with a real `SEARCH_PROVIDER_SERPER_KEY`: open-mode whole-web search and `site_restricted` curated-site search both returned real Google results (curated run stayed entirely within the configured domain list). Free tier 2,500 credits, 1 credit/query.
 
 Schema notes: `endpoints` per vertical (missing vertical → provider skipped for that `result_type`, warned); `results_path` string or per-vertical object, dot-notation; `field_map` values are dot-paths or fallback arrays; `method` GET (params → query string) or POST (params → JSON body); `auth.type` = `header` | `bearer` | `query_param` (missing env var → provider skipped, warned); optional `date_param`, `site_filter`, `extra_params`.
 
@@ -92,6 +92,7 @@ Output items: `url` (key), `title`, `snippet`, `domain`, `source`, `result_type`
 
 - `node modules/step-1-discovery/search-discovery/test-search-discovery.js` — 51 assertions, all HTTP mocked, no credentials.
 - `PERPLEXITY_API_KEY=... node modules/step-1-discovery/search-discovery/test-live-perplexity.js` — live test, ~$0.01 (2 requests); exits 0 harmlessly when the key is absent. Passed 2026-07-03.
+- `SEARCH_PROVIDER_SERPER_KEY=... node modules/step-1-discovery/search-discovery/test-live-serper.js` — live test, ~4 credits; exercises open mode + curated-site `site:` mode; exits 0 harmlessly when the key is absent. Passed 2026-07-03.
 
 ## Edge cases
 
@@ -102,4 +103,4 @@ Output items: `url` (key), `title`, `snippet`, `domain`, `source`, `result_type`
 
 ## Changelog
 
-- **1.0.0** (2026-07-03) — initial version per the canonical revised brief. Perplexity provider block live-verified with the existing key. Serper/Brave/SerpAPI blocks documented but not yet live-verified (need new keys). Pre-commit code review: added provider-wide skip on 401/403 auth failures (was per-query error → wasted the whole fan-out on a dead-auth provider), per the brief's "provider 401/403 → skip provider" line.
+- **1.0.0** (2026-07-03) — initial version per the canonical revised brief. Perplexity AND Serper provider blocks live-verified with real keys (Serper: open + curated-site `site:` modes, real Google results within the configured list). Brave/SerpAPI blocks documented but not yet live-verified (need new keys). Pre-commit code review: added provider-wide skip on 401/403 auth failures (was per-query error → wasted the whole fan-out on a dead-auth provider), per the brief's "provider 401/403 → skip provider" line.
