@@ -50,6 +50,7 @@ Tasks not yet scheduled for implementation.
 | 40 | **`npm test` silently skipped 11 `.mjs` test suites — 3 failing unseen** (skeleton repo; test-gate integrity) — the gate `node --test 'server/**/*.test.js'` matched only `.test.js`, so all 11 `server/tests/*.test.mjs` never ran. **RESOLVED 2026-06-29:** widened glob to run `.js` + `.mjs`; added `test:integration`; migrated 2 stale-fixture routing suites to canonical schema (test-only); deleted 2 hollow/duplicate suites; separated `modes` as integration. Gate now 108/108 green over 16 suites. **Hollow-green found + closed:** `applyRouting` had NO passing gated test (its only suites were the 2 failing ones) — now genuinely covered. | **RESOLVED 2026-06-29** | 2026-06-29 |
 | 41 | **Canonical specs live OUTSIDE git** (hygiene; root cause behind the PHASE_3B flag) — PHASE_3B + other `Content-Pipeline/specs/*.md` are only Dropbox-versioned; the only git root over them is the 892-item `/Projects` mega-repo, where they're untracked. This is WHY specs drift (e.g. `noble-wandering-graham.md` vs PHASE_3B repeatedly out of sync). Move canonical specs into proper version control — a clean dedicated sub-repo, NOT the mega-repo. Leave PHASE_3B Dropbox-versioned until this is done deliberately (do not quick-fix by `git add`-ing into the mega-repo). | Medium (hygiene; prevents spec drift) | 2026-06-29 |
 | 42 | **Multi-window / shared-working-directory state contention** (process; recurring, cross-repo) — concurrent Claude windows over one working dir + one shared session/project dir + reliance on **unpushed local state** and a **single shared `RESUME.md`** cause cross-thread clobbering and lost work. **Confirmed costs:** wrong-branch cross-repo push (2026-05-31); a wrong-thread session report; repeated `RESUME.md` overwrites by a parallel window; a lost session of client work; and the **2026-07-03 card-write landing kit itself now unfindable** (sandbox-verified kit couldn't be located to land — searched Downloads/repo/branches/stashes/claude-sync/OnlyiGaming-tree by name+content). Fix: one-thread-one-worktree; per-thread RESUME in each thread's own repo; push-immediately; handoff kits to a versioned+pushed location (never loose Downloads / unpushed local). | **High — actively costing lost work** | 2026-07-03 |
+| 43 | **Routing/card authoring belongs in the template editor, not the run view** (UX/architecture; card-write follow-up) — the card-write UI mounts the variant rows + Step-7 routing editor inside RunView. But the running pipeline resolves cards/routing from the run's `execution_plan_snapshot` (`submoduleRuns.js:304`, "prefer snapshot so mid-run template edits cannot poison"), so editing routing through a *run's* Step 7 edits the LIVE TEMPLATE for **future** runs and does NOT affect the run being viewed — slightly misleading. Also: routing is only reachable when a run's Step 7 is active/completed/approved (pending = not clickable), so operators can't author routing until a run reaches Step 7. Consider moving card+routing authoring to the template editor (`/templates/:id`) as the honest home; make the run-view versions read-only views of the snapshot. Components already read the template (not run/stage data), so they remount cheaply. **Decide from a DEPLOYED baseline, as a separate thread — deliberately NOT bolted onto the certified card-write branch.** | Medium (UX/architecture; post-deploy) | 2026-07-04 |
 
 ---
 
@@ -1761,3 +1762,24 @@ The deeper issue the PHASE_3B commit-3 flag surfaced: **canonical specs are not 
 - Avoid `cd` in compound bash (cwd-persistence footgun) — use absolute paths.
 
 **Not a code change** — workflow discipline. Filed because the pattern has now cost five distinct incidents, including blocking the very task predicated on it.
+
+---
+
+## Item 43 — Routing/card authoring belongs in the template editor, not the run view
+
+**Priority:** Medium (UX/architecture; card-write follow-up) · **Added:** 2026-07-04 · **Status:** PARKED — decide from a deployed baseline, separate thread.
+
+**Observation (surfaced 2026-07-04 during the card-write visual-pass setup):**
+The card-write UI mounts the variant rows (Step 5) and the routing-rules editor (`Step7RoutingBody`) inside **RunView** (`/projects/:id/runs/:id`). Two problems with that home:
+
+1. **Snapshot isolation makes run-view editing misleading.** The running pipeline resolves cards + routing from the run's **`execution_plan_snapshot`**, not the live template — `server/routes/submoduleRuns.js:304`: *"Prefer execution_plan_snapshot so mid-run template edits cannot poison [the run]."* So editing routing through a run's Step 7 edits the **live template** (for future runs) and does **not** affect the run you're looking at. The UI implies you're configuring "this run"; you're actually configuring the template.
+2. **Reachability gate.** `StepContainer.isClickable` is `active || completed || approved`, so a `pending` Step 7 can't be expanded. On a fresh/mid-flight run the routing editor is unreachable until the run actually reaches Step 7 — operators can't author routing ahead of time. (During the visual pass this required a temporary `isClickable = true` dev tweak just to view Step 7.)
+
+**Proposed direction (not decided):**
+- Move card + routing **authoring** into the **template editor** (`/templates/:id`) — its honest home, since `card_definitions`/`routing_rules` are template-level `execution_plan` data. The components already read the template via `useTemplatePlan`/`useTemplateCardMutation` (not run/stage data), so they remount there cheaply.
+- Make the **run-view** versions **read-only views of the run's snapshot** — show what *that run* will do, without pretending edits affect it.
+- This restores what the deleted `CardsSection`/`RoutingRulesSection` conceptually covered, but with the correct schema + atomic `cardPlanEditor` writes.
+
+**Explicit constraint (user, 2026-07-04):** do **NOT** bolt this onto the certified, deploy-ready card-write branch (`auto-21-w2-2026-06-25`). The branch is manifested and reviewed; this is new scope. **Decide it from a DEPLOYED baseline, as its own thread, after the card-write bundle ships.**
+
+**Not urgent / not a correctness bug** — the current run-view authoring works and writes valid template data; it's a UX-honesty + discoverability improvement.
