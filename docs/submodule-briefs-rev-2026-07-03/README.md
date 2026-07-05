@@ -23,9 +23,9 @@
 
 No new module: seo-keyword-researcher → **extension of `seo-planner`** (keyword_data_providers layer); human-rewriter → **card of `tone-seo-editor`**; youtube-podcast-discovery → **provider configs of built `api-search`** (+ rss-feeds).
 
-## Skeleton gaps surfaced (filed as BACKLOG #43–46)
+## Skeleton gaps surfaced (filed as BACKLOG #45–48)
 
-1. **#43** `tools.http` — no PUT/PATCH, binary-unsafe, no multipart.
-2. **#44** — no asset persistence (`tools.storage`); generated-media URLs expire.
-3. **#45** — no Step-10-approval → Step-9 execute trigger; `terminal_state` unreadable by modules (extends #8/#9).
-4. **#46** — api-search lacks custom-header auth (Pexels, PodcastIndex).
+1. **#45** `tools.http` — no PUT/PATCH, binary-unsafe, no multipart.
+2. **#46** — no asset persistence (`tools.storage`); generated-media URLs expire.
+3. **#47** — no Step-10-approval → Step-9 execute trigger; `terminal_state` unreadable by modules (extends #8/#9).
+4. **#48** — api-search lacks custom-header auth (Pexels, PodcastIndex).

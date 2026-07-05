@@ -7,7 +7,7 @@
 
 ## 1. One-paragraph summary
 
-The pipeline had 32 research briefs for submodules; 12 were already built, 20 were not. Those 20 briefs were rewritten (2026-07-03) to be pipeline-agnostic and re-based on providers that actually exist in mid-2026 (the originals were anchored on APIs that have since shut down). The rewrite **collapsed 20 briefs into 10 new generic modules + 1 module extension + 1 config card + several configs of already-built modules** — the module catalog grows 37 → 47 rather than 37 → 56. **Two of the 10 are now built, tested, and live-verified.** The remaining eight are fully specified; four of them are partly gated by small skeleton-side capability gaps (filed as BACKLOG #43–46).
+The pipeline had 32 research briefs for submodules; 12 were already built, 20 were not. Those 20 briefs were rewritten (2026-07-03) to be pipeline-agnostic and re-based on providers that actually exist in mid-2026 (the originals were anchored on APIs that have since shut down). The rewrite **collapsed 20 briefs into 10 new generic modules + 1 module extension + 1 config card + several configs of already-built modules** — the module catalog grows 37 → 47 rather than 37 → 56. **Two of the 10 are now built, tested, and live-verified.** The remaining eight are fully specified; four of them are partly gated by small skeleton-side capability gaps (filed as BACKLOG #45–48).
 
 ---
 
@@ -118,16 +118,16 @@ The original briefs were unbuildable as written — these were all confirmed shu
 
 ---
 
-## 7. Skeleton capability gaps (BACKLOG #43–46 — gate parts of the build-out)
+## 7. Skeleton capability gaps (BACKLOG #45–48 — gate parts of the build-out)
 
 These live in the **skeleton repo** (`content-pipeline-v2`), not this modules repo. They block specific modules, noted below.
 
 | # | Gap | Blocks |
 |---|---|---|
-| **43** | `tools.http` is GET/HEAD/POST-only, binary-unsafe, no multipart | OpenAI TTS (raw binary), Strapi/Ghost/Contentful updates (PUT), Airtable upsert (PATCH), S3/WebDAV, large-audio STT upload |
-| **44** | No asset persistence (`tools.storage` doesn't exist); generated-media URLs expire | `media-generator` **video mode** (hard); TTS/image can ship first via non-expiring paths |
-| **45** | No Step-10-approval → Step-9 `execute` trigger; modules can't read `terminal_state` for flagged-entity gating (extends #8/#9) | entire Step-9 delivery family |
-| **46** | `api-search` supports bearer auth only (no custom headers) | Pexels + PodcastIndex provider configs (small, modules-repo fix) |
+| **45** | `tools.http` is GET/HEAD/POST-only, binary-unsafe, no multipart | OpenAI TTS (raw binary), Strapi/Ghost/Contentful updates (PUT), Airtable upsert (PATCH), S3/WebDAV, large-audio STT upload |
+| **46** | No asset persistence (`tools.storage` doesn't exist); generated-media URLs expire | `media-generator` **video mode** (hard); TTS/image can ship first via non-expiring paths |
+| **47** | No Step-10-approval → Step-9 `execute` trigger; modules can't read `terminal_state` for flagged-entity gating (extends #8/#9) | entire Step-9 delivery family |
+| **48** | `api-search` supports bearer auth only (no custom headers) | Pexels + PodcastIndex provider configs (small, modules-repo fix) |
 
 ---
 
@@ -140,15 +140,15 @@ These live in the **skeleton repo** (`content-pipeline-v2`), not this modules re
 4. human-rewriter card on `tone-seo-editor` — config only, existing keys.
 5. `ai-discovery-scout` — Anthropic key exists.
 
-**Wave 2 — after the small `api-search` header-auth fix (#46):**
-6. YouTube/podcast/stock-image/logo provider configs (all become live once #46 lands).
+**Wave 2 — after the small `api-search` header-auth fix (#48):**
+6. YouTube/podcast/stock-image/logo provider configs (all become live once #48 lands).
 
 **Wave 3 — after skeleton gaps, in this order:**
 7. `seo-planner` keyword-data extension — GSC free tier works today; DataForSEO needs a new key.
 8. `dataset-fetcher` — verify Bright Data Datasets key scope ($0.003 test) first.
 9. `transcript-fetcher` — free podcast/native paths first; STT (paid) behind budget guard; confirm Gemini YouTube-ingestion billing.
-10. `media-generator` — TTS + image modes (need binary-safe HTTP #43 for some providers); **video mode last** (needs asset persistence #44).
-11. Step-9 family (`cms-publisher`, `doc-exporter`, `sheet-logger`) — needs #45 (execute trigger + flag readability); also closes BACKLOG #9 (distribution gate).
+10. `media-generator` — TTS + image modes (need binary-safe HTTP #45 for some providers); **video mode last** (needs asset persistence #46).
+11. Step-9 family (`cms-publisher`, `doc-exporter`, `sheet-logger`) — needs #47 (execute trigger + flag readability); also closes BACKLOG #9 (distribution gate).
 
 **Principle for every wave:** TDD (mocked `tools`) → independent `/code-review` → live verification where a key exists → commit + push per module. Build on the branch; merge to `main` deploys on push, so that stays a deliberate decision.
 
@@ -158,7 +158,7 @@ These live in the **skeleton repo** (`content-pipeline-v2`), not this modules re
 
 - **Per-module docs (built):** each module folder has `README.md` (operator contract) + `CLAUDE.md` (maintainer notes) + tests.
 - **Full briefs (all 20):** canonical in `Content-Pipeline/specs/submodule-briefs/`; committed snapshot in `docs/submodule-briefs-rev-2026-07-03/` (20 revised + 20 originals + index). Each brief = module contract + provider table w/ pricing + example configs + test plan.
-- **Backlog:** `BACKLOG.md` items #43–46.
+- **Backlog:** `BACKLOG.md` items #45–48.
 - **Session log:** `CLAUDE.md` (2026-07-03 entry).
 - **Decision log:** Supabase `decision_log`, project `content-pipeline-modules-v2`.
 
