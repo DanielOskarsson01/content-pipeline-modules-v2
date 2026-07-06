@@ -1,0 +1,104 @@
+{
+  "id": "api-fetcher",
+  "name": "API Fetcher",
+  "description": "Generic identifier-driven structured-API fetcher. Per-entity lookups against configured APIs (JSON + XML/RSS), multi-endpoint chaining, field mapping, raw-text flattening. Adding an API source = JSON config, not code.",
+  "version": "1.0.0",
+  "step": 3,
+  "category": "enrichment",
+  "cost": "medium",
+  "data_operation_default": "add",
+  "pool_precondition": "empty_ok",
+  "sort_order": 6,
+  "depends_on": [],
+  "requires_columns": ["name"],
+  "usage_notes": "Enriches entities from structured APIs keyed by an identifier (a channel id, feed URL, or registry number). Identifiers come from an entity seed column (Step 0) or a Step-1 pool-item field, so this Step-3 module is empty_ok (runs without prior URLs). Configure at least one provider (JSON config; see README for schemas and ready-made blocks). ALL provider knowledge — endpoints, params, field maps, auth, RSS tag names — is template configuration; no vertical is baked into code or defaults. providers: [] default is a loud no-op.",
+
+  "options": [
+    {
+      "name": "providers",
+      "type": "json",
+      "label": "API Providers",
+      "presets_enabled": true,
+      "description": "Array of provider config objects: id, name, response_format (json|xml), identifier_source ({entity_field, item_field}), optional auth, and endpoints[] (url, params, results_path, field_map, optional url_template / raw_text_template). Endpoints run in order; {identifier}, {max_items}, {endpoint_id.field} chain responses. No providers = loud no-op. See README for schema and examples.",
+      "default": []
+    },
+    {
+      "name": "provider_params",
+      "type": "json",
+      "label": "Provider parameters",
+      "description": "Extra query params per provider id, merged into every endpoint request. E.g. {\"companies-house\": {\"items_per_page\": \"20\"}}.",
+      "default": {}
+    },
+    {
+      "name": "max_items",
+      "type": "number",
+      "label": "Max items per list endpoint",
+      "description": "Cap on records kept per endpoint (videos, episodes, filings). Also substituted into params via the {max_items} placeholder. Quota guard.",
+      "default": 25,
+      "min": 1,
+      "max": 500
+    },
+    {
+      "name": "requests_per_minute",
+      "type": "number",
+      "label": "Rate limit (requests/min)",
+      "description": "Global token-bucket rate limit across all providers, entities, and endpoints.",
+      "default": 30,
+      "min": 1,
+      "max": 120
+    },
+    {
+      "name": "raw_text_max_chars",
+      "type": "number",
+      "label": "Raw text max characters",
+      "description": "Truncate the flattened raw_text per item to this length (downstream Step 5 input size guard).",
+      "default": 20000,
+      "min": 200,
+      "max": 200000
+    },
+    {
+      "name": "skip_providers_without_auth",
+      "type": "boolean",
+      "label": "Skip providers with missing credentials",
+      "description": "When a provider declares auth with an env var that is not set, skip it with a warning (true) rather than calling the API unauthenticated (false).",
+      "default": true
+    }
+  ],
+
+  "options_defaults": {
+    "providers": [],
+    "provider_params": {},
+    "max_items": 25,
+    "requests_per_minute": 30,
+    "raw_text_max_chars": 20000,
+    "skip_providers_without_auth": true
+  },
+
+  "item_key": "url",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": false,
+    "source_api": "string",
+    "url": "string (required)",
+    "title": "string",
+    "raw_text": "string",
+    "fetch_date": "string (ISO date)",
+    "status": "string",
+    "error": "string",
+    "flagged_when": { "status": ["error"] },
+    "downloadable_fields": [
+      { "field": "raw_text", "extension": "txt", "label": "Flattened Text" },
+      { "field": "data_json", "extension": "json", "label": "Structured Data" }
+    ],
+    "detail_schema": {
+      "header_fields": [
+        { "field": "url", "display": "link" },
+        "title",
+        { "field": "status", "display": "badge" },
+        "source_api",
+        "fetch_date"
+      ]
+    }
+  }
+}
