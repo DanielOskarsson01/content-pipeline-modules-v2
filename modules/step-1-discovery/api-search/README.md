@@ -136,6 +136,8 @@ Each provider in the `providers` array is a JSON object:
 | `auth` | Optional | Auth config: `{ "type": "query_param", "key": "param_name", "env_var": "ENV_VAR_NAME" }` or `{ "type": "bearer", "env_var": "ENV_VAR_NAME" }` |
 | `headers` | Optional | Static custom-header map, values support `{env:VAR_NAME}` interpolation. For APIs whose auth is neither a query param nor a `Bearer` token — e.g. Pexels: `{ "Authorization": "{env:PEXELS_API_KEY}" }` (raw key, no "Bearer" prefix). Multiple headers allowed; static (non-`{env:}`) values pass through verbatim. If any referenced env var is unset, the provider is skipped with a warning (same policy as `auth`). Applied after `auth.bearer`, so a `headers` entry can intentionally override it. (v1.1.0) |
 
+> **v1.1.0 custom-header auth — live-verified 2026-07-07.** A real Pexels call routed through this module (the `config-image-search/providers-stock.json` preset) went out with the raw-key `Authorization` header (no `Bearer` prefix), returned HTTP 200, and produced 5 items — proving the `{env:VAR}` header path end-to-end against the live API. (Skip-on-missing-env-var stays covered by the mocked `test-header-auth.js` / `test-image-search-config.js`.) See `config-image-search` for the full four-provider sweep.
+
 ### field_map supports
 
 - **Simple path:** `"employer.name"` -- dot-notation into the API response object

@@ -103,4 +103,5 @@ Output items: `url` (key), `title`, `snippet`, `domain`, `source`, `result_type`
 
 ## Changelog
 
+- **Serper `images` vertical live-confirmed (2026-07-07)** — via the `config-image-search/providers-image-serp.json` preset (no module change). A real `POST /images` with the `X-API-KEY` header (`SEARCH_PROVIDER_SERPER_KEY`) for `"Evolution Gaming" logo` returned HTTP 200 and 4 items, each `result_type: images` with `image_url` mapped from `imageUrl`. Complements the 2026-07-03 web/news-vertical verification below.
 - **1.0.0** (2026-07-03) — initial version per the canonical revised brief. Perplexity AND Serper provider blocks live-verified with real keys (Serper: open + curated-site `site:` modes, real Google results within the configured list). Brave/SerpAPI blocks documented but not yet live-verified (need new keys). Pre-commit code review: added provider-wide skip on 401/403 auth failures (was per-query error → wasted the whole fan-out on a dead-auth provider), per the brief's "provider 401/403 → skip provider" line.

@@ -8,8 +8,8 @@ Image/logo discovery per the brief (`docs/submodule-briefs-rev-2026-07-03/step1-
 
 | Preset | Module | Purpose | Status |
 |---|---|---|---|
-| `providers-stock.json` | `api-search` | Illustrative/stock imagery (Pixabay, Unsplash, **Pexels**) | **built** (config-only) |
-| `providers-image-serp.json` | `search-discovery` | Entity-specific image search (logos-in-context, product shots, screenshots) via the `images` SERP vertical (Serper) | **built** (config-only) |
+| `providers-stock.json` | `api-search` | Illustrative/stock imagery (Pixabay, Unsplash, **Pexels**) | **built** + **live-verified 2026-07-07** |
+| `providers-image-serp.json` | `search-discovery` | Entity-specific image search (logos-in-context, product shots, screenshots) via the `images` SERP vertical (Serper) | **built** + **live-verified 2026-07-07** |
 
 Both presets carry `image_url` on every item for step-8 `company-media` shape-routing. Query flavor (`"{entity}" logo`) and keywords are template config, never in the provider config.
 
@@ -34,9 +34,14 @@ The brief's brand-logo **lookup** providers (`kind: lookup`, deterministic `url_
 
 Both are small, generic, Rule-13-clean search-discovery enhancements (mirroring the api-search header-auth pattern) — but they are **code**, so they belong in their own reviewed unit, not a config. The brief's ready-to-ship Brandfetch/Logo.dev configs apply the moment that ships. Their keys (`ASSET_PROVIDER_BRANDFETCH_CLIENT_ID` / `ASSET_PROVIDER_LOGODEV_KEY`) are new free signups, not yet provisioned.
 
-## Live-verify — DEFERRED (no image-provider keys in this environment)
+## Live-verify — DONE (2026-07-07)
 
-Pixabay/Unsplash/Pexels/Serper keys are **not resolvable from this session's environment** (they live in the skeleton `.env`, which is not read — thread boundary + secret-file discipline). So live-verify is deferred as a documented open item (the Wave-1 pattern): the presets are validated structurally by routing through the real modules with mocked HTTP; a real run just needs the relevant key exported into the environment. No no-auth free path exists for this leg (unlike the iTunes podcast leg in `config-media-discovery`).
+All four providers **live-verified with real keys** (Track 2 batched sweep — keys now exported into the environment). Each preset was routed through its **real module** against the live API; the harness lived in `/tmp` and **module code was untouched** (git-verified). Cheap raw pre-flight per provider first (clean 401 detection), then the module-routing run:
+
+- **Stock (`providers-stock.json` → api-search):** Pixabay + Unsplash (query-param) + Pexels (raw-key header, W2-A) — pre-flight **HTTP 200** each; **15/15 items carried `image_url`** (5 per provider). The **Pexels request went out with the raw-key `Authorization` header (no `Bearer`)** — confirms the api-search v1.1.0 custom-header path end-to-end.
+- **Image-SERP (`providers-image-serp.json` → search-discovery):** Serper `/images` POST with `X-API-KEY` — pre-flight **HTTP 200**; 4 items for `"Evolution Gaming" logo`, **every item `result_type: images` with `image_url` mapped** (real logo image URLs).
+
+No key (401) or code failures. The mocked structural test (`test-image-search-config.js`, 28 assertions) still runs offline for CI; this section records the one-time real-API confirmation. Re-running requires only the four keys in the environment.
 
 ## Testing
 
