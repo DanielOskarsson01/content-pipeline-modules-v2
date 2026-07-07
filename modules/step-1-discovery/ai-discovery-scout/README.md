@@ -63,8 +63,8 @@ Verified leads land in the Step-1 pool as `url`-keyed items (`add`, so they augm
 
 ## Testing
 
-- `node modules/step-1-discovery/ai-discovery-scout/test-ai-discovery-scout.js` — 54 assertions, `tools.ai` + `tools.http` fully mocked, no credentials, no network. Covers the JSON-retry path, the hallucination-drop (dead-URL) gate, confidence pruning, HEAD→GET fallback, and suggested-queries.
-- **Live test: DEFERRED.** A real `tools.ai` run (~a few cents on a haiku-class model) is pending an available `ANTHROPIC_API_KEY` in the build environment (currently commented out locally). The module is inert-by-default, so shipping ahead of the live run is low-risk; run the live check before first production use.
+- `node modules/step-1-discovery/ai-discovery-scout/test-ai-discovery-scout.js` — 55 assertions, `tools.ai` + `tools.http` fully mocked, no credentials, no network. Covers the JSON-retry path, the hallucination-drop (dead-URL) gate, confidence pruning, HEAD→GET fallback, suggested-queries, and `$`-replacement-safe prompt interpolation.
+- `zsh -c 'source ~/.zprofile; node modules/step-1-discovery/ai-discovery-scout/test-live-ai-discovery-scout.js'` — **live test, PASSED 2026-07-07** (~a couple cents on a haiku-class model; exits 0 harmlessly when `ANTHROPIC_API_KEY` is absent). Part A: real Haiku proposed 15 leads across 3 real entities (OpenAI/Anthropic/GitHub), all parsed as strict JSON on the first attempt, **10 verified live + 5 dropped by the gate**. Part B: deterministic real-HTTP `verifyUrl` — live URL kept (200), 404 dropped, DNS-failure dropped.
 
 ## Technical Reference
 
@@ -76,4 +76,4 @@ Verified leads land in the Step-1 pool as `url`-keyed items (`add`, so they augm
 
 ## Changelog
 
-- **1.0.0** (2026-07-06) — initial version per the canonical revised brief. LLM lead proposal + default-on live-verification gate; corrective JSON retry; suggested-queries to meta; fully agnostic default prompt. 54/54 mocked unit tests. **Live LLM verification deferred** until an `ANTHROPIC_API_KEY` is available in the build environment (inert-by-default → low-risk to ship ahead of it).
+- **1.0.0** (2026-07-06) — initial version per the canonical revised brief. LLM lead proposal + default-on live-verification gate; corrective JSON retry; suggested-queries to meta; fully agnostic default prompt. 55/55 mocked unit tests. **Live-verified 2026-07-07** against real Haiku + real HTTP (haiku-class run: 15 proposed → 10 verified / 5 dropped across OpenAI/Anthropic/GitHub; deterministic liveness gate keeps 200s, drops 404/DNS-fail).
