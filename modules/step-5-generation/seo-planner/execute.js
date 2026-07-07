@@ -20,6 +20,7 @@
 
 const MANIFEST = require('./manifest.json');
 const MANIFEST_DEFAULT_PROMPT = MANIFEST.options_defaults.prompt;
+const { fetchKeywordData, deriveSeedKeywords, renderKeywordMetricsTable } = require('./keyword-data-providers.js');
 
 /**
  * Replace prompt placeholders with actual content.
@@ -27,15 +28,24 @@ const MANIFEST_DEFAULT_PROMPT = MANIFEST.options_defaults.prompt;
  * - {keyword_research} → keyword research results (or fallback to keyword-summary.md)
  * - {faq_count} → configurable FAQ count (agnostic-path knob; override prompts that
  *                 don't use the placeholder are unaffected)
+ * - {keyword_metrics} → quantitative keyword-data table (v2.3.0). ADDITIVE and
+ *                 opt-in: the manifest default prompt has no {keyword_metrics}, so
+ *                 templates that don't use the keyword-data layer are unaffected.
  * - {doc:filename} → reference doc content
  */
-function buildPrompt(promptTemplate, entityContent, referenceDocs, keywordResearchText, faqCount) {
+function buildPrompt(promptTemplate, entityContent, referenceDocs, keywordResearchText, faqCount, keywordMetricsText) {
   let prompt = promptTemplate.replace(/\{entity_content\}/g, entityContent);
 
   // Replace {keyword_research} — research results, or fallback to keyword-summary.md, or empty notice
   const keywordFallback = (referenceDocs && referenceDocs['keyword-summary.md']) || '';
   const keywordData = keywordResearchText || keywordFallback || 'No keyword research data available.';
   prompt = prompt.replace(/\{keyword_research\}/g, keywordData);
+
+  // Replace {keyword_metrics} — quantitative keyword-data table. A function
+  // replacer keeps $-sequences ($&, $1) in the table literal. No-op when the
+  // template omits the placeholder (the default path).
+  const metricsText = keywordMetricsText || 'No keyword metrics data available.';
+  prompt = prompt.replace(/\{keyword_metrics\}/g, () => metricsText);
 
   // Replace {faq_count} with the configured count. Override prompts that don't
   // include the placeholder are unaffected; for them the override's own FAQ
@@ -482,6 +492,9 @@ async function execute(input, options, tools) {
     temperature, max_tokens,
     keyword_research, search_provider, perplexity_model, research_queries,
     faq_count, requires_prompt_override,
+    // v2.3.0 — quantitative keyword-data layer (additive; empty by default → inert)
+    keyword_data_providers, max_seed_keywords, max_metric_lookups_per_entity,
+    per_run_budget_usd, metrics_required,
   } = options;
   const { logger, progress, ai } = tools;
 
@@ -561,6 +574,38 @@ async function execute(input, options, tools) {
         progress.update(i + 1, entities.length, `Planning SEO for ${entity.name || 'entity'}`);
       }
 
+      // Quantitative keyword-data pre-step (v2.3.0). ADDITIVE: empty
+      // keyword_data_providers (the default) → fetchKeywordData returns inert
+      // ({}), zero I/O, and nothing below changes. Providers score seeds derived
+      // generically from the analysis. Provider failures never fail the module.
+      let keywordMetrics = [];
+      let keywordMetricsText = '';
+      const keywordDataWarnings = [];
+      try {
+        const seeds = deriveSeedKeywords(entity, analyzerItem, max_seed_keywords ?? 25);
+        const kd = await fetchKeywordData({
+          providers: keyword_data_providers,
+          entityName: entity.name,
+          seeds,
+          budgetUsd: per_run_budget_usd ?? 1.0,
+          maxSeedKeywords: max_seed_keywords ?? 25,
+          maxMetricLookups: max_metric_lookups_per_entity ?? 100,
+          metricsRequired: metrics_required === true,
+        }, tools);
+        keywordMetrics = kd.keyword_metrics;
+        keywordDataWarnings.push(...kd.warnings);
+        keywordMetricsText = renderKeywordMetricsTable(keywordMetrics);
+        if (keywordMetrics.length > 0) {
+          logger.info(`${entity.name}: keyword-data layer produced ${keywordMetrics.length} metric row(s) from provider(s) [${kd.provider_ids.join(', ')}]`);
+          // Rule 10: surface fetched metrics before the (potentially slow) LLM call.
+          if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
+        }
+      } catch (kdErr) {
+        // fetchKeywordData swallows provider errors; a throw here is unexpected —
+        // warn and continue without metrics rather than fail the entity.
+        logger.warn(`${entity.name}: keyword-data layer error (${kdErr.message}) — continuing without keyword metrics`);
+      }
+
       logger.info(`${entity.name}: generating SEO plan from analyzer output with ${ai_provider}/${ai_model}`);
 
       // Use analysis_json as entity content
@@ -568,7 +613,7 @@ async function execute(input, options, tools) {
         ? JSON.stringify(analyzerItem.analysis_json, null, 2)
         : JSON.stringify(analyzerItem, null, 2);
 
-      const prompt = buildPrompt(promptTemplate, analysisContent, reference_docs, keywordResearchText, faq_count);
+      const prompt = buildPrompt(promptTemplate, analysisContent, reference_docs, keywordResearchText, faq_count, keywordMetricsText);
 
       let plan;
       try {
@@ -591,12 +636,20 @@ async function execute(input, options, tools) {
         throw parseErr;
       }
 
+      // Attach the quantitative keyword-data as an ADDITIVE audit-trail field.
+      // Only set it when there IS data, so the empty-providers path leaves
+      // seo_plan_json byte-identical to today (backbone: target_keywords / meta /
+      // faqs / keyword_distribution / keyword_sources are never touched here).
+      if (Array.isArray(keywordMetrics) && keywordMetrics.length > 0) {
+        plan.keyword_metrics = keywordMetrics;
+      }
+
       // Validate meta lengths (warn, don't fail)
       const metaWarnings = validateMeta(plan.meta || {});
 
-      // Merge LLM-generated warnings with meta validation warnings
+      // Merge LLM-generated warnings with meta validation + keyword-data warnings
       const llmWarnings = Array.isArray(plan.warnings) ? plan.warnings : [];
-      const allWarnings = [...metaWarnings, ...llmWarnings];
+      const allWarnings = [...metaWarnings, ...llmWarnings, ...keywordDataWarnings];
 
       // Flatten for display
       const flat = flattenPlan(plan);

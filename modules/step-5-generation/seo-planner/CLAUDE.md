@@ -1,0 +1,20 @@
+# seo-planner — CLAUDE.md
+
+When modifying this submodule — fixing bugs, changing logic, adjusting options, altering output schema — update README.md to reflect the changes. The README is the contract operators and downstream modules rely on. Stale docs are worse than no docs.
+
+## Module identity
+
+- **ID:** seo-planner · **Step:** 5 (Generation) · **Category:** planning · **Cost:** expensive
+- **Contract (do not change without cross-repo review):** `item_key: entity_name` · `data_operation_default: add` · `pool_precondition: requires_items` · `depends_on: ["content-analyzer"]` · `requires_columns: ["entity_name","analysis_json"]`
+- **Two orthogonal research layers feed the planning LLM:** qualitative (Perplexity, `keyword_research`/`search_provider`/`research_queries`) and quantitative (`keyword_data_providers`, v2.3.0). Complementary, not alternatives.
+
+## Rules specific to this module
+
+1. **Backbone `seo_plan_json` fields are load-bearing** — `target_keywords.{primary,secondary,long_tail}`, `keyword_sources`, `keyword_distribution`, `meta`, `faqs`. Downstream consumers (keyword-sufficiency-checker, tone-seo-editor, meta-compliance-checker, content-writer, Step 8 meta/json/schema outputs) read them BY NAME. Only ever ADD fields; see the coupling table in README before touching the schema.
+2. **The keyword-data layer is ADDITIVE and inert by default.** `keyword_data_providers` default `[]` ⇒ `fetchKeywordData` returns `{}` with **zero I/O**, `plan.keyword_metrics` is not set, and the default prompt (which has NO `{keyword_metrics}` placeholder) is a no-op — output is byte-identical to v2.2.1 (A/B proven). Never let the layer change the empty-providers path; that guarantee is the whole point.
+3. **Provider = config + thin handler** (`keyword-data-providers.js`). A new provider of an existing `kind` (`gsc`/`dataforseo`/`autocomplete`) is config-only; a new `kind` is one small handler + a `KIND_ROLES` entry. Roles: `expansion` runs first (widen seeds), then `metrics` (score the widened set). All HTTP goes through `tools.http` (Rule 3); `crypto` (RS256 JWT) and `fs` (GSC key file) are Node built-ins — never raw fetch/axios, never DB.
+4. **Inert, don't throw.** A provider with missing credentials is config-present-but-inert (warning + skip, no HTTP). A provider that errors mid-call is caught per-provider (warning + skip). `fetchKeywordData` must never throw for provider errors. `metrics_required: true` makes emptiness LOUD (a `warnings[]` entry) — never silent (W1.1 discipline).
+5. **Cost guards are pre-call.** `per_run_budget_usd` refuses a paid provider BEFORE the HTTP call when the estimate would exceed the cap. `est_cost_per_lookup` is per-keyword × count; DataForSEO actually bills per request, so the guard is intentionally conservative. Do NOT set `est_cost_per_lookup` on free providers (`gsc`, `autocomplete`) or they become budget-guarded.
+6. **Rule 13 hard line:** no content-type/vertical/domain vocabulary in code or manifest defaults. `deriveSeedKeywords` uses only conventional analysis field names (no `categories.primary[].slug`-style deep paths). GSC site URL, DataForSEO locale, and provider selection are template `preset_map` config. All manifest defaults are neutral (`[]`, 25, 100, 1.0, false).
+7. **JSON discipline:** the model must return a single JSON object. `completeWithJsonRetry` reformats a markdown/prose response once at `temperature 0` (v2.2.1), then throws loudly preserving `rawText`. Keep it loud on the second failure.
+8. **Tests:** `node modules/step-5-generation/seo-planner/test-keyword-data.js` (82 assertions, mocked; real RS256 JWT signing exercised with a throwaway keypair), plus `test-refusal.js` (29) and `test-json-retry.js` (11) — all free, no network. Run all three after any change. **GSC live-verify is DEFERRED** — the service-account key (`GSC_SERVICE_ACCOUNT_KEY_PATH`) was not resolvable in the build shell; do a one-off free live test (Search Console API enabled + `webmasters.readonly` scope + service account added to the property) before relying on `gsc` in production. Do NOT hunt for keys or read secret files.

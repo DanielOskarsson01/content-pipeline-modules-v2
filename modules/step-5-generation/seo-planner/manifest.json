@@ -2,7 +2,7 @@
   "id": "seo-planner",
   "name": "SEO Planner",
   "description": "Keyword distribution planner. Selects target keywords from keyword research and produces a flat keyword plan: target_keywords (primary/secondary/long_tail), meta title and description, optional FAQs, tone notes, and warnings. Section-level distribution is template-driven via format_spec.md. The manifest default is project-agnostic; pipeline-specific shape (e.g. company-profile categories/tags/credentials) is added via template prompt overrides. Uses configurable web search (Perplexity Sonar by default) to ground keywords in actual search patterns. Requires content-analyzer.",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "step": 5,
   "category": "planning",
   "cost": "expensive",
@@ -113,6 +113,48 @@
       "default": false
     },
     {
+      "name": "keyword_data_providers",
+      "type": "json",
+      "label": "Keyword data providers",
+      "presets_enabled": true,
+      "description": "Quantitative keyword-data providers (v2.3.0) — real search volume, difficulty, and own-site rank/impressions from SEO/search APIs, ALONGSIDE the qualitative (Perplexity) research. Array of provider config objects; each names a `kind` that selects a generic handler. Built-in kinds: `gsc` (Google Search Console — free, own verified properties only), `dataforseo` (paid volume/difficulty), `autocomplete` (free seed expansion). Empty (the default) = layer is fully inert, zero cost, output unchanged. See README for the config schema. Feed the numbers into the LLM by adding {keyword_metrics} to your prompt override; the fetched metrics always land in seo_plan_json.keyword_metrics regardless.",
+      "default": []
+    },
+    {
+      "name": "max_seed_keywords",
+      "type": "number",
+      "label": "Max seed keywords",
+      "description": "Cap on seed keywords sent to expansion/metrics providers per entity. Cost guard. Only applies when keyword_data_providers is non-empty.",
+      "default": 25,
+      "min": 1,
+      "max": 200
+    },
+    {
+      "name": "max_metric_lookups_per_entity",
+      "type": "number",
+      "label": "Max metric lookups per entity",
+      "description": "Hard cap on keyword→metrics lookups per entity (seeds + expansion). Cost guard. Only applies when keyword_data_providers is non-empty.",
+      "default": 100,
+      "min": 1,
+      "max": 1000
+    },
+    {
+      "name": "per_run_budget_usd",
+      "type": "number",
+      "label": "Per-entity keyword-data budget (USD)",
+      "description": "Sums each provider's est_cost_per_lookup; refuses further PAID lookups once the cap would be exceeded, warns loudly, and continues with free providers (GSC, autocomplete). Cost guard. Only applies when keyword_data_providers is non-empty.",
+      "default": 1.0,
+      "min": 0.0,
+      "max": 100.0
+    },
+    {
+      "name": "metrics_required",
+      "type": "boolean",
+      "label": "Require keyword metrics",
+      "description": "If true and all metrics providers fail, are inert, or return empty, add a loud warning to the plan's warnings[] (never silent) — surfaces upstream provider/credential problems instead of quietly planning without numbers. Default false. Only applies when keyword_data_providers is non-empty.",
+      "default": false
+    },
+    {
       "name": "prompt",
       "type": "textarea",
       "label": "Planning prompt",
@@ -134,6 +176,11 @@
     "max_tokens": 8192,
     "faq_count": 0,
     "requires_prompt_override": false,
+    "keyword_data_providers": [],
+    "max_seed_keywords": 25,
+    "max_metric_lookups_per_entity": 100,
+    "per_run_budget_usd": 1.0,
+    "metrics_required": false,
     "prompt": "You are an SEO strategist. Produce a keyword distribution plan for the content writer to follow. You do NOT decide the article structure (the format spec, if provided, defines it). You do NOT write the content. You produce a keyword plan only.\n\n### INPUTS\n\n**Analysis from content-analyzer:**\n{entity_content}\n\n**Keyword research data (from the configured search provider, e.g. Perplexity web search):**\n{keyword_research}\n\nIf the keyword research block above says 'No keyword research data available' or appears empty/low-quality, the keyword research step did not produce usable output. In that case: (1) add a warning to the JSON output's `warnings` array — the text 'Keyword research returned no data — keywords were inferred from content-analyzer categories/tags only. Review this output before publishing.' Do NOT emit this warning as a markdown heading or any text before the JSON object. (2) Tag every keyword in `keyword_sources` as 'analysis' rather than 'Q<n>'. (3) Proceed using the analysis as the sole source. Do NOT silently produce a plan as if the research succeeded.\n\n**Format rules (uploaded reference doc — defines the section structure if provided):**\n{doc:format_spec.md}\n\n**Tone rules (uploaded reference doc — voice rules if provided):**\n{doc:tone_guide.md}\n\n### CRITICAL RULE — KEYWORD SOURCING\n\nEvery keyword you place into the plan MUST come from the keyword research block above. Do NOT invent keywords from your training data. Do NOT add keywords because 'they sound right.' If the keyword research didn't surface a phrase, it is not in scope for this plan.\n\nThe keyword research is grounded in actual web search patterns. Your training data is not. Trust the research, not your priors.\n\nException: entity-specific long-tail phrases — constructed from the entity name + a category or differentiator found in the research — are permitted even if the exact phrase isn't in the research output.\n\n### INSTRUCTIONS\n\nCreate an SEO plan as a JSON object. Follow these rules exactly:\n\n**1. TARGET KEYWORDS**\n\nSelect keywords from the keyword research data. Cross-reference against the analysis to filter for relevance.\n- `primary`: 1 phrase that best describes this entity's core offering, in the language the audience actually uses\n- `secondary`: 2-4 phrases covering main product/service areas\n- `long_tail`: 3-5 specific phrases\n\nFor every keyword selected, record its provenance in the `keyword_sources` field — name the query number (Q1, Q2, ... QN) it came from, or 'analysis' if derived from content-analyzer's categories/tags per the CRITICAL RULE exception.\n\n**2. KEYWORD DISTRIBUTION**\n\nIf a format spec was provided in {doc:format_spec.md} above, map keywords to the sections defined there using whatever section names that format spec uses. If no format spec was provided, return `keyword_distribution: {}` (an empty object) — the content writer will work from `target_keywords` directly. Do NOT invent sections that are not in the format spec.\n\n**3. META TAGS**\n\n- `title`: ≤60 characters. Lead with the entity name and primary value proposition.\n- `description`: 150-160 characters. One compelling sentence summarizing the entity and its value prop, including the primary keyword naturally.\n- Include character counts for both.\n\n**4. FAQS**\n\nProduce exactly {faq_count} FAQ question(s).\n\nIf {faq_count} is 0, return an empty array: `faqs: []`. Skip the rest of this section.\n\nIf {faq_count} is greater than 0:\n- Select questions from the keyword research data (real audience questions surfaced by the research)\n- Use them VERBATIM, or with minimal substitution to make them entity-specific\n- Do NOT invent FAQ questions from your own knowledge — if the research didn't surface a question, it does NOT go in the FAQ\n- If fewer than {faq_count} research questions are answerable from the analysis content, output only the answerable subset and add a warning\n- Each question's `answer_brief` is a short direction note for the writer (NOT the actual answer)\n- Each question's `target_keyword` is a long-tail keyword from the research that the answer should weave in\n\n**5. TONE NOTES**\n\nOne short paragraph describing the tone for this entity's content.\n\n**6. WARNINGS**\n\nFlag any issues in the `warnings` array:\n- Meta length problems (title >60 chars, description outside 150-160 range)\n- Thin source material (analysis doesn't support keyword targets)\n- Keyword gaps (research didn't surface keywords for an area in the analysis)\n- FAQ shortage (fewer answerable research questions than {faq_count} requested)\n- Research absence (the keyword research block was empty or low-quality)\n\n### OUTPUT FORMAT\n\nReturn ONLY a valid JSON object matching this schema:\n\n```json\n{\n  \"target_keywords\": {\n    \"primary\": \"string\",\n    \"secondary\": [\"string\"],\n    \"long_tail\": [\"string\"]\n  },\n  \"keyword_sources\": {\n    \"primary\": \"Q<n> | analysis\",\n    \"secondary\": [\"Q<n> | analysis\"],\n    \"long_tail\": [\"Q<n> | analysis\"]\n  },\n  \"keyword_distribution\": {},\n  \"meta\": {\n    \"title\": \"string\",\n    \"title_chars\": 0,\n    \"description\": \"string\",\n    \"description_chars\": 0\n  },\n  \"faqs\": [\n    {\n      \"question\": \"string\",\n      \"answer_brief\": \"string — direction for writer, not the actual answer\",\n      \"target_keyword\": \"long-tail keyword this FAQ targets\"\n    }\n  ],\n  \"tone_notes\": \"string\",\n  \"warnings\": [\"string\"]\n}\n```\n\nThe first character of your response MUST be `{` and the last character MUST be `}`. No markdown headings before, after, or inside the JSON. No code fences. No explanation. No preamble. Return ONLY the JSON object."
   },
   "item_key": "entity_name",

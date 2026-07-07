@@ -3,7 +3,7 @@
 > Keyword distribution planner with web-researched keyword data. Selects target keywords and produces meta tags, optional FAQs, and section-level keyword distribution. The manifest default is fully project-agnostic; pipeline-specific shapes (e.g. company-profile section breakdowns) come from template-level prompt overrides.
 
 **Module ID:** `seo-planner` | **Step:** 5 (Generation) | **Category:** planning | **Cost:** expensive
-**Version:** 2.2.1 | **Data Operation:** add (➕)
+**Version:** 2.3.0 | **Data Operation:** add (➕)
 
 ---
 
@@ -30,6 +30,18 @@ content-analyzer (＝) -> seo-planner (➕) -> content-writer (➕)
 It uses the **add (➕)** data operation - it chains from the working pool, finding content-analyzer output by the `source_submodule` field, and adds its own output alongside. After approval, the pool contains both analysis items and SEO plan items, distinguished by `source_submodule`.
 
 This is the cheapest step in the chain. The input is just the analysis JSON (a few KB), not the full scraped text (50KB+). This makes it safe to re-run multiple times while iterating on keyword strategy without significant cost.
+
+### v2.3.0: Quantitative keyword-data providers (2026-07-07)
+
+Adds an **additive** `keyword_data_providers` layer that grounds the plan in **real numbers** — search volume, keyword difficulty, own-site rank/impressions/clicks — from SEO/search APIs, running **alongside** the qualitative (Perplexity) research, not instead of it. It resolves the long-standing limitation that seo-planner "explicitly refuses to invent volume numbers" and had "no search volume data."
+
+**Empty by default → fully inert.** The `keyword_data_providers` default is `[]`, so existing templates make **zero** extra API calls and produce **byte-identical** output (proven via A/B diff against the prior version on the empty-providers path). The whole layer only activates when a template configures at least one provider.
+
+**How it works.** Per entity: (1) seeds are derived generically (entity name + conventional analysis fields — categories/tags/primary_category/industry/keywords); (2) **expansion** providers widen the seed set; (3) **metrics** providers score the widened set with real numbers; (4) results normalize to `keyword_metrics[]` and are attached to `seo_plan_json.keyword_metrics` (an **additive** audit-trail field — the backbone `target_keywords`/`meta`/`faqs`/`keyword_distribution`/`keyword_sources` are untouched). To feed the numbers into the planning LLM, add a `{keyword_metrics}` placeholder to your prompt override; the metrics land in `seo_plan_json.keyword_metrics` regardless of whether the prompt uses them.
+
+**Built-in provider kinds** (see [Keyword Data Providers](#keyword-data-providers-v230) for the full config schema): `gsc` (Google Search Console — **free**, own verified properties only, real rank/impressions/clicks), `dataforseo` (**paid** — true search volume + CPC + competition via the Google-Ads live endpoint), `autocomplete` (**free**, no auth — seed expansion). New providers of an existing kind are config-only; a new kind is one small handler.
+
+**Cost guards** (only apply when the layer is active): `max_seed_keywords` (25), `max_metric_lookups_per_entity` (100), `per_run_budget_usd` (1.0 — refuses paid lookups past the cap, warns, continues with free providers), and `metrics_required` (loud warning if the layer produces nothing — never silent). A provider with missing credentials is **config-present-but-inert** (warning + skip, never a failure). Pipeline-agnostic per Rule 13: the GSC site URL, DataForSEO locale, and provider selection are all template config; the manifest carries no domain, vertical, or content-type assumptions. Tested in `test-keyword-data.js` (82 assertions; the real RS256 JWT signing path is exercised with a throwaway keypair). **GSC live-verify deferred** (the service-account key was not resolvable in the build shell) — see [Limitations](#limitations--edge-cases).
 
 ### v2.2.1: Corrective JSON retry (2026-06-13)
 
@@ -276,6 +288,8 @@ When changing seo-planner's OUTPUT FORMAT schema in a template prompt override, 
 
 **Before changing the schema in a template prompt override**, grep these consumers for the field names you intend to remove or restructure. If a consumer iterates a field you remove, you'll need to either (a) keep the field but document it as empty for the new content type, OR (b) configure the consumer's prompt override (or skip the consumer entirely in the template) to match.
 
+**Additive fields are safe.** `seo_plan_json.keyword_metrics[]` (v2.3.0) is an additive audit-trail field present **only** when the keyword-data layer is active. It does not touch the backbone fields above, so it is safe for every consumer (content-writer/json-output read the whole blob and simply carry it; the by-name consumers don't read it).
+
 ## Options Guide
 
 | Option | Default | When to Change | Impact |
@@ -283,10 +297,59 @@ When changing seo-planner's OUTPUT FORMAT schema in a template prompt override, 
 | `keyword_research` | true | Set false to skip web research and reduce cost/latency | When true, runs Perplexity Sonar queries before the planning LLM call |
 | `search_provider` | perplexity | Only `perplexity` supported in v2.0.0 | Controls which search API is used for keyword research |
 | `research_queries` | (3 default queries) | Customize for specific industries, pipelines, or entity types | One query per line. Supports `{entity_name}` and `{entity_context}` placeholders. ≤5 queries recommended |
-| `prompt` | (SEO planning template) | Customize when you need different keyword strategies or industry-specific SEO patterns | The full LLM instruction. Uses `{entity_content}` for analysis JSON, `{keyword_research}` for research results, and `{doc:filename}` for reference docs |
+| `prompt` | (SEO planning template) | Customize when you need different keyword strategies or industry-specific SEO patterns | The full LLM instruction. Uses `{entity_content}` for analysis JSON, `{keyword_research}` for research results, `{keyword_metrics}` for the quantitative keyword-data table (v2.3.0, opt-in), and `{doc:filename}` for reference docs |
 | `reference_docs` | (none) | Upload format spec, tone guide, or supplemental keyword data | Selected docs injected into prompt at `{doc:filename}` placeholders |
 | `ai_model` | haiku | Haiku for quick planning iterations. Sonnet for production | Planning is less sensitive to model quality than analysis or writing |
 | `ai_provider` | anthropic | Switch for model comparison | Which API to call |
+| `keyword_data_providers` | `[]` | Add real search-volume/difficulty/rank data (v2.3.0). Empty = layer off, no cost | Array of provider configs. See [Keyword Data Providers](#keyword-data-providers-v230) |
+| `max_seed_keywords` | 25 | Lower to trim cost; raise for broad entities | Cap on seed keywords per entity (cost guard; only when the layer is active) |
+| `max_metric_lookups_per_entity` | 100 | Lower to trim cost | Hard cap on keyword→metrics lookups per entity (cost guard) |
+| `per_run_budget_usd` | 1.0 | Raise to allow more paid lookups; 0 = free providers only | Refuses paid lookups past the cap, warns, continues with free providers |
+| `metrics_required` | false | Set true when a template depends on real numbers | If nothing is produced, adds a **loud** warning (never silent) |
+
+## Keyword Data Providers (v2.3.0)
+
+The `keyword_data_providers` option is a JSON array of provider config objects. Empty (the default) means the layer is **off** — no API calls, no cost, output unchanged. Each provider names a `kind` that selects a small generic handler; everything else is config. There are two roles: **expansion** (widen the seed set) and **metrics** (score keywords with real numbers). Expansion runs first, then metrics on the widened set. Results are normalized and attached to `seo_plan_json.keyword_metrics`.
+
+**Built-in kinds**
+
+| `kind` | Role | Cost | Env var(s) | Produces |
+|--------|------|------|------------|----------|
+| `gsc` | metrics | **free** | `GSC_SERVICE_ACCOUNT_KEY_PATH` (path to a service-account JSON key) | `current_rank`, `impressions`, `clicks` for the queries your **own verified property** already ranks for |
+| `dataforseo` | metrics | **paid** | `DATAFORSEO_LOGIN` + `DATAFORSEO_PASSWORD` (Basic auth) | `search_volume`, `cpc`, `competition` (Google-Ads **live** endpoint) |
+| `autocomplete` | expansion | **free** | none | seed-expansion suggestion strings |
+
+**Config schema** (per provider object)
+
+| Field | Applies to | Notes |
+|-------|-----------|-------|
+| `id` | all | Short identifier; also the `source` tag on each metric row and the `keyword_sources` provenance id. |
+| `kind` | all | One of `gsc` \| `dataforseo` \| `autocomplete`. |
+| `est_cost_per_lookup` | all | Per-keyword cost estimate for the budget guard. **Leave 0 (or unset) for free providers** (`gsc`, `autocomplete`); setting it makes them budget-guarded and possibly skipped. |
+| `auth.env_var` | `gsc` | Env var holding the service-account key **file path** (default `GSC_SERVICE_ACCOUNT_KEY_PATH`). |
+| `site_url` | `gsc` | GSC property, e.g. `sc-domain:example.com` or `https://example.com/`. Required. |
+| `scope` | `gsc` | OAuth scope (default `https://www.googleapis.com/auth/webmasters.readonly`). |
+| `date_range_days`, `row_limit` | `gsc` | Look-back window (default 90) and max rows (default 100, cap 25000). |
+| `auth.login_env` / `auth.password_env` | `dataforseo` | Env vars for Basic auth (default `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD`). |
+| `location_code`, `language_code` | `dataforseo` | Google-Ads locale (default `2840` = US, `en`). |
+| `endpoint` | `dataforseo` | Override the live endpoint if needed. **Live endpoints only** — the standard queue's 1–3h latency would blow the 30-min module timeout. |
+| `hl`, `max_seeds` | `autocomplete` | Suggestion language (default `en`) and per-provider seed cap. |
+
+**Example** (company-profile style — GSC free tier + optional paid volume, `{env:VAR}` values come from the environment):
+```json
+[
+  { "id": "gsc", "kind": "gsc", "site_url": "sc-domain:example.com",
+    "auth": { "env_var": "GSC_SERVICE_ACCOUNT_KEY_PATH" }, "est_cost_per_lookup": 0 },
+  { "id": "autocomplete", "kind": "autocomplete", "est_cost_per_lookup": 0 },
+  { "id": "dataforseo", "kind": "dataforseo", "location_code": 2840, "language_code": "en",
+    "est_cost_per_lookup": 0.05 }
+]
+```
+Then add a `{keyword_metrics}` placeholder to the template's `prompt` override to feed the numbers into the planning LLM (e.g. "prefer high-volume/low-difficulty targets, and terms you already rank 5–20 for").
+
+**Cost model note:** the budget guard sums `est_cost_per_lookup × keyword_count`. DataForSEO's live search-volume endpoint bills **per request** (all keywords in one task), so the guard is intentionally conservative — it may skip a provider that would actually be within budget rather than overspend. Set `est_cost_per_lookup` to the per-request price divided by your expected keyword count, or raise `per_run_budget_usd`, if you see over-eager skips.
+
+**Failure behavior:** a provider whose credentials are missing is **inert** (a warning is added, the provider is skipped, no HTTP call is made) — the module never fails because a provider is unconfigured. A provider that errors mid-call is likewise skipped with a warning. With `metrics_required: true`, producing zero metrics adds a loud warning to `warnings[]` (it is never silent). GSC returns data only for properties the service account is added to as a user; a new/small property returns empty with a warning.
 
 ## Recipes
 
@@ -343,7 +406,7 @@ research_queries:
 - `keyword_plan_preview` - summary of keyword distribution (e.g., "3 categories, 4 tags, 12 unique keywords")
 - `meta_title` - proposed meta title
 - `faq_count` - number of FAQs generated
-- `seo_plan_json` - the full structured SEO plan (carried to pool for content-writer)
+- `seo_plan_json` - the full structured SEO plan (carried to pool for content-writer). When the keyword-data layer is active it additionally carries `keyword_metrics[]` (v2.3.0): `{ keyword, search_volume, difficulty, cpc, competition, current_rank, impressions, clicks, source }`, with `null` where a provider lacks a field.
 
 **Detail view sections:** target keywords (text), keyword distribution (prose), meta tags (text), FAQs (prose), tone notes (text), warnings (text)
 
@@ -429,7 +492,10 @@ research_queries:
 
 ## Limitations & Edge Cases
 
-- **No search volume data** - Perplexity Sonar returns qualitative keyword research (PAA questions, competitor coverage) but not numeric search volume or competition scores. For volume data, supplement with an Ahrefs/SEMrush reference doc
+- **No search volume data (default mode)** - Perplexity Sonar returns qualitative keyword research (PAA questions, competitor coverage) but not numeric search volume or competition scores. For real numbers, enable the v2.3.0 [keyword-data providers](#keyword-data-providers-v230) (`dataforseo` for volume/difficulty; `gsc` for own-site rank) instead of relying on a static reference doc
+- **GSC live-verify deferred (v2.3.0)** - The `gsc` provider is unit-tested with a real RS256 JWT signing path (throwaway keypair, no network), but a live run against the real Google Search Console API was not performed because the service-account key (`GSC_SERVICE_ACCOUNT_KEY_PATH`) was not resolvable in the build shell. Before relying on `gsc` in production, do a one-off free live test: confirm the Search Console API is enabled, the scope is `webmasters.readonly`, and the service account is added as a user on the property
+- **GSC returns own-property data only** - Google Search Console reports rank/impressions/clicks only for properties the service account is verified on. It surfaces queries you *already* rank for — it is not a general keyword-volume tool (that's `dataforseo`)
+- **Autocomplete is unofficial** - The `autocomplete` kind uses Google's undocumented suggest endpoint; it may rate-limit (429 → warning, skipped) or change without notice. Treat it as best-effort free seed expansion, never a hard dependency
 - **Research query failures don't fail the module** - Individual query failures are caught and logged. If all queries fail, the module falls back to `keyword-summary.md` (if uploaded) or proceeds with no keyword data. Check logs if results look generic
 - **≤5 queries recommended** - More queries are allowed but multiply cost linearly. The module logs a warning if >5 queries are configured
 - **Meta length validation is soft** - The module warns about meta title/description lengths but doesn't force compliance. Some LLMs consistently produce titles slightly over 60 characters
