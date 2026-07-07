@@ -1,0 +1,33 @@
+{
+  "config": "entity-image-search",
+  "configures": "search-discovery",
+  "version": "1.0.0",
+  "description": "search-discovery preset for entity-specific image discovery (logos-in-context, product shots, screenshots) via the images SERP vertical. Serper /images provider. Query flavor ('{entity_name}' logo) is template config. verify_liveness is on because SERP image URLs rot fast; step-8 company-media should re-verify at bundle time regardless. Brand-logo LOOKUP providers (Brandfetch/Logo.dev) are NOT here — they need search-discovery code that does not exist yet (see README).",
+  "search_mode": "open",
+  "result_type": "images",
+  "query_templates": ["\"{entity_name}\" logo", "\"{entity_name}\" screenshot"],
+  "max_results_per_query": 5,
+  "max_queries_per_entity": 10,
+  "requests_per_minute": 20,
+  "verify_liveness": true,
+  "providers": [
+    {
+      "id": "serper-images",
+      "name": "Serper Images",
+      "kind": "serp",
+      "method": "POST",
+      "endpoints": { "images": "https://google.serper.dev/images" },
+      "query_param": "q",
+      "num_param": "num",
+      "results_path": { "images": "images" },
+      "field_map": {
+        "url": "imageUrl",
+        "image_url": "imageUrl",
+        "title": "title",
+        "snippet": "source",
+        "pub_date": null
+      },
+      "auth": { "type": "header", "header": "X-API-KEY", "env_var": "SEARCH_PROVIDER_SERPER_KEY" }
+    }
+  ]
+}
