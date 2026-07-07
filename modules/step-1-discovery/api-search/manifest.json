@@ -2,7 +2,7 @@
   "id": "api-search",
   "name": "API Search",
   "description": "Generic REST API search. Supports keyword-search APIs and feed APIs via provider configs. Adding a new API source = adding JSON config, not code.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "step": 1,
   "category": "search",
   "cost": "cheap",
@@ -51,7 +51,7 @@
       "type": "json",
       "label": "API Providers",
       "presets_enabled": true,
-      "description": "Provider configurations. Each provider is a JSON object with: id, name, mode (search or feed), url, field_map, and optional auth. See README for schema.",
+      "description": "Provider configurations. Each provider is a JSON object with: id, name, mode (search or feed), url, field_map, optional auth (query_param | bearer), and optional headers (a static custom-header map with {env:VAR} interpolation, e.g. {\"Authorization\": \"{env:PEXELS_API_KEY}\"}). See README for schema.",
       "default": []
     },
     {

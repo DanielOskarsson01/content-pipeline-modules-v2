@@ -37,10 +37,11 @@
 ```
 {
   id, name, mode, url, keyword_param?, limit_param?,
-  results_path, filter_fields?, field_map, auth?
+  results_path, filter_fields?, field_map, auth?, headers?
 }
 ```
 
 - `field_map` values: dot-notation string, fallback array, or null
 - `results_path`: dot-notation into JSON response, or `$slice_first` (skip element 0)
-- `auth.type`: only `query_param` supported currently
+- `auth.type`: `query_param` or `bearer`
+- `headers`: optional static custom-header map, values support `{env:VAR}` interpolation (v1.1.0) — for APIs whose auth is a raw header (e.g. Pexels `Authorization: <key>`). A provider whose `headers` references an unset env var is skipped (same as `auth`). Signed/HMAC schemes (PodcastIndex) are NOT covered — a static map can't compute a per-request hash; that stays a separate future item.

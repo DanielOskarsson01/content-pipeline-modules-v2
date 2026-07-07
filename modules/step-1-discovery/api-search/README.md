@@ -3,7 +3,7 @@
 > Discovers items from multiple REST APIs using a single config-driven module. Supports keyword-search APIs and feed APIs -- adding a new API source means adding a JSON config, not writing code.
 
 **Module ID:** `api-search` | **Step:** 1 (Discovery) | **Category:** search | **Cost:** cheap
-**Version:** 1.0.0 | **Data Operation:** transform (=)
+**Version:** 1.1.0 | **Data Operation:** transform (=)
 
 ---
 
@@ -133,7 +133,8 @@ Each provider in the `providers` array is a JSON object:
 | `results_path` | Yes | Dot-notation path to the results array in the JSON response (e.g., `"hits"`, `"data.items"`) or `$slice_first` to skip element 0 |
 | `filter_fields` | Feed only | Which raw fields to search for keyword matches (e.g., `["title", "description"]`) |
 | `field_map` | Yes | Maps canonical output fields to API response fields using dot notation |
-| `auth` | Optional | Auth config: `{ "type": "query_param", "key": "param_name", "env_var": "ENV_VAR_NAME" }` |
+| `auth` | Optional | Auth config: `{ "type": "query_param", "key": "param_name", "env_var": "ENV_VAR_NAME" }` or `{ "type": "bearer", "env_var": "ENV_VAR_NAME" }` |
+| `headers` | Optional | Static custom-header map, values support `{env:VAR_NAME}` interpolation. For APIs whose auth is neither a query param nor a `Bearer` token — e.g. Pexels: `{ "Authorization": "{env:PEXELS_API_KEY}" }` (raw key, no "Bearer" prefix). Multiple headers allowed; static (non-`{env:}`) values pass through verbatim. If any referenced env var is unset, the provider is skipped with a warning (same policy as `auth`). Applied after `auth.bearer`, so a `headers` entry can intentionally override it. (v1.1.0) |
 
 ### field_map supports
 
@@ -271,7 +272,7 @@ score_rules: []
 - **No HTML scraping** -- only works with APIs that return JSON
 - **Feed-mode keyword filtering is basic** -- case-insensitive substring match on raw fields
 - **No pagination** -- fetches one page of results per keyword
-- **Auth limited to query params** -- header-based auth not yet supported
+- **Auth: query param, bearer, or custom static headers** -- via `auth` (query_param/bearer) or the `headers` map (v1.1.0). Signed/HMAC auth (e.g. PodcastIndex's key+hash+timestamp) is NOT supported -- that needs a computed-signature handler, tracked separately
 - **15-second timeout per request** -- hardcoded
 - **String option parsing** -- the UI may store JSON options as strings. The module auto-parses these, but malformed JSON silently falls back to defaults
 

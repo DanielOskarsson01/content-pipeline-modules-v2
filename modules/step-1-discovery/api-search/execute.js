@@ -137,12 +137,43 @@ function buildRequestUrl(provider, keyword, maxResults, extraParams) {
   return qs ? `${provider.url}?${qs}` : provider.url;
 }
 
+// Interpolate {env:VAR_NAME} tokens against process.env. Function replacement
+// (not a string replacement) so an env value containing $ sequences ($&, $$, $1)
+// cannot corrupt the output. A missing var interpolates to an empty string.
+function interpolateEnvTokens(value) {
+  return String(value).replace(/\{env:([A-Za-z0-9_]+)\}/g, (_, name) => process.env[name] || '');
+}
+
+// Collect the env var names referenced by {env:VAR} tokens across a headers map.
+// Used to skip a provider up-front when a referenced credential is unset (so we
+// never send an empty/garbled auth header that would just 401).
+function collectHeaderEnvRefs(headers) {
+  const refs = [];
+  if (headers && typeof headers === 'object') {
+    for (const value of Object.values(headers)) {
+      for (const m of String(value).matchAll(/\{env:([A-Za-z0-9_]+)\}/g)) refs.push(m[1]);
+    }
+  }
+  return refs;
+}
+
 function getProviderHeaders(provider) {
+  const headers = {};
+  // Bearer auth (existing) — `Authorization: Bearer <key>`.
   if (provider.auth && provider.auth.type === 'bearer') {
     const envVal = process.env[provider.auth.env_var];
-    if (envVal) return { 'Authorization': `Bearer ${envVal}` };
+    if (envVal) headers['Authorization'] = `Bearer ${envVal}`;
   }
-  return {};
+  // Custom static headers (per-provider `headers` map, {env:VAR} interpolation).
+  // Applied AFTER bearer so a headers entry can intentionally override it — e.g.
+  // Pexels sends `Authorization: <key>` with NO "Bearer" prefix. Pipeline-agnostic:
+  // the module knows nothing about which header shapes any provider needs.
+  if (provider.headers && typeof provider.headers === 'object') {
+    for (const [name, value] of Object.entries(provider.headers)) {
+      headers[name] = interpolateEnvTokens(value);
+    }
+  }
+  return headers;
 }
 
 function createRateLimiter(rpm) {
@@ -263,6 +294,13 @@ async function execute(input, options, tools) {
           logger.warn(`Provider "${p.id}" skipped: missing env var ${p.auth.env_var}`);
           return false;
         }
+      }
+      // Validate custom-header credentials: skip if any {env:VAR} referenced by
+      // the provider's `headers` map is unset (same policy as auth env vars).
+      const missingHeaderEnv = collectHeaderEnvRefs(p.headers).filter(name => !process.env[name]);
+      if (missingHeaderEnv.length > 0) {
+        logger.warn(`Provider "${p.id}" skipped: missing env var(s) ${missingHeaderEnv.join(', ')} referenced by custom headers`);
+        return false;
       }
       return true;
     });
@@ -480,3 +518,5 @@ async function execute(input, options, tools) {
 }
 
 module.exports = execute;
+// Exported for test harness use only — not part of the public submodule interface.
+module.exports.__testing = { getProviderHeaders, interpolateEnvTokens, collectHeaderEnvRefs };
