@@ -1,0 +1,37 @@
+{
+  "card": "human-rewriter",
+  "configures": "tone-seo-editor",
+  "version": "1.0.0",
+  "description": "Config-only card on tone-seo-editor: a final humanization edit pass that removes recognizable AI-writing patterns while preserving [Type] markers, [#n] citations, section count, and placed SEO keywords. Framed as style/voice quality, NOT AI-detector evasion. No new module code — every field is an existing tone-seo-editor option, applied via a template preset_map override.",
+  "how_to_use": "In a template's preset_map, set preset_map['tone-seo-editor'].fallback_values to one of the presets below (Pattern B: a second tone-seo-editor pass after the SEO-edit pass; or Pattern A: fold the humanization prompt into a single combined pass). See README.md for patterns A/B/C. The card is inert until a template references it.",
+  "presets": {
+    "light": {
+      "prompt": "You are a line editor. Revise the article below for natural, human rhythm. Do NOT add, remove, or alter any facts.\n\nFix these AI-writing patterns wherever they appear:\n1. Formulaic transitions (\"Furthermore\", \"Moreover\", \"Additionally\", \"In conclusion\") -> content-specific transitions, or none.\n2. Monotonous rhythm -> vary sentence length (5-30 words) and vary how sentences open.\n3. Parallel paragraph structure -> lead some paragraphs with a concrete detail, end some with a question.\n4. Generic qualifiers (\"comprehensive suite of\", \"wide range of\", \"robust\", \"seamless\") -> the specific counts and details already in the text.\n5. Mechanical list intros -> weave some list items into prose.\n6. Predictable section openings -> not every section should start \"{Company} offers/provides\".\n7. Hedging (\"It is important to note\", \"It is worth mentioning\") -> state the fact directly.\n\nPRESERVE EXACTLY (do not change any of these): every ## and ### heading INCLUDING any [Type] markers such as [Primary Category: slug] or [Tag: slug]; every [#n] citation kept on its original claim; the total section count; FAQ **Q:** wording; the **Meta Title:** and **Meta Description:** lines; and all SEO keywords already placed ({keyword_targets}).\n\nIntensity: light -- rewrite only 10-20% of sentences; fix only the most obvious AI tells and leave already-strong prose alone.\n\n### ARTICLE\n\n{content_markdown}\n\nReturn ONLY the revised markdown. No preamble, no commentary, no code fences.",
+      "temperature": 0.5,
+      "ai_model": "sonnet",
+      "ai_provider": "anthropic",
+      "max_content_chars": 50000
+    },
+    "moderate": {
+      "prompt": "You are a line editor. Revise the article below for natural, human rhythm. Do NOT add, remove, or alter any facts.\n\nFix these AI-writing patterns wherever they appear:\n1. Formulaic transitions (\"Furthermore\", \"Moreover\", \"Additionally\", \"In conclusion\") -> content-specific transitions, or none.\n2. Monotonous rhythm -> vary sentence length (5-30 words) and vary how sentences open.\n3. Parallel paragraph structure -> lead some paragraphs with a concrete detail, end some with a question.\n4. Generic qualifiers (\"comprehensive suite of\", \"wide range of\", \"robust\", \"seamless\") -> the specific counts and details already in the text.\n5. Mechanical list intros -> weave some list items into prose.\n6. Predictable section openings -> not every section should start \"{Company} offers/provides\".\n7. Hedging (\"It is important to note\", \"It is worth mentioning\") -> state the fact directly.\n\nPRESERVE EXACTLY (do not change any of these): every ## and ### heading INCLUDING any [Type] markers such as [Primary Category: slug] or [Tag: slug]; every [#n] citation kept on its original claim; the total section count; FAQ **Q:** wording; the **Meta Title:** and **Meta Description:** lines; and all SEO keywords already placed ({keyword_targets}).\n\nIntensity: moderate -- 40-60% of sentences should read noticeably different, while every fact, marker, and citation stays exactly put.\n\n### ARTICLE\n\n{content_markdown}\n\nReturn ONLY the revised markdown. No preamble, no commentary, no code fences.",
+      "temperature": 0.6,
+      "ai_model": "sonnet",
+      "ai_provider": "anthropic",
+      "max_content_chars": 50000
+    },
+    "aggressive": {
+      "prompt": "You are a line editor. Revise the article below for natural, human rhythm. Do NOT add, remove, or alter any facts.\n\nFix these AI-writing patterns wherever they appear:\n1. Formulaic transitions (\"Furthermore\", \"Moreover\", \"Additionally\", \"In conclusion\") -> content-specific transitions, or none.\n2. Monotonous rhythm -> vary sentence length (5-30 words) and vary how sentences open.\n3. Parallel paragraph structure -> lead some paragraphs with a concrete detail, end some with a question.\n4. Generic qualifiers (\"comprehensive suite of\", \"wide range of\", \"robust\", \"seamless\") -> the specific counts and details already in the text.\n5. Mechanical list intros -> weave some list items into prose.\n6. Predictable section openings -> not every section should start \"{Company} offers/provides\".\n7. Hedging (\"It is important to note\", \"It is worth mentioning\") -> state the fact directly.\n\nPRESERVE EXACTLY (do not change any of these): every ## and ### heading INCLUDING any [Type] markers such as [Primary Category: slug] or [Tag: slug]; every [#n] citation kept on its original claim; the total section count; FAQ **Q:** wording; the **Meta Title:** and **Meta Description:** lines; and all SEO keywords already placed ({keyword_targets}).\n\nIntensity: aggressive -- deep rewrite for a distinctly human voice; only the headings, [Type] markers, and [#n] citations are locked -- everything else may be recast.\n\n### ARTICLE\n\n{content_markdown}\n\nReturn ONLY the revised markdown. No preamble, no commentary, no code fences.",
+      "temperature": 0.65,
+      "ai_model": "sonnet",
+      "ai_provider": "anthropic",
+      "max_content_chars": 50000
+    },
+    "cover_letter_voice": {
+      "prompt": "You are a line editor rewriting a cover letter in a natural first-person voice. Do NOT add, remove, or alter any facts.\n\nRules:\n- First-person, concrete verbs, plain language; vary sentence length and openers.\n- Ban these AI / cover-letter cliches entirely: leveraged, spearheaded, passionate, excited, thrilled, cutting-edge, robust, synergy, proven track record, perfect fit, hit the ground running, I am confident that.\n- Avoid formulaic transitions (\"Furthermore\", \"Moreover\", \"Additionally\").\n- Do not echo the company's mission statement back at them.\n\nPRESERVE: every [#n] citation if present, and every specific fact, name, number, date, and role exactly as written. (Cover letters carry no [Type] heading markers.)\n\n### LETTER\n\n{content_markdown}\n\nReturn ONLY the revised markdown. No preamble, no commentary, no code fences.",
+      "temperature": 0.7,
+      "ai_model": "sonnet",
+      "ai_provider": "anthropic",
+      "max_content_chars": 20000
+    }
+  }
+}
