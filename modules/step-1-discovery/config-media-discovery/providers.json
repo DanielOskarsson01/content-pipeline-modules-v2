@@ -1,0 +1,32 @@
+{
+  "config": "media-discovery",
+  "configures": "api-search",
+  "version": "1.0.0",
+  "description": "api-search provider preset for podcast discovery per entity: Apple Podcasts (iTunes Search API, no auth). Returns each podcast's RSS feedUrl for handoff to the built rss-feeds module (episode enumeration). Pipeline-agnostic: entity-name search, no vertical baked in. YouTube (video/channel search) is intentionally NOT in this preset — see README (blocked on the api-search field_map template form + a YouTube Data API key).",
+  "search_input": "entity_names",
+  "max_results": 5,
+  "requests_per_minute": 15,
+  "providers": [
+    {
+      "id": "itunes-podcasts",
+      "name": "Apple Podcasts Search",
+      "mode": "search",
+      "url": "https://itunes.apple.com/search",
+      "keyword_param": "term",
+      "limit_param": "limit",
+      "results_path": "results",
+      "field_map": {
+        "url": ["feedUrl", "collectionViewUrl"],
+        "title": "collectionName",
+        "company": "artistName",
+        "snippet": null,
+        "postedAt": "releaseDate",
+        "externalId": "collectionId"
+      },
+      "auth": null
+    }
+  ],
+  "provider_params": {
+    "itunes-podcasts": { "media": "podcast" }
+  }
+}
