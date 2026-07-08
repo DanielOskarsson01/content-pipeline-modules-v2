@@ -2,6 +2,8 @@
 
 Tasks not yet scheduled for implementation.
 
+> **Number allocation rule (added 2026-07-05).** Item numbers are allocated ONLY by editing this `BACKLOG.md` in a pushed commit — **never** assigned in a session report, handoff, plan, or spec first. Any document that needs to cite a not-yet-filed item must file the item here (claiming its number) **before** referencing it. This rule exists because a buildout-thread report proposed `#43–46` for four skeleton gaps while committed `BACKLOG.md` already held `#43` (routing/card authoring) + `#44` (Pipeline Copilot); the gaps were renumbered to `#45–48` (this file is the single source of truth for item numbers).
+
 ---
 
 ## Index
@@ -50,10 +52,12 @@ Tasks not yet scheduled for implementation.
 | 40 | **`npm test` silently skipped 11 `.mjs` test suites — 3 failing unseen** (skeleton repo; test-gate integrity) — the gate `node --test 'server/**/*.test.js'` matched only `.test.js`, so all 11 `server/tests/*.test.mjs` never ran. **RESOLVED 2026-06-29:** widened glob to run `.js` + `.mjs`; added `test:integration`; migrated 2 stale-fixture routing suites to canonical schema (test-only); deleted 2 hollow/duplicate suites; separated `modes` as integration. Gate now 108/108 green over 16 suites. **Hollow-green found + closed:** `applyRouting` had NO passing gated test (its only suites were the 2 failing ones) — now genuinely covered. | **RESOLVED 2026-06-29** | 2026-06-29 |
 | 41 | **Canonical specs live OUTSIDE git** (hygiene; root cause behind the PHASE_3B flag) — PHASE_3B + other `Content-Pipeline/specs/*.md` are only Dropbox-versioned; the only git root over them is the 892-item `/Projects` mega-repo, where they're untracked. This is WHY specs drift (e.g. `noble-wandering-graham.md` vs PHASE_3B repeatedly out of sync). Move canonical specs into proper version control — a clean dedicated sub-repo, NOT the mega-repo. Leave PHASE_3B Dropbox-versioned until this is done deliberately (do not quick-fix by `git add`-ing into the mega-repo). | Medium (hygiene; prevents spec drift) | 2026-06-29 |
 | 42 | **Multi-window / shared-working-directory state contention** (process; recurring, cross-repo) — concurrent Claude windows over one working dir + one shared session/project dir + reliance on **unpushed local state** and a **single shared `RESUME.md`** cause cross-thread clobbering and lost work. **Confirmed costs:** wrong-branch cross-repo push (2026-05-31); a wrong-thread session report; repeated `RESUME.md` overwrites by a parallel window; a lost session of client work; and the **2026-07-03 card-write landing kit itself now unfindable** (sandbox-verified kit couldn't be located to land — searched Downloads/repo/branches/stashes/claude-sync/OnlyiGaming-tree by name+content). Fix: one-thread-one-worktree; per-thread RESUME in each thread's own repo; push-immediately; handoff kits to a versioned+pushed location (never loose Downloads / unpushed local). | **High — actively costing lost work** | 2026-07-03 |
-| 43 | **`tools.http` verb + binary gaps** (skeleton repo) — GET/HEAD/POST only, responses binary-unsafe, no multipart upload. Blocks: OpenAI TTS (raw binary), Strapi v5/Ghost/Contentful updates (PUT), Airtable upsert (PATCH), S3/WebDAV, large-audio STT upload. Surfaced by the 2026-07-03 brief revision — affects media-generator, cms-publisher, doc-exporter, sheet-logger, transcript-fetcher briefs. | Medium-high (gates several planned modules) | 2026-07-03 |
-| 44 | **No asset persistence for generated media** (skeleton repo) — no `tools.storage`; provider asset URLs expire (BFL ~10 min, Veo ~2 days) and base64 payloads have nowhere durable to land. Hard blocker for media-generator video mode; TTS/image can ship first via non-expiring paths (Leonardo CDN, base64-in-JSON). | Medium (blocks video mode; sequencing constraint) | 2026-07-03 |
-| 45 | **Step-10 approval → Step-9 `execute` trigger + terminal_state readability** (skeleton repo; extends #8/#9) — the Step-9 delivery-family briefs (cms-publisher / doc-exporter / sheet-logger) stage payloads and fire only post-approval, but no skeleton mechanism exists for Step-10 approval to trigger execute mode, and modules cannot read `entity_run_meta.terminal_state` for flagged-entity gating. | Medium (prerequisite for any Step-9 module) | 2026-07-03 |
-| 46 | **api-search header-auth support** (modules repo, small) — api-search only supports bearer-token auth; providers needing custom headers (Pexels `Authorization: <key>`, PodcastIndex key+hash headers) can't be configured. Add a per-provider `headers` map to provider config. | Low-medium (small; unblocks 2+ planned provider configs) | 2026-07-03 |
+| 43 | **Routing/card authoring belongs in the template editor, not the run view** (UX/architecture; card-write follow-up) — the card-write UI mounts the variant rows + Step-7 routing editor inside RunView. But the running pipeline resolves cards/routing from the run's `execution_plan_snapshot` (`submoduleRuns.js:304`, "prefer snapshot so mid-run template edits cannot poison"), so editing routing through a *run's* Step 7 edits the LIVE TEMPLATE for **future** runs and does NOT affect the run being viewed — slightly misleading. Also: routing is only reachable when a run's Step 7 is active/completed/approved (pending = not clickable), so operators can't author routing until a run reaches Step 7. Consider moving card+routing authoring to the template editor (`/templates/:id`) as the honest home; make the run-view versions read-only views of the snapshot. Components already read the template (not run/stage data), so they remount cheaply. **Decide from a DEPLOYED baseline, as a separate thread — deliberately NOT bolted onto the certified card-write branch.** | Medium (UX/architecture; post-deploy) | 2026-07-04 |
+| 44 | **Pipeline Copilot — AI assistant present at every step** (skeleton repo; design-complete, partially built) — LLM assistant embedded in the pipeline UI that monitors a live run, analyzes each step's results, and proposes field-level setting changes + other-submodule changes (human approves; never auto-applies). Canonical spec: `Content-Pipeline/specs/PIPELINE_COPILOT_SPEC_v2.md` + `PHASE_12C_ADDENDUM.md` (both landed 2026-07-05; drafts archived). **BUILT:** the event-emit foundation in `autoExecutor.js` (EventEmitter + 10 lifecycle emits + `error_summary` enrichment in `auto_execute_state.per_step_results`). **NOT BUILT:** the entire Copilot consumer (`copilotEventQueue`/`Engine`/`Tools`/`Fallback`/`Conversation`), `/api/copilot/*` routes, `copilot_*` tables, and all client UI (alerts + chat panel). Parallel track to Phase 12, not on any roadmap phase. | Deferred (design complete; ~0% of product built, foundation only) | 2026-07-05 |
+| 45 | **`tools.http` verb/binary/multipart gaps** (skeleton repo) — GET/HEAD/POST-only, binary-unsafe, no multipart. Gates OpenAI TTS (raw binary), Strapi/Ghost/Contentful (PUT), Airtable (PATCH), S3/WebDAV, large-audio STT upload. **Renumbered from the 2026-07-03 buildout report's proposed `#43`** (never committed; collided with real [[Item 43]]). | Medium (gates module buildout: media-generator TTS/image for some providers, Step-9 delivery PUT/PATCH) | 2026-07-05 |
+| 46 | **No asset persistence (`tools.storage` missing)** (skeleton repo) — generated-media URLs expire; no durable home for binaries. Gates `media-generator` **video mode** (hard); TTS/image can ship first via non-expiring paths. **Renumbered from buildout `#44`** (collided with real [[Item 44]]). | Medium (gates media video mode) | 2026-07-05 |
+| 47 | **No Step-10-approval → Step-9 `execute` trigger; `terminal_state` unreadable by modules** (skeleton repo) — modules can't gate flagged entities out of distribution. Extends [[Item 8]]/[[Item 9]]; gates the entire Step-9 delivery family (`cms-publisher`/`doc-exporter`/`sheet-logger`) and closes [[Item 9]]. **Renumbered from buildout `#45`.** | Medium (gates Step-9 delivery → U1 publish) | 2026-07-05 |
+| 48 | **`api-search` custom-header auth** (modules repo) — bearer-auth only, no custom headers. Gates Pexels + PodcastIndex provider configs. Small modules-repo fix. **Renumbered from buildout `#46`.** | Low-medium (unblocks Wave-2 provider configs) | 2026-07-05 |
 
 ---
 
@@ -616,7 +620,11 @@ Gemini Round 3 recommended assigning ULID/timestamp+random hash to each card ins
 - No real use case demands ULID-based targeting that FIFO doesn't already serve.
 - ULID introduction would be a spec deviation with no demonstrated benefit.
 
-**Shared-invariant note for future maintainers:** FIFO-by-position safety AND the markSkipped FIFO decision (Brutal-critic Round 2 Fix #3) share the same dependency: "ALL card_instructions mutation goes through the 3 RPCs under row lock." If any future code path mutates the array in app memory (read JSONB, modify in JS, write back), revisit BOTH this rejection (which may need ULID-style targeting) AND the markSkipped FIFO alignment (which may need explicit loop_iteration filter to disambiguate). Two decisions, one invariant. Surface the dependency rather than hide it in two separate places. — UUID_REGEX false-positive risk on submodule_ids
+**Shared-invariant note for future maintainers:** FIFO-by-position safety AND the markSkipped FIFO decision (Brutal-critic Round 2 Fix #3) share the same dependency: "ALL card_instructions mutation goes through the 3 RPCs under row lock." If any future code path mutates the array in app memory (read JSONB, modify in JS, write back), revisit BOTH this rejection (which may need ULID-style targeting) AND the markSkipped FIFO alignment (which may need explicit loop_iteration filter to disambiguate). Two decisions, one invariant. Surface the dependency rather than hide it in two separate places.
+
+---
+
+## Item 13 — UUID_REGEX false-positive risk on submodule_ids
 
 **Added 2026-06-02** during V5 Phase 3 Sub-plan 1 Brutal-critic Round 2 review.
 
@@ -1768,40 +1776,134 @@ The deeper issue the PHASE_3B commit-3 flag surfaced: **canonical specs are not 
 
 ---
 
-## Item 43 — `tools.http` verb + binary gaps (skeleton repo)
+## Item 43 — Routing/card authoring belongs in the template editor, not the run view
 
-**Added:** 2026-07-03 | **Status:** Open | **Priority:** Medium-high (gates several planned modules) | **Touches:** skeleton `stageWorker.js::buildTools` (tools.http)
+**Priority:** Medium (UX/architecture; card-write follow-up) · **Added:** 2026-07-04 · **Status:** PARKED — decide from a deployed baseline, separate thread.
 
-Surfaced by the 2026-07-03 submodule-brief revision (all 20 unbuilt briefs rewritten pipeline-agnostic; snapshot in `docs/submodule-briefs-rev-2026-07-03/`). `tools.http` supports only GET/HEAD/POST, is binary-unsafe on response bodies (raw binary corrupts), and has no multipart upload. This blocks, concretely: OpenAI TTS (returns raw binary — Gemini TTS's base64-in-JSON is the workaround), Strapi v5 / Ghost / Contentful entry updates (PUT), Airtable native upsert (PATCH), S3/WebDAV file delivery, and large-audio multipart upload for STT providers.
+**Observation (surfaced 2026-07-04 during the card-write visual-pass setup):**
+The card-write UI mounts the variant rows (Step 5) and the routing-rules editor (`Step7RoutingBody`) inside **RunView** (`/projects/:id/runs/:id`). Two problems with that home:
 
-**Do:** extend tools.http with PUT/PATCH/DELETE, a binary-safe response mode (e.g. `responseType: 'arraybuffer'` → base64), and multipart/form-data request bodies. Pipeline-agnostic by construction (pure transport). Affected briefs: media-generator (×3 files), cms-publisher, doc-exporter, sheet-logger, transcript-fetcher.
+1. **Snapshot isolation makes run-view editing misleading.** The running pipeline resolves cards + routing from the run's **`execution_plan_snapshot`**, not the live template — `server/routes/submoduleRuns.js:304`: *"Prefer execution_plan_snapshot so mid-run template edits cannot poison [the run]."* So editing routing through a run's Step 7 edits the **live template** (for future runs) and does **not** affect the run you're looking at. The UI implies you're configuring "this run"; you're actually configuring the template.
+2. **Reachability gate.** `StepContainer.isClickable` is `active || completed || approved`, so a `pending` Step 7 can't be expanded. On a fresh/mid-flight run the routing editor is unreachable until the run actually reaches Step 7 — operators can't author routing ahead of time. (During the visual pass this required a temporary `isClickable = true` dev tweak just to view Step 7.)
 
----
+**Proposed direction (not decided):**
+- Move card + routing **authoring** into the **template editor** (`/templates/:id`) — its honest home, since `card_definitions`/`routing_rules` are template-level `execution_plan` data. The components already read the template via `useTemplatePlan`/`useTemplateCardMutation` (not run/stage data), so they remount there cheaply.
+- Make the **run-view** versions **read-only views of the run's snapshot** — show what *that run* will do, without pretending edits affect it.
+- This restores what the deleted `CardsSection`/`RoutingRulesSection` conceptually covered, but with the correct schema + atomic `cardPlanEditor` writes.
 
-## Item 44 — No asset persistence for generated media (skeleton repo)
+**Explicit constraint (user, 2026-07-04):** do **NOT** bolt this onto the certified, deploy-ready card-write branch (`auto-21-w2-2026-06-25`). The branch is manifested and reviewed; this is new scope. **Decide it from a DEPLOYED baseline, as its own thread, after the card-write bundle ships.**
 
-**Added:** 2026-07-03 | **Status:** Open | **Priority:** Medium (blocks media-generator video mode) | **Touches:** skeleton tools surface (would be a new `tools.storage` or equivalent)
-
-Modules emit JSON items into the pool; there is no facility to persist a binary asset. Generated-media provider URLs expire (Black Forest Labs FLUX ~10 min; Veo files deleted after ~2 days; OpenAI images return base64 that has nowhere durable to land). The media-generator briefs therefore sequence: TTS + image modes first via non-expiring paths (Leonardo CDN URLs never expire; Gemini base64-in-JSON payloads stored inline), video mode LAST — it becomes "just another provider config" once persistence exists.
-
-**Do (design question, deliberately open):** decide the persistence primitive — Supabase Storage bucket via skeleton (likely), local disk + static serve, or S3-compatible. Must be provider-agnostic and quota-guarded. See briefs: step5-video-generator.md (hard blocker), step5-audio-tts-generator.md, step5-image-generator.md.
-
----
-
-## Item 45 — Step-10 approval → Step-9 `execute` trigger + terminal_state readability (skeleton repo; extends #8/#9)
-
-**Added:** 2026-07-03 | **Status:** Open | **Priority:** Medium (prerequisite for any Step-9 module) | **Touches:** skeleton approve/routing flow; pool-item enrichment (ties to #8)
-
-The revised Step-9 delivery-family briefs (cms-publisher, doc-exporter, sheet-logger) all use `mode: stage|execute` — stage builds + validates payloads onto pool items; the actual send fires only after the Step-10 human gate. Two skeleton capabilities don't exist yet: (1) a mechanism by which Step-10 approval triggers an execute-mode run of the staged Step-9 submodules; (2) modules cannot read `entity_run_meta.terminal_state`, so the briefs' fail-closed `flagged_policy` gating (hold/stage-with-warning for QA-flagged entities — the #8/#9 close-out) needs the skeleton to inject flag state onto pool items (exactly BACKLOG #8's propagation) or expose it via tools.
-
-**Do:** design alongside #8/#9 when the first Step-9 module is scheduled — this is the "distribution gate" #9 has always pointed at, now with a concrete module-side contract to design against.
+**Not urgent / not a correctness bug** — the current run-view authoring works and writes valid template data; it's a UX-honesty + discoverability improvement.
 
 ---
 
-## Item 46 — api-search header-auth support (modules repo, small)
+## Item 44 — Pipeline Copilot: AI assistant present at every step
 
-**Added:** 2026-07-03 | **Status:** Open | **Priority:** Low-medium (small; unblocks 2+ planned provider configs) | **Touches:** `modules/step-1-discovery/api-search/execute.js` + manifest (provider config schema)
+**Priority:** Deferred (design complete; foundation only, ~0% of product built) · **Added:** 2026-07-05 · **Status:** SPEC LANDED — parallel track to Phase 12, not scheduled.
 
-api-search provider configs support bearer-token auth only. Providers needing custom header shapes cannot be configured: Pexels (`Authorization: <key>`, no "Bearer" prefix — key EXISTS in .env), PodcastIndex (key + hash + timestamp headers). Revised briefs step1-image-logo-search.md and step1-youtube-podcast-discovery.md route stock-image and podcast providers through api-search and hit this.
+**What it is:** An LLM assistant (Claude API + tool use) embedded in the pipeline UI that guides run setup, **monitors a live run in real time, analyzes each step's results, and proposes concrete field-level setting changes and changes to other submodules** — always as suggestions the operator accepts/rejects (system prompt: *"Never auto-apply changes"*). Cross-run analysis and field-level suggestion cards are a later (deferred) phase. This is the "AI at every step" concept from ~Mar–Apr 2026; it sat as loose drafts on Desktop/Downloads until located + landed 2026-07-05.
 
-**Do:** add an optional per-provider `headers` object (values support `{env:VAR_NAME}` interpolation, consistent with existing env handling) alongside the existing bearer option. Backwards-compatible; pipeline-agnostic.
+**Canonical docs (landed 2026-07-05):**
+- `Content-Pipeline/specs/PIPELINE_COPILOT_SPEC_v2.md` — the post-review v2 spec (3-phase rollout: Background Monitor → Sidebar Chat → Optimization Engine).
+- `Content-Pipeline/specs/PHASE_12C_ADDENDUM.md` — the auto-executor changes the Copilot consumes (EventEmitter + `error_summary`).
+- Stale drafts archived to `Content-Pipeline/archive/copilot-spec-drafts/`.
+
+**BUILT (verified in deployed-shape code, `content-pipeline-v2/server/services/autoExecutor.js`, 2026-07-05):** the addendum's *emit-side foundation* only —
+- `autoExecuteEvents` EventEmitter + `'error'` safety net (addendum Change 2).
+- 10 lifecycle emits wired: `step_started`, `submodule_completed`, `step_evaluated` (carries `errorSummary`), `threshold_halt` (carries `errorSummary`), `enqueue_mismatch`, `step_completed`, `run_completed`, `run_aborted`, `execution_error`, plus a `routing_loop` emit added later (not in the addendum).
+- `error_summary` computed in `evaluateStepResult` (groupBy error string, first 50 chars) and persisted into `auto_execute_state.per_step_results` incl. on the halt path (addendum Changes 1 + 3).
+
+**NOT BUILT (0% — the entire Copilot product):**
+- Consumer services: `copilotEventQueue.js`, `copilotEngine.js`, `copilotTools.js` (11 read-only tools), `copilotFallback.js`, `copilotConversation.js`, `copilotAlerts.js`, `copilotInsights.js`.
+- Routes: `POST /api/copilot/chat`, `/chat/stream`, `GET /api/copilot/stream` (SSE).
+- Tables: `copilot_conversations`, `copilot_messages`, `copilot_conversation_summaries`, `copilot_insights`.
+- Client: `CopilotAlerts/`, `CopilotPanel/`, `CopilotSuggestionCard/`, `useCopilotContext`, `useChat`.
+- 3 addendum emits never wired: `entity_timeout_warning`, `step_timeout`, `server_restart_halt`.
+
+**Dependency note:** the spec is written against the Phase-12 auto-executor (`auto_execute_state` JSONB, presets, reports). Pipeline state has moved since April (multi-card routing, Section C, etc.), so a build restart should re-scope Phase 1 against current code before estimating. Spec's own MVP sizing: Phase 1 ≈ 1,540 lines, Phase 2 ≈ 900 lines, Phase 3 deferred.
+
+**Why it's here, not lost again:** classic "brief saved in two places" (Item 42 pattern) — this was chat-era design that never landed in `specs/`. Now it has.
+
+---
+
+## Item 45 — `tools.http` verb/binary/multipart gaps (skeleton repo)
+
+**Added:** 2026-07-05
+**Priority:** Medium (gates parts of the module buildout)
+**Touches:** `content-pipeline-v2` skeleton — the `tools.http` surface built in `stageWorker.js::buildTools()`
+**Renumbered:** filed by the 2026-07-03 buildout thread as proposed `#43`; that number was **never committed to this BACKLOG** and collided with the real [[Item 43]] (routing/card authoring). Reallocated to **#45** by unit 0.1 (2026-07-05, per the header allocation rule). The buildout-thread docs (`SUBMODULE_BUILDOUT_PLAN.md`, briefs README, on worktree branch `claude/charming-lamport-4b708c`) still say `#43` until that thread renumbers its own cross-refs — see the handoff.
+
+### Issue
+`tools.http` is GET/HEAD/POST-only, binary-unsafe, and has no multipart support.
+
+### Blocks
+- OpenAI TTS (raw binary response)
+- Strapi / Ghost / Contentful updates (PUT)
+- Airtable upsert (PATCH)
+- S3 / WebDAV uploads
+- Large-audio STT upload (multipart)
+
+Directly gates `media-generator` (TTS/image for some providers) and several Step-9 delivery providers. Clusters with [[Item 46]] (asset persistence) and [[Item 47]] (Step-9 family) around media + delivery.
+
+### Source
+`SUBMODULE_BUILDOUT_PLAN.md` §7 (buildout thread worktree `claude/charming-lamport-4b708c`); canonical briefs describe it as "binary-safe HTTP" / "skeleton capability audit needed".
+
+---
+
+## Item 46 — No asset persistence (`tools.storage` missing); generated-media URLs expire (skeleton repo)
+
+**Added:** 2026-07-05
+**Priority:** Medium (gates media video mode)
+**Touches:** `content-pipeline-v2` skeleton — a new `tools.storage` surface (or a Step-8 downloader, or distribution-step ownership)
+**Renumbered:** filed by the buildout thread as proposed `#44`; never committed, collided with the real [[Item 44]] (Pipeline Copilot). Reallocated to **#46** by unit 0.1 (2026-07-05).
+
+### Issue
+No `tools.storage` exists. Modules that generate media get back ephemeral/expiring URLs (or base64 in the pool) with no durable home.
+
+### Blocks
+- `media-generator` **video mode** (hard block — video URLs expire fast).
+- TTS / image modes can ship first via non-expiring provider paths (e.g. Leonardo, base64), deferring this gap.
+
+### Options (from the briefs — `step5-audio-tts-generator.md`, `step5-image-generator.md`)
+1. Skeleton adds a storage tool (e.g. Supabase Storage bucket) modules hand base64/URLs to.
+2. A Step-8 bundler downloads + persists (needs binary-safe HTTP [[Item 45]] there too).
+3. The distribution step owns persistence.
+
+### Source
+`SUBMODULE_BUILDOUT_PLAN.md` §7.
+
+---
+
+## Item 47 — No Step-10-approval → Step-9 `execute` trigger; `terminal_state` unreadable by modules (skeleton repo)
+
+**Added:** 2026-07-05
+**Priority:** Medium (gates the Step-9 delivery family → U1 publish)
+**Touches:** `content-pipeline-v2` skeleton (Step-10 → Step-9 trigger + `terminal_state` exposure to modules); closes [[Item 9]]
+**Renumbered:** filed by the buildout thread as proposed `#45`. Reallocated to **#47** by unit 0.1 (2026-07-05).
+
+### Issue
+There is no Step-10-approval → Step-9 `execute` trigger, and modules can't read `entity_run_meta.terminal_state` to gate flagged entities out of distribution. Extends [[Item 8]] (quality signals to Step 8) and [[Item 9]] (distribution gate).
+
+### Blocks
+The entire Step-9 delivery family — `cms-publisher`, `doc-exporter`, `sheet-logger`. Resolving it also **closes [[Item 9]]** (the distribution gate) by giving Step 9 the trigger + the flagged-entity signal it needs.
+
+### Source
+`SUBMODULE_BUILDOUT_PLAN.md` §7 / §8.
+
+---
+
+## Item 48 — `api-search` custom-header auth (modules repo)
+
+**Added:** 2026-07-05
+**Priority:** Low-medium (small modules-repo fix; unblocks Wave-2 provider configs)
+**Touches:** `modules/step-1-discovery/api-search/` — auth handling (currently bearer-only)
+**Renumbered:** filed by the buildout thread as proposed `#46`. Reallocated to **#48** by unit 0.1 (2026-07-05). **Note:** unlike [[Item 45]]/[[Item 46]]/[[Item 47]] (skeleton repo), this one is a **modules-repo** fix.
+
+### Issue
+`api-search` supports bearer auth only — no custom request headers.
+
+### Blocks
+Pexels + PodcastIndex provider configs (both need custom-header auth).
+
+### Source
+`SUBMODULE_BUILDOUT_PLAN.md` §7 / §8 (Wave 2 — "after the small `api-search` header-auth fix").
