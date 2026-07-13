@@ -1941,6 +1941,8 @@ Only **Anthropic, OpenAI, Perplexity** are wired into `tools.ai` today. **Gemini
 ### Rollout (sequenced — research §8)
 Eval harness + `tools.ai` refactor → add **ONE** adapter (**Gemini first** — Flash-Lite is the biggest cheap-classification win, clean API) → measure vs the real baseline → add **DeepSeek** only if it wins the rebuilt QA gold set by a margin worth a 4th provider. **Do NOT wire 3 providers at once.**
 
+**Step-1 adapter scope:** [`docs/GEMINI_ADAPTER_SCOPE.md`](docs/GEMINI_ADAPTER_SCOPE.md) — the ~45-line `stageWorker.js` branch (grounded in the real `ai.complete()` code), the **HTTP-200 safety-block guard** (gambling copy trips Gemini filters and a naive port publishes empty), MODEL_MAP entries, test plan, and what the MVP deliberately skips (streaming, cache_prefix, adapter refactor). Skeleton-track implements/deploys; this is the hand-off.
+
 ### Biggest risk
 Silent semantic drift behind a uniform `complete()` interface (one provider reasons by default, another refuses, another changes JSON shape, another counts 30% more tokens) — and with the current fail-open QA, that drift reaches publication. Mitigation: per-provider output validation before accepting a response, plus the QA rebuild.
 
