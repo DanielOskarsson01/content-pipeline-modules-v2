@@ -58,6 +58,7 @@ Tasks not yet scheduled for implementation.
 | 46 | **No asset persistence (`tools.storage` missing)** (skeleton repo) — generated-media URLs expire; no durable home for binaries. Gates `media-generator` **video mode** (hard); TTS/image can ship first via non-expiring paths. **Renumbered from buildout `#44`** (collided with real [[Item 44]]). | Medium (gates media video mode) | 2026-07-05 |
 | 47 | **No Step-10-approval → Step-9 `execute` trigger; `terminal_state` unreadable by modules** (skeleton repo) — modules can't gate flagged entities out of distribution. Extends [[Item 8]]/[[Item 9]]; gates the entire Step-9 delivery family (`cms-publisher`/`doc-exporter`/`sheet-logger`) and closes [[Item 9]]. **Renumbered from buildout `#45`.** | Medium (gates Step-9 delivery → U1 publish) | 2026-07-05 |
 | 48 | **`api-search` custom-header auth** (modules repo) — bearer-auth only, no custom headers. Gates Pexels + PodcastIndex provider configs. Small modules-repo fix. **Renumbered from buildout `#46`.** | Low-medium (unblocks Wave-2 provider configs) | 2026-07-05 |
+| 51 | **Claim-extraction redesign / QA faithfulness pass** (modules repo; forked from UNIT #50 QA-hardening) — regex claim-extraction (`FACTUAL_CLAIM_PATTERNS` + `GENERAL_KNOWLEDGE_PATTERNS`) is padding-blind: qualitative/marketing prose scores 1.0. **Shared** across hallucination-detector + citation-coverage as near-duplicate, silently drifted copies. **Absorbs [[Item 35]].** Direction: LLM faithfulness pass (or broadened-pattern + LLM-judge hybrid) + de-dup the two copies. Architectural — needs brutal-critic + CTO. **Gated AFTER #50** (`content-pipeline-specs/specs/UNIT_50_QA_HARDENING_DESIGN.md`, Decision 3). Numbered #51 to match the unit-number pre-referenced in the UNIT_50 design+review; #49/#50 are unallocated backlog gaps (design jumped to #50/#51) — next filer takes #52. | Medium-high (deeper redesign; the residual #50 explicitly defers) | 2026-07-13 |
 
 ---
 
@@ -1907,3 +1908,28 @@ Pexels + PodcastIndex provider configs (both need custom-header auth).
 
 ### Source
 `SUBMODULE_BUILDOUT_PLAN.md` §7 / §8 (Wave 2 — "after the small `api-search` header-auth fix").
+
+## Item 51 — Claim-extraction redesign / QA faithfulness pass (forked from UNIT #50)
+
+**Added:** 2026-07-13
+**Priority:** Medium-high (deeper redesign; the residual UNIT #50 explicitly defers — NOT "nothing broken": the padding-blind score is a load-bearing QA signal that saturates at 1.0, which is what forced the content-writer-v2 entry gate to stop trusting it — see [[Item 35]])
+**Touches:** `modules/step-6-qa/hallucination-detector/execute.js` + `modules/step-6-qa/citation-coverage-checker/execute.js` (`FACTUAL_CLAIM_PATTERNS`, `GENERAL_KNOWLEDGE_PATTERNS`, `isGeneralKnowledge`); cross-module — a shared extractor or shared LLM faithfulness pass.
+**Absorbs:** [[Item 35]] (citation-coverage padding-blind gap + its content-writer-v2-entry-gate evidence). #51 supersedes #35 rather than running parallel to it.
+**Cross-ref:** `content-pipeline-specs/specs/UNIT_50_QA_HARDENING_DESIGN.md` (Decision 3 — the fork; Decision 1 case 3 + the FLOOR reframe are the residual disclosures #50 lands) + `UNIT_50_REVIEW.md` (CTO-3 — filing #51 was a build condition for #50).
+**Numbering note:** filed as **#51** to match the unit number pre-referenced across the UNIT_50 design + review. This filing closes exactly the "scoped-in-prose-but-unfiled → silent drift" pattern that CTO-3 flagged and that [[Item 10]] (the 26-day PHASE_3B lapse) names as a known failure mode. Backlog **#49/#50 are unallocated gaps** — the design jumped to #50 (the QA-hardening *unit*, tracked by its design doc, not a separate backlog item) / #51 (this fork). A future filer should take **#52**, not #49/#50.
+
+### Issue
+Claim extraction is a narrow regex set (numbers/dates/currency/company-verbs). Qualitative/marketing/padded prose matches none of it, so unsupported qualitative claims are invisible — `hallucination_score` / `citation_score` saturate at 1.0. A 1.0 means *"the claims the regex could see are supported,"* NOT *"all claims are supported."* A padding-blind perfect score reads as clean in Step-7 routing, Step-8 propagation, and QA pass-rate reporting.
+
+### Why forked from #50 (not folded in)
+#50 is a bounded gate / empty-input / severity-floor fix on `execute.js` scoring, unit-testable in isolation. Extraction is (a) a **shared, already-drifted** surface across two modules (HD carries 3 extra factual + 2 extra GK patterns citation lacks — near-duplicate, NOT byte-identical), and (b) has no cheap correct form — only an LLM faithfulness pass is a real fix, which is a new verification model. A half-fixed regex broadening manufactures false confidence while still missing most qualitative prose (and deepens the HD/citation divergence). #50 keeps them apart and reframes the score as a documented FLOOR; #51 does the real redesign.
+
+### Scope
+1. Replace/augment regex extraction with an **LLM faithfulness pass** ("does any sentence assert a fact not in the cited/available sources?") — or a broadened-pattern + LLM-judge hybrid — covering qualitative/marketing/padded prose.
+2. **De-duplicate** the drifted regex across hallucination-detector + citation-coverage (shared extractor or shared LLM pass).
+3. Absorb [[Item 35]].
+4. **Architectural review required (brutal-critic + CTO):** new verification model, cross-module surface, LLM-cost implications, Rule-13 agnosticism of any new prompt.
+5. **Coordinate with W2.3:** the faithfulness prompt becomes a locked truth-metric prompt on the same terms as the verification prompt; and the severity taxonomy #50's hard floor depends on — including `high` defined for the `partial` tier (UNIT_50 Decision 2 disposition (a) + CTO-8) — must survive as a locked contract if #51 rewrites the prompt.
+
+### Gating
+Gated **AFTER #50** ships. #50 disclosed the residual and reframed the score as a FLOOR; #51 closes it.
