@@ -58,6 +58,8 @@ Tasks not yet scheduled for implementation.
 | 46 | **No asset persistence (`tools.storage` missing)** (skeleton repo) — generated-media URLs expire; no durable home for binaries. Gates `media-generator` **video mode** (hard); TTS/image can ship first via non-expiring paths. **Renumbered from buildout `#44`** (collided with real [[Item 44]]). | Medium (gates media video mode) | 2026-07-05 |
 | 47 | **No Step-10-approval → Step-9 `execute` trigger; `terminal_state` unreadable by modules** (skeleton repo) — modules can't gate flagged entities out of distribution. Extends [[Item 8]]/[[Item 9]]; gates the entire Step-9 delivery family (`cms-publisher`/`doc-exporter`/`sheet-logger`) and closes [[Item 9]]. **Renumbered from buildout `#45`.** | Medium (gates Step-9 delivery → U1 publish) | 2026-07-05 |
 | 48 | **`api-search` custom-header auth** (modules repo) — bearer-auth only, no custom headers. Gates Pexels + PodcastIndex provider configs. Small modules-repo fix. **Renumbered from buildout `#46`.** | Low-medium (unblocks Wave-2 provider configs) | 2026-07-05 |
+| 49 | **Multi-provider LLM routing — cut cost + raise quality per task** (skeleton `tools.ai` + all 8 LLM manifests) — stop running every LLM step on one model; route each task to its best price/quality model. Only Anthropic/OpenAI/Perplexity are wired today; Gemini/DeepSeek/Grok/Qwen/Kimi/GLM need a provider-contract refactor + adapters (NOT manifest edits). Full routing spec + verified July-2026 pricing + 3 independent reviews: `docs/MODEL_SELECTION_RESEARCH_2026-07.md`. Sequenced rollout: eval harness + `tools.ai` refactor → ONE adapter (Gemini first) → measure vs baseline → add DeepSeek only if it wins. Builds on [[Item 21]]; QA-routing gated by [[Item 50]]. **Scheduled AFTER the current short-term project.** | Medium (cost + quality; deferred) | 2026-07-13 |
+| 50 | **hallucination-detector fails open** (modules repo) — QA gate passes unsupported content. Confirmed in-repo 2026-07-13: no `content_markdown`→`qa_pass:true` (execute.js:264); zero extracted claims→score 1→pass (execute.js:432); pass is a plain AVERAGE so severity isn't gated (9 supported + 1 high-severity falsehood passes at 0.9); regex extraction misses broad claims + truncates at 200 chars; sources concatenated without IDs so quotes can't be tied to evidence. Model swap does NOT fix it — architecture. Same shape as [[Item 35]]; blocks QA routing in [[Item 49]]; overlaps Rule-13 W2.3 code-lock | Medium-high (correctness; QA signal untrustworthy) | 2026-07-13 |
 
 ---
 
@@ -1907,3 +1909,61 @@ Pexels + PodcastIndex provider configs (both need custom-header auth).
 
 ### Source
 `SUBMODULE_BUILDOUT_PLAN.md` §7 / §8 (Wave 2 — "after the small `api-search` header-auth fix").
+
+---
+
+## Item 49 — Multi-provider LLM routing: cut cost + raise quality per task
+
+**Added:** 2026-07-13
+**Priority:** Medium (cost + quality) — **scheduled AFTER the current short-term project** (the acute "Haiku can't categorize/write" fix is a separate near-term thread using already-wired Sonnet/GPT, no adapters).
+**Touches:** skeleton `tools.ai` (provider adapters + contract), host alias map, all 8 LLM-calling manifests, run/template config migration.
+**Full research + routing spec + verified pricing:** [`docs/MODEL_SELECTION_RESEARCH_2026-07.md`](docs/MODEL_SELECTION_RESEARCH_2026-07.md) (v1.2 — deep research + 3 independent reviews incl. Codex repo audit).
+
+### Goal
+Stop running every LLM step on one model. Route each task to its best price/quality model — cheaper for the dumb high-volume steps, stronger for drafting/QA. In mid-2026 the market is diverse enough that task-matched routing meaningfully cuts the compute-tax while raising quality on the steps that matter.
+
+### The gate (why this is real work, not a config change)
+Only **Anthropic, OpenAI, Perplexity** are wired into `tools.ai` today. **Gemini, DeepSeek, Grok, Qwen, Kimi, GLM throw** if selected — each needs an adapter. So diversification = a provider-contract refactor, not manifest edits.
+
+### Prerequisite work (the real cost — research §6)
+- **`tools.ai` provider-contract refactor:** adapter interface (not one big conditional); structured-output/JSON-schema support; per-provider tokenizer + token accounting (char caps today); retries with jitter + `Retry-After` + idempotency (fixed 2/4/8s today, no timeout retry); streaming normalization (only Anthropic streams today); safety/refusal normalization (HTTP-200-with-stop_reason etc.); observability (resolved model id, provider, finish reason, reasoning/cache tokens, cost, fallback); cross-provider fallback on 429/503/refusal.
+- **Alias map fix:** `sonnet`→Sonnet 4.5, `opus`→4.6 today (stale); map is global not provider-scoped, so the UI can build invalid combos (`haiku`+`openai` → an Anthropic ID sent to OpenAI).
+- **Config migration:** run/template/card configs override manifest defaults — changing source defaults won't move already-saved configs.
+- **Eval harness:** per-task A/B measuring **publishable-rate / editor-minutes-per-dollar** (not benchmark score), counting billed reasoning tokens.
+
+### Target routing (per research; billable July-2026 first-party prices)
+- **Classification / discovery** (`url-relevance`, `intent-tagger`, `ai-discovery-scout`): → **Gemini 2.5 Flash-Lite** $0.10/$0.40 (~10× cheaper than Haiku). Regression-test on real labels first.
+- **Category analysis / extraction** (`content-analyzer`): → **DeepSeek-V4-Flash** (or V4-Pro for reasoning) — cheaper *and* stronger.
+- **Drafting** (`content-writer`, `tone-seo-editor`): A/B **Gemini 2.5 Flash vs Claude Sonnet 5 vs GPT-5.6 Terra** (Terra is OpenAI's balanced tier, not Luna). Sonnet 5 needs the temperature-omit adapter change.
+- **QA** (`hallucination-detector`): judge A/B **GPT-5.6 Terra vs Gemini 3.1 Pro vs DeepSeek-V4-Pro** — but **only after the detector fail-open architecture fix**; model choice is moot while it passes empty/low-claim content. Use `sonar` (already wired) as the evidence retriever.
+- **Future** — long-context synthesis: DeepSeek-V4-Flash / Gemini 2.5 Pro (1M ctx). Real-time/social: Grok 4.5 (note: web/X access = separately-billed tools).
+
+### Rollout (sequenced — research §8)
+Eval harness + `tools.ai` refactor → add **ONE** adapter (**Gemini first** — Flash-Lite is the biggest cheap-classification win, clean API) → measure vs the real baseline → add **DeepSeek** only if it wins the rebuilt QA gold set by a margin worth a 4th provider. **Do NOT wire 3 providers at once.**
+
+### Biggest risk
+Silent semantic drift behind a uniform `complete()` interface (one provider reasons by default, another refuses, another changes JSON shape, another counts 30% more tokens) — and with the current fail-open QA, that drift reaches publication. Mitigation: per-provider output validation before accepting a response, plus the QA rebuild.
+
+### Related
+Builds on [[Item 21]] (prompt caching — done). Pairs with [[Item 2]] (content-analyzer/writer flexibility). **Hard dependency for QA routing:** [[Item 50]] (hallucination-detector fails open) — model choice for the QA step is moot until the detector stops passing empty/low-claim content.
+
+---
+
+## Item 50 — hallucination-detector fails open (QA gate passes unsupported content)
+
+**Added:** 2026-07-13
+**Priority:** Medium-high (correctness — the QA quality signal is structurally untrustworthy)
+**Touches:** `modules/step-6-qa/hallucination-detector/` (execute.js, manifest.json)
+
+Confirmed in-repo 2026-07-13 (surfaced by the model-selection research + Codex repo audit, re-verified this session):
+- **No `content_markdown` → `qa_pass:true`, score 1** (execute.js:264) — nothing to verify counts as a pass.
+- **Zero extracted claims → score 1 → pass** (execute.js:432, `totalClaims > 0 ? verifiedValue/totalClaims : 1`).
+- **Pass is a plain AVERAGE**, severity reported but not gated → 9 supported claims + 1 high-severity falsehood still passes the default 0.9 threshold.
+- Regex claim-extraction misses broad assertions, exempts hedges ("leading", "major", "continues to grow"), truncates each claim at 200 chars (drops qualifiers/citations).
+- Sources concatenated + end-truncated without source IDs/URLs → returned quotes can't be programmatically tied to evidence.
+
+**Effect:** the QA gate can pass hallucinated/unsupported marketing copy. Changing the model (Haiku→DeepSeek/etc.) does NOT fix any of this — it is architecture, not model capability. Same structural weakness as [[Item 35]] (citation-coverage padding-blind).
+
+**Rebuild (research §3):** atomic claim extraction (no truncation) → per-claim evidence retrieval preserving source ID/URL/exact char-span → structured verdict (`supported`/`contradicted`/`insufficient_evidence`) → programmatic check that the quoted span exists in the cited source → **any high-severity contradiction OR insufficient-evidence blocks publication; missing sources = "unverified", never a pass.** Web retrieval only for claims meant to rely on fresh public facts; supplied-source claims stay source-bounded. Then choose the judge model (part of [[Item 49]]).
+
+**Related:** [[Item 35]] (same shape), [[Item 8]]/[[Item 9]] (quality propagation), [[Item 49]] (QA routing depends on this). **Overlaps Rule-13 W2.3** (hallucination-detector code-lock) — coordinate so the code-lock and this fail-open rebuild don't collide.
