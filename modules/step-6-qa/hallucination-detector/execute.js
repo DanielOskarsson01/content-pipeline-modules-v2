@@ -17,6 +17,45 @@
  *   5. Pass/fail based on pass_threshold
  */
 
+// ─── Code-locked verification prompt (W2.3) ───
+//
+// The truth-metric verification prompt is standardized system-wide and is NOT
+// template-overridable -- a template must not be able to weaken the fact-check.
+// It previously lived in a manifest `prompt` option (operator-editable in the
+// UI); W2.3 inlined it here and removed that option. The example claims are
+// domain-neutral (Rule 13 -- no content-type assumptions in module code).
+const MANIFEST_DEFAULT_PROMPT = `You are a fact-checking assistant. You will be given a list of factual claims extracted from a generated article, and the original source material the article was based on.
+
+For each claim, determine whether it is supported by the source material.
+
+Rules:
+- "supported" = the source material contains information that directly or clearly supports this claim, even if paraphrased
+- "unsupported" = the source material does NOT contain information supporting this claim, and it is NOT general common knowledge
+- "partial" = the source material partially supports the claim but key details (numbers, dates, specifics) differ or are missing
+- General knowledge claims (e.g. "Paris is the capital of France", "the global economy is growing") should be marked "supported" even if not explicitly in sources
+- If the claim references data from an analysis or summary derived from the sources, mark it "supported"
+
+Return a JSON array (no markdown fences, no extra text) with one object per claim:
+[
+  {
+    "claim": "the exact claim text",
+    "verdict": "supported" | "unsupported" | "partial",
+    "quote": "the supporting quote from sources, or null if unsupported",
+    "severity": "low" | "medium" | "high"
+  }
+]
+
+Severity guide:
+- "low" = general phrasing, opinion, or common knowledge that is hard to verify
+- "medium" = specific factual claim (company name, product, feature) not found in sources
+- "high" = specific number, date, statistic, or financial claim not found in sources
+
+CLAIMS:
+{{CLAIMS}}
+
+SOURCE MATERIAL:
+{{SOURCES}}`;
+
 // ─── Heuristic patterns for factual claims ───
 
 /**
@@ -238,12 +277,11 @@ async function execute(input, options, tools) {
     pass_threshold = 0.9,
     max_source_chars = 100000,
     claims_per_batch = 10,
-    prompt: promptTemplate,
   } = otherOptions;
 
-  // Prompt comes from manifest options (editable by operator in UI)
-  if (!promptTemplate) throw new Error('Missing verification prompt -- check manifest options_defaults includes "prompt"');
-  const verificationPrompt = promptTemplate;
+  // Verification prompt is code-locked (W2.3) -- NOT template-overridable.
+  // Any `prompt` a template supplies lands in otherOptions and is ignored.
+  const verificationPrompt = MANIFEST_DEFAULT_PROMPT;
 
   logger.info(
     `Config: pass_threshold=${pass_threshold}, model=${ai_model || 'default'}, ` +
@@ -551,3 +589,5 @@ async function execute(input, options, tools) {
 }
 
 module.exports = execute;
+// Exported for the W2.3 code-lock tests (behavior-equivalence + neutrality).
+module.exports.MANIFEST_DEFAULT_PROMPT = MANIFEST_DEFAULT_PROMPT;

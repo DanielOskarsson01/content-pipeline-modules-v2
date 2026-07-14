@@ -55,7 +55,13 @@ This module uses data-shape routing. It finds its input by checking which fields
 | `ai_provider` | string | `anthropic` | LLM provider | Change if using a different provider (e.g. Mercury, Gemini). |
 | `max_source_chars` | number | 100000 | Max source text to include in LLM context | Increase if sources are large and claims reference distant content. Decrease to save tokens. |
 | `claims_per_batch` | number | 10 | Claims verified per LLM call | Lower to 5 for more reliable results. Higher values use fewer API calls but may reduce accuracy. |
-| `prompt` | textarea | (built-in) | System prompt for claim verification | Customize to adjust verdict criteria, severity definitions, or domain-specific rules. Uses `{{CLAIMS}}` and `{{SOURCES}}` placeholders. |
+
+> **Verification prompt is code-locked (W2.3).** The fact-checking prompt is a
+> truth metric standardized system-wide — it is inlined in `execute.js`
+> (`MANIFEST_DEFAULT_PROMPT`) and is **not** a template-overridable option. A
+> template must not be able to weaken the fact-check. To change the verdict
+> criteria or severity definitions, edit the module code (a deliberate,
+> reviewed change), not a template preset.
 
 ---
 
