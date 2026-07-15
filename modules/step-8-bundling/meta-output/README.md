@@ -3,7 +3,14 @@
 > Generate validated SEO metadata (title, description, keywords, Open Graph, Twitter Card) from pipeline data.
 
 **Module ID:** `meta-output` | **Step:** 8 (Bundling) | **Category:** seo | **Cost:** cheap
-**Version:** 1.0.0 | **Data Operation:** transform (=)
+**Version:** 1.0.1 | **Data Operation:** add (+)
+
+## Changelog
+
+### v1.0.1 (2026-07-16) — BACKLOG #52: ship the planned meta, not the entity name
+- Meta title/description now resolve in **the same priority order meta-compliance-checker validates** (the QA check is only honest if it verifies what ships): (1) direct `meta_title`/`meta_description` fields on any pool item (content-writer emits the planner candidate here since v1.6.2) → (2) YAML frontmatter in `content_markdown` → (3) `seo_plan_json.meta.{title,description}` (legacy), then `seo_plan_json.sections.meta.meta_{title,description}.candidate` (seo-planner's actual output) → (4) H1 / first-paragraph heuristics → (5) entity name / empty string (last resort, surfaced via length warnings).
+- Keyword assembly now mirrors the checker's `extractHeadTerms`: per-section `target_keywords` (seo-planner's actual shape), `keyword_summary_table[].keyword`, `head_terms`, flat `keywords` — in addition to the legacy top-level `target_keywords`. SEO-plan keywords are trimmed + lowercased for consistent dedup.
+- Previously only legacy top-level `seo_plan_json.meta.title` was read, so after FIX D the QA gate passed on the planner candidate while the deliverable still shipped `title="<entity name>"` / empty description.
 
 ---
 
@@ -111,8 +118,8 @@ include_twitter_tags: false
 
 **Output fields per entity:**
 - `entity_name` -- the company/entity name
-- `meta_title` -- the SEO title (from seo_plan_json.meta.title, fallback to entity name)
-- `meta_description` -- the SEO description (from seo_plan_json.meta.description)
+- `meta_title` -- the SEO title (resolved: item meta_title field → frontmatter → plan meta/candidate → H1 → entity name)
+- `meta_description` -- the SEO description (resolved: item meta_description field → frontmatter → plan meta/candidate → first paragraph → empty)
 - `title_length` -- character count of the title
 - `description_length` -- character count of the description
 - `keyword_count` -- number of assembled keywords
@@ -131,7 +138,7 @@ include_twitter_tags: false
 **Keyword assembly sources:**
 - Categories: primary and secondary category slugs from analysis_json
 - Tags: existing tag slugs + suggested new tag labels from analysis_json
-- SEO keywords: primary, secondary (array), and long-tail (array) from seo_plan_json
+- SEO keywords (mirrors meta-compliance-checker's extractHeadTerms): `head_terms`, top-level `target_keywords`, per-section `sections.*.target_keywords` (primary/secondary/long_tail), `keyword_summary_table[].keyword`, flat `keywords` -- from the first seo_plan_json with any extractable keywords; trimmed + lowercased
 
 **Red flags to watch for:**
 - Many entities with `status: warning` -- seo-planner may be generating titles/descriptions outside Google limits
@@ -141,7 +148,7 @@ include_twitter_tags: false
 ## Limitations & Edge Cases
 
 - **Requires seo_plan_json** -- entities without this field are skipped with an error. Run seo-planner first
-- **Title fallback to entity name** -- if seo_plan_json.meta.title is missing, the entity name is used. This may exceed the max_title_length for long company names
+- **Title fallback to entity name** -- only when NO source resolves (no item meta fields, no frontmatter, no plan meta/candidate, no H1). The fallback may exceed max_title_length for long company names -- surfaced as a warning
 - **Slug generation is basic** -- uses simple regex to lowercase, strip special characters, and replace spaces with hyphens. Non-ASCII characters may be handled inconsistently
 - **OG type is always "article"** -- does not support other Open Graph types (product, website, etc.)
 - **Twitter Card is always "summary"** -- does not support summary_large_image, player, or other card types
@@ -164,7 +171,7 @@ The status/warning system provides an immediate quality gate -- operators can re
 - **Step:** 8 (Bundling)
 - **Category:** seo
 - **Cost:** cheap
-- **Data operation:** transform (=) -- metadata extracted and validated
+- **Data operation:** add (+) -- metadata items added to the pool (item_key: entity_name)
 - **Requires columns:** none (reads from pool items, not CSV columns)
 - **Depends on:** seo-planner (required)
 - **Input:** `input.entities[]` with `items[]` containing `seo_plan_json` and optionally `analysis_json`
@@ -173,4 +180,4 @@ The status/warning system provides an immediate quality gate -- operators can re
 - **Flagged when:** `status` is `warning` (highlighted in the table)
 - **Detail view:** header fields (entity_name, status badge, title_length, description_length, keyword_count) and sections for meta_title (text), meta_description (text), meta_json (prose)
 - **Dependencies:** `tools.logger`, `tools.progress`
-- **Files:** `manifest.json`, `execute.js`
+- **Files:** `manifest.json`, `execute.js`, `test-meta-resolution.js`

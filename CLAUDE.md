@@ -1136,3 +1136,17 @@ Architectural specs in "pending sign-off" state need active tracking to either a
 **Verification:** full step-5 + meta-chain module test set **15/15 green** after the manifest edit (JSON re-validated). Changes are doc/backlog only.
 
 **Updated by:** Claude (verdict reconciliation — conditions verified + folded; FIX C returned to the planning chat)
+
+### Session: 2026-07-16 — UNIT #52: meta-output loop closure (v1.0.1, branch `step5-token-economics`, NOT merged)
+
+**Status:** BACKLOG #52 implemented per its entry. Ownership: `modules/step-8-bundling/meta-output/*` + BACKLOG.md + this log only — step-5/step-6 untouched (verified in review). TDD (red→green), `/code-review` PASS (0 critical/0 warning-in-diff), full module test set green. Committed on `step5-token-economics`, pushed; **merge to main remains a separate deliberate act (CI deploy)**.
+
+**The fix (meta-output v1.0.1):** `execute.js` previously read only legacy top-level `seo_plan_json.meta.title` → `entity.name` fallback, so after FIX D the QA gate passed on the planner candidate while the deliverable still shipped `title="ELK Studios"` / empty description. New `resolveMeta()` mirrors meta-compliance-checker's exact priority order: (1) direct item `meta_title`/`meta_description` fields (writer emits the candidate there since v1.6.2) → (2) YAML frontmatter → (3) `plan.meta` legacy then `sections.meta.meta_*.candidate` → (4) H1/first-paragraph heuristics → (5) entity-name/'' last resort. `assembleKeywords` now mirrors `extractHeadTerms` v1.0.1 (per-section `target_keywords`, `keyword_summary_table`, `head_terms`, flat `keywords`; first plan with extractable terms; trim+lowercase). Helpers are self-contained copies (Rule 4); the writer+checker+meta-output shared-resolver de-dup stays a noted future item.
+
+**Invariant established and TESTED:** `test-meta-resolution.js` (31 assertions) cross-imports the real checker and runs the SAME fixture through both modules, asserting shipped ≡ validated on four fixtures (FIX D calibration fixture incl. `qa_pass===true`, writer-fields, frontmatter, H1-heuristic) — checker-pass now implies deliverable-correct. Plus: honest entity-name fallback (flagged `warning`, not silent), legacy top-level shapes regression-guarded.
+
+**Deliberate behavior notes:** multi-plan pools resolve first-plan-wins (was last-plan) — the checker's semantics, required by the invariant; abnormal case anyway under composite-key upsert. SEO-plan keywords now lowercased (checker parity; documented). README stale-doc fix: data operation is `add` (manifest + CLAUDE.md Step-8 table), README wrongly said `transform`.
+
+**Carried to the planning chat (review WARNING, out of ownership):** content-writer `execute.js:311-314` + `README.md:166` still say "Step 8 meta-output does NOT yet consume these fields (BACKLOG #52)" — falsified by this commit on the SAME branch. Needs a one-line doc amend (separate approved commit or at merge). Also open: #53 effort dial, #54 cache restructure, #55 page selection; FIX C identification still with the planning chat.
+
+**Updated by:** Claude (UNIT #52 execution session)
