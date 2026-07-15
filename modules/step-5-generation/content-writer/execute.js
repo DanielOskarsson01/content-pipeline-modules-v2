@@ -29,14 +29,21 @@ const MANIFEST_DEFAULT_PROMPT = MANIFEST.options_defaults.prompt;
 
 /**
  * Replace prompt placeholders with actual content.
+ *
+ * Uses function-form replacement everywhere a caller-supplied value is inserted.
+ * String.prototype.replace interprets $-patterns ($$, $&, $`, $', $n) in a
+ * STRING replacement, which mangles scraped source content or reference docs
+ * containing those sequences (ubiquitous — "$$" for money, "$&" in URLs). A
+ * replacer function inserts the value literally.
  */
 function buildPrompt(promptTemplate, entityContent, referenceDocs) {
-  let prompt = promptTemplate.replace(/\{entity_content\}/g, entityContent);
+  let prompt = promptTemplate.replace(/\{entity_content\}/g, () => entityContent);
 
   // Replace {doc:filename} placeholders
   if (referenceDocs && typeof referenceDocs === 'object') {
     for (const [filename, content] of Object.entries(referenceDocs)) {
-      prompt = prompt.replace(new RegExp(`\\{doc:${escapeRegex(filename)}\\}`, 'g'), String(content));
+      const str = String(content);
+      prompt = prompt.replace(new RegExp(`\\{doc:${escapeRegex(filename)}\\}`, 'g'), () => str);
     }
   }
 
@@ -519,5 +526,6 @@ module.exports.__testing = {
   countResolvedSlugs,
   renderAllowedSlugsBlock,
   assembleEntityContent,
+  buildPrompt,
   MANIFEST_DEFAULT_PROMPT,
 };

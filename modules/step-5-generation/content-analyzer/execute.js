@@ -34,10 +34,18 @@ function assembleEntityContent(items, maxChars) {
  */
 function resolveDocs(text, referenceDocs) {
   let out = text;
-  // Replace {doc:filename} placeholders with actual doc content
+  // Replace {doc:filename} placeholders with actual doc content.
+  // Function-form replacement: String.prototype.replace interprets $-patterns
+  // ($$, $&, $`, $', $n) in a STRING replacement, which mangles doc content or
+  // scraped text containing those sequences (ubiquitous — e.g. "$$" for money).
+  // A replacer function inserts the value literally. This also fixes the
+  // BACKLOG #21 cache split: buildPrompt (this path) and buildCachedPrompt's
+  // plain concatenation now agree byte-for-byte on $-content, so the split
+  // engages instead of falling back.
   if (referenceDocs && typeof referenceDocs === 'object') {
     for (const [filename, content] of Object.entries(referenceDocs)) {
-      out = out.replace(new RegExp(`\\{doc:${escapeRegex(filename)}\\}`, 'g'), String(content));
+      const str = String(content);
+      out = out.replace(new RegExp(`\\{doc:${escapeRegex(filename)}\\}`, 'g'), () => str);
     }
   }
   // Clean up any unreplaced {doc:...} placeholders
@@ -50,7 +58,9 @@ function resolveDocs(text, referenceDocs) {
  * - {doc:filename} → reference doc content (from resolved options)
  */
 function buildPrompt(promptTemplate, entityContent, referenceDocs) {
-  return resolveDocs(promptTemplate.replace(/\{entity_content\}/g, entityContent), referenceDocs);
+  // Function-form replacement so $-sequences in scraped entity content are
+  // inserted literally (not interpreted as replacement patterns). See resolveDocs.
+  return resolveDocs(promptTemplate.replace(/\{entity_content\}/g, () => entityContent), referenceDocs);
 }
 
 /**
@@ -79,13 +89,13 @@ function buildCachedPrompt(promptTemplate, entityContent, referenceDocs) {
     const prompt = resolveDocs(entityContent + parts[1], referenceDocs);
     // BULLETPROOF GUARD: only cache-split when it reassembles to the EXACT
     // single-prompt bytes. Caching is billing-only — it must never change what
-    // the model sees. Two assembly paths can otherwise diverge: (a) entity
-    // content with $-replacement-pattern sequences ($$, $&, $`, $') that
-    // String.prototype.replace interprets in buildPrompt but plain
-    // concatenation here does not; (b) a template nesting {entity_content}
-    // inside a {doc:...} token. Both fall back to the full prompt (no caching,
-    // identical bytes). [Separate latent bug: buildPrompt's $-mangling of
-    // scraped content — tracked for a deliberate follow-up, not changed here.]
+    // the model sees. As of the $-sequence fix (buildPrompt/resolveDocs now use
+    // function-form replacement), the $-content divergence is gone: buildPrompt
+    // and this concatenation agree on $$/$&/$`/$' content, so the split engages.
+    // The guard remains as defense-in-depth — it still catches the residual
+    // divergence case (b): a template nesting {entity_content} inside a {doc:...}
+    // token, where the two paths resolve tokens in different order. That falls
+    // back to the full prompt (no caching, identical bytes).
     if (cachePrefix + prompt === full) return { prompt, cachePrefix };
   }
   // 0 or >1 {entity_content}, or a divergent split → no caching, identical bytes.
