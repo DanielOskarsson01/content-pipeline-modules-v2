@@ -3,7 +3,7 @@
 > Structural fact extraction from scraped content. Classifies into categories, assigns tags, extracts key facts, and maps source citations.
 
 **Module ID:** `content-analyzer` | **Step:** 5 (Generation) | **Category:** analysis | **Cost:** expensive
-**Version:** 1.4.1 | **Data Operation:** add (+)
+**Version:** 1.4.2 | **Data Operation:** add (+)
 
 ---
 
@@ -102,6 +102,7 @@ Other useful reference docs: classification guidelines, industry glossaries. The
 | `ai_model` | haiku | Haiku is fast and cheap for structured extraction. Use Sonnet for higher accuracy on complex companies. Opus rarely needed for extraction | Quality vs cost tradeoff. Haiku is the recommended default for structured extraction |
 | `ai_provider` | anthropic | Switch to openai if you prefer GPT models or want to compare outputs | Which API to call |
 | `max_content_chars` | 200,000 | Lower to 30-50k for cost control on simple companies. Raise to 300-500k for companies with many long pages | Truncates assembled source text. 200k ~ 33,000 words, enough for most companies |
+| `max_tokens` | 16,384 | Raise only if analyses truncate (rare — complete outputs run 1.2k-6.6k tokens on 200+ page inputs). **Re-derive if you switch off haiku** | Max LLM response length. Sized for haiku (no thinking overhead). On a Claude-5 model, adaptive thinking eats this budget invisibly and 16,384 may truncate — and truncation fails the run via the skeleton fail-closed guard (v1.4.2, was 8,192) |
 
 ## Recipes
 

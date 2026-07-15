@@ -2,7 +2,7 @@
   "id": "content-writer",
   "name": "Content Writer",
   "description": "AI-powered long-form content generation. Writes content using analysis (required), optional SEO plan (keyword distribution), and scraped source content (raw material for specific details). Produces markdown output. Requires content-analyzer; seo-planner is optional.",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "step": 5,
   "category": "generation",
   "cost": "expensive",
@@ -10,7 +10,7 @@
   "pool_precondition": "requires_items",
   "depends_on": ["content-analyzer"],
   "optional_depends_on": ["seo-planner"],
-  "usage_notes": "Requires content-analyzer. seo-planner is optional — if absent, writer warns and proceeds without SEO plan section. Use sonnet for production-quality content; haiku produces acceptable drafts. Increase max_source_chars for entities with extensive source material.",
+  "usage_notes": "Requires content-analyzer. seo-planner is optional — if absent, writer warns and proceeds without SEO plan section. Use sonnet for production-quality content; haiku produces acceptable drafts. Increase max_source_chars for entities with extensive source material. max_tokens default 32768: unlike content-analyzer/seo-planner (haiku-only), this module legitimately runs a Claude-5 model (sonnet) in QA-retry cards, where adaptive thinking is ON by default and consumes max_tokens INVISIBLY (~10-12k thinking tokens per call observed on sonnet-5, on top of the ~5-7k tokens of markdown text). 16384 truncated 4/7 complete sonnet retries in the 2026-07-14 calibration, and the skeleton fail-closed guard turns any such truncation into a failed run. 32768 gives the visible text room to complete after thinking. The skeleton-side fix (a thinking/effort control for Claude-5 models) is filed separately; until it lands, the cap must cover thinking.",
 
   "requires_columns": [
     "entity_name",
@@ -63,8 +63,8 @@
       "name": "max_tokens",
       "type": "number",
       "label": "Max output tokens",
-      "description": "Maximum tokens in the LLM response. Without this, long articles silently truncate. Default 16384 for full company profiles.",
-      "default": 16384,
+      "description": "Maximum tokens in the LLM response. Covers BOTH visible markdown text AND (on Claude-5 models like sonnet) invisible adaptive-thinking tokens, which are on by default and count against this budget. Default 32768: sonnet retries think ~10-12k tokens before writing ~5-7k of text; 16384 truncated them. Truncation fails the run (fail-closed guard).",
+      "default": 32768,
       "min": 1024,
       "max": 32768
     },
@@ -114,7 +114,7 @@
     "ai_provider": "anthropic",
     "reference_docs": [],
     "temperature": 0.4,
-    "max_tokens": 16384,
+    "max_tokens": 32768,
     "max_source_chars": 100000,
     "allowed_slug_paths": "",
     "require_slug_paths": false,

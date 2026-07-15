@@ -3,7 +3,7 @@
 > Keyword distribution planner with web-researched keyword data. Selects target keywords and produces meta tags, optional FAQs, and section-level keyword distribution. The manifest default is fully project-agnostic; pipeline-specific shapes (e.g. company-profile section breakdowns) come from template-level prompt overrides.
 
 **Module ID:** `seo-planner` | **Step:** 5 (Generation) | **Category:** planning | **Cost:** expensive
-**Version:** 2.3.0 | **Data Operation:** add (➕)
+**Version:** 2.3.1 | **Data Operation:** add (➕)
 
 ---
 
@@ -301,6 +301,7 @@ When changing seo-planner's OUTPUT FORMAT schema in a template prompt override, 
 | `reference_docs` | (none) | Upload format spec, tone guide, or supplemental keyword data | Selected docs injected into prompt at `{doc:filename}` placeholders |
 | `ai_model` | haiku | Haiku for quick planning iterations. Sonnet for production | Planning is less sensitive to model quality than analysis or writing |
 | `ai_provider` | anthropic | Switch for model comparison | Which API to call |
+| `max_tokens` | 16,384 | Raise only if plans truncate (rare — complete section-level plans run 4k-7k+ tokens). **Re-derive if you switch off haiku** | Max LLM response length. Sized for haiku (no thinking overhead). On a Claude-5 model, adaptive thinking eats this budget invisibly and 16,384 may truncate — truncation fails the run via the skeleton fail-closed guard (v2.3.1, was 8,192) |
 | `keyword_data_providers` | `[]` | Add real search-volume/difficulty/rank data (v2.3.0). Empty = layer off, no cost | Array of provider configs. See [Keyword Data Providers](#keyword-data-providers-v230) |
 | `max_seed_keywords` | 25 | Lower to trim cost; raise for broad entities | Cap on seed keywords per entity (cost guard; only when the layer is active) |
 | `max_metric_lookups_per_entity` | 100 | Lower to trim cost | Hard cap on keyword→metrics lookups per entity (cost guard) |
