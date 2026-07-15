@@ -1116,3 +1116,23 @@ Architectural specs in "pending sign-off" state need active tracking to either a
 **Not done / for the merge session:** merge to `main` is deliberate and coordinated (Cloudinary migration + #50). BACKLOG #52 must be understood as the delivery-layer gap this branch does NOT close.
 
 **Updated by:** Claude (step5-token-economics unit — investigate → STOP for approval → build → review → file → push, no merge)
+
+### Session: 2026-07-15 (later) — Planning-chat VERDICT reconciled onto `step5-token-economics` (conditions folded; FIX C flagged unresolved)
+
+**Status:** Reconciliation pass. The planning chat returned a VERDICT (approve-with-conditions) on the step5-token-economics report. Bulk (A/A+/B, Cache-`$`, D) was already built + matches the verdict; this pass VERIFIED the conditions and folded the verdict's corrections. Small doc/backlog diff (3 files), branch NOT merged. No product-code behavior change.
+
+**BLOCKER answered (verdict's hard gate before FIX B):** `stageWorker.js:180-210` **streams** (`stream:true`). Per the verdict's own rule "if it streams, take 32768 not 24576" — and the committed FIX B (`00e974b`) is **already 32768** with streaming verified. So the BLOCKER the verdict raised was already resolved the way it mandated; no change needed.
+
+**FIX A condition VERIFIED (verdict made 16384 CONDITIONAL on haiku-everywhere):** DB read of pipeline prod (`fevxvwqjhndetktujeuu`) — content-analyzer + seo-planner are `ai_model=haiku` in **every** `run_submodule_config` row (0 non-haiku), and **all** template `card_definitions` are content-writer-only (zero card override touches analyzer/planner). No Claude-5 model reaches either → 16384 is safe, no re-derivation. The manifest LANDMINE notes are the correct forward-guard. (The `ai_model: sonnet` lines in the analyzer/planner `.md` files are README *Recipes* — documentation of the option, not executable cards.)
+
+**Verdict corrections folded:**
+- Sonnet-5 **tokenizer caveat** added to content-writer manifest `usage_notes` + README: Sonnet 5 tokenizes ~30% higher than Haiku, so the ~10-12k thinking figures and any Haiku↔Sonnet cap comparison are approximate/not same-unit — the ~11k headroom survives, diagnosis holds.
+- **#53 (FIX B+)** enhanced to the verdict's framing: effort dial is **five levels (low/medium/high/xhigh/max, default high)** + **Anthropic's guidance is to try thinking ON at lower effort, not disable** (verified against the claude-api skill). The `display:"omitted"` finding was already in #53.
+- **#54 (CACHE+)** got a minimums sanity-check: `promptCache.js` cites stale versions; current minimums are Haiku 4.5 = 4096 (correct), Opus 4.8 = 4096, **Sonnet 5 undocumented** in the caching table (Sonnet 4.6 = 2048 / 4.5 = 1024) — but the ~1k head is below every candidate so the structural argument holds regardless.
+- **#51 cross-unit constraint** added: **#50/#51 hallucination-threshold tuning MUST calibrate on a POST-`$`-fix re-run**, not the 2026-07-14 batch — the 2 high-severity hallucinations there may be the model faithfully reporting `$`-mangled text (a DATA dependency on this unit, orthogonal to file-disjointness).
+
+**FIX C — UNRESOLVED (flagged, not fabricated):** the verdict approved "C — as proposed," but no commit is tagged FIX C and I do not hold the underlying report (it lives in the planning chat). A/A+/B share `00e974b`, Cache-`$` is `c5b0ef6`, FIX D is `10e28cb` (was `4538371` pre-amend); B+/CACHE+ are #53/#54; a Step-8 meta-output follow-up is #52 — but nothing maps to a "FIX C" label. Per #42-rule-6 (never fabricate a missing artifact) I did NOT guess it. The planning chat must confirm what FIX C is and whether it's already covered.
+
+**Verification:** full step-5 + meta-chain module test set **15/15 green** after the manifest edit (JSON re-validated). Changes are doc/backlog only.
+
+**Updated by:** Claude (verdict reconciliation — conditions verified + folded; FIX C returned to the planning chat)

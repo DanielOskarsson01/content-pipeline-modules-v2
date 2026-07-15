@@ -1938,6 +1938,9 @@ Claim extraction is a narrow regex set (numbers/dates/currency/company-verbs). Q
 ### Gating
 Gated **AFTER #50** ships. #50 disclosed the residual and reframed the score as a FLOOR; #51 closes it.
 
+### Calibration-baseline constraint (cross-unit, added 2026-07-15 — step5-token-economics `$`-fix)
+**#50's / #51's hallucination-threshold tuning MUST calibrate on a POST-`$`-fix re-run, NOT the existing 2026-07-14 calibration data.** The step5-token-economics `Cache fix` (`c5b0ef6`) removed a `$`-mangling bug (`$$`→`$`, `$&`→matched-substring inserted mid-text) that corrupted model-visible input to content-analyzer / content-writer / seo-planner. On iGaming pages `$` is everywhere, so the **2 high-severity hallucinations in the 2026-07-14 calibration batch may be the model faithfully reporting mangled text** — artifacts the `$`-fix removes, not real hallucinations. Tuning thresholds against that batch calibrates against a defect that no longer exists. Reproduce the calibration on a post-`$`-fix run before trusting any threshold derived from it. (This is a DATA dependency on the step5-token-economics unit, orthogonal to file-disjointness — the two units touch different files but share the calibration corpus.)
+
 ## Item 52 — meta-output ships the entity name, not the planned meta (modules repo, Step 8)
 
 **Added:** 2026-07-15
@@ -1976,7 +1979,7 @@ Out of the step5-token-economics unit's ownership (that unit was scoped to conte
 Claude-5 models (sonnet-5, opus-4-8) run **adaptive thinking ON by default**, and thinking tokens count against `max_tokens`. `stageWorker.js` sends no `thinking` field and no effort control, so every sonnet call thinks ~10-12k tokens invisibly (`display:"omitted"` is the API default — which is exactly why this was invisible for a month, until the 2026-07-14 calibration surfaced it via truncated round-2 retries). This forced the content-writer max_tokens cap to 32768 (step5-token-economics FIX B) as a mitigation — the branch could only size the cap, not control the thinking.
 
 ### Fix (scope as effort-tuning, not thinking-disable)
-Add an **`effort` quality/cost dial** to `ai.complete` (`output_config: { effort: "low"|"medium"|"high" }`), exposed as a per-module/per-card manifest option, and MEASURE the cost/quality tradeoff. Do NOT reflexively hard-disable thinking (an assumed cost fix) — effort tuning is the measured lever; some step-5 work may benefit from thinking. Once landed, content-writer's cap can drop back toward the text-only ceiling (~5-7k) and analyzer/seo-planner become safe on Claude-5 models (removing the LANDMINE noted in their v1.4.2 / v2.3.1 manifests).
+Add an **`effort` quality/cost dial** to `ai.complete` (`output_config: { effort: ... }`), exposed as a per-module/per-card manifest option, and MEASURE the cost/quality tradeoff. The dial has **five levels — `low` / `medium` / `high` / `xhigh` / `max`, default `high`** (verified against the claude-api skill; Sonnet 5 / Opus 4.8 support the full range). Do NOT reflexively hard-disable thinking (an assumed cost fix) — **Anthropic's own guidance is to try thinking ON at a LOWER effort rather than disabling it**; effort is the measured lever and nobody has yet measured it on the R2 retry. Some step-5 work may genuinely benefit from thinking. Once landed, content-writer's cap can drop back toward the text-only ceiling (~5-7k) and analyzer/seo-planner become safe on Claude-5 models (removing the LANDMINE noted in their v1.4.2 / v2.3.1 manifests).
 
 ### Cross-ref
 step5-token-economics FIX B (content-writer cap 32768) + the manifest usage_notes LANDMINE on content-analyzer / seo-planner (16384 assumes haiku).
@@ -1992,6 +1995,9 @@ Adopting the content-analyzer prompt-cache split (BACKLOG #21 pattern) for conte
 
 ### Fix
 Restructure the **template prompt** so the large stable docs sit in the head, before `{entity_content}` — a `preset_map` change (different ownership surface: template config, not module code). Then the split-at-`{entity_content}` pattern yields a cacheable prefix. content-analyzer already benefits (its ~20k-token vocab head is above the cache minimum; the step5-token-economics `$`-fix makes the split engage on scraped `$`-content).
+
+### Cache minimums — sanity-check (2026-07-15, verified against the claude-api skill)
+`promptCache.js`'s doc comment cites minimums for STALE model versions ("Sonnet 4.5 = 1024, Haiku 4.5 / Opus 4.6 = 4096"). Current per-model minimum cacheable prefix: **Haiku 4.5 = 4096** (cited number correct), **Opus 4.8 = 4096** (number correct, version label stale). The pipeline's Claude-5 retry model is **Sonnet 5**, whose minimum is **NOT documented in the caching table** (Sonnet 4.6 = 2048, Sonnet 4.5 = 1024) — treat it as unverified; do not assume 1024 from the stale "Sonnet 4.5" reference. **Structural argument holds regardless:** the writer/planner stable head is ~900-1,100 tokens — below the minimum for BOTH models actually in play (Haiku 4.5 = 4096; Sonnet 5 ≥ 2048 on any documented Sonnet tier) — so the split can't cache until the docs move into the head, no matter which figure is exact. When #21 module adoption reaches these modules, re-cite the minimum against the ACTUAL model in MODEL_MAP, not a version label.
 
 ## Item 55 — No relevance-ranked selection of pages into Step 5 (new capability)
 
