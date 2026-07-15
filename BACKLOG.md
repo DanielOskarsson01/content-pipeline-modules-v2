@@ -59,6 +59,10 @@ Tasks not yet scheduled for implementation.
 | 47 | **No Step-10-approval → Step-9 `execute` trigger; `terminal_state` unreadable by modules** (skeleton repo) — modules can't gate flagged entities out of distribution. Extends [[Item 8]]/[[Item 9]]; gates the entire Step-9 delivery family (`cms-publisher`/`doc-exporter`/`sheet-logger`) and closes [[Item 9]]. **Renumbered from buildout `#45`.** | Medium (gates Step-9 delivery → U1 publish) | 2026-07-05 |
 | 48 | **`api-search` custom-header auth** (modules repo) — bearer-auth only, no custom headers. Gates Pexels + PodcastIndex provider configs. Small modules-repo fix. **Renumbered from buildout `#46`.** | Low-medium (unblocks Wave-2 provider configs) | 2026-07-05 |
 | 51 | **Claim-extraction redesign / QA faithfulness pass** (modules repo; forked from UNIT #50 QA-hardening) — regex claim-extraction (`FACTUAL_CLAIM_PATTERNS` + `GENERAL_KNOWLEDGE_PATTERNS`) is padding-blind: qualitative/marketing prose scores 1.0. **Shared** across hallucination-detector + citation-coverage as near-duplicate, silently drifted copies. **Absorbs [[Item 35]].** Direction: LLM faithfulness pass (or broadened-pattern + LLM-judge hybrid) + de-dup the two copies. Architectural — needs brutal-critic + CTO. **Gated AFTER #50** (`content-pipeline-specs/specs/UNIT_50_QA_HARDENING_DESIGN.md`, Decision 3). Numbered #51 to match the unit-number pre-referenced in the UNIT_50 design+review; #49/#50 are unallocated backlog gaps (design jumped to #50/#51) — next filer takes #52. | Medium-high (deeper redesign; the residual #50 explicitly defers) | 2026-07-13 |
+| 52 | **meta-output delivers the entity name, not the planned meta** (modules repo, Step 8) — `meta-output/execute.js:104-105` reads only legacy top-level `seo_plan_json.meta.title` and falls back to `entity.name`; `assembleKeywords` (line 38) has the same top-level-only keyword blindness. Same bug class the step5-token-economics branch fixed in meta-compliance-checker + content-writer, but Step 8 was out of that unit's ownership. Consequence: after FIX D the QA gate (meta-compliance-checker) PASSES on the planner candidate, but the SEO deliverable still ships `title="ELK Studios"` / empty description. Fix: give meta-output the same resolution — read the writer's emitted `meta_title`/`meta_description` pool fields OR `sections.meta.meta_*.candidate`, and aggregate per-section `target_keywords` + `keyword_summary_table` in `assembleKeywords`. Surfaced by /code-review of the step5-token-economics branch (CRITICAL). | Medium (closes the meta loop at delivery; QA is green but the artifact is wrong until this lands) | 2026-07-15 |
+| 53 | **Skeleton `ai.complete` has no thinking/effort control for Claude-5 models** (skeleton repo) — sonnet-5/opus-4-8 run adaptive thinking ON by default, consuming `max_tokens` invisibly (~10-12k tokens/call), which forced content-writer's cap to 32768 and is the root cause the step5-token-economics branch could only mitigate. `display: "omitted"` is the default, which is why the ~11-12k thinking tokens/call were invisible for a month. Scope as **effort-tuning** (add an `effort` quality/cost dial to `ai.complete`, measured), NOT thinking-disable (assumed cost fix). Extends [[Item 21]] (prompt caching). Next skeleton unit, not backlog-rot. | Medium (cost + unblocks lowering the writer cap) | 2026-07-15 |
+| 54 | **Cache adoption for content-writer / seo-planner needs a template-prompt restructure** (template config, not module code) — the v4 writer prompt's stable head before `{entity_content}` is only ~900-1,100 tokens (below every cache minimum), and the big stable docs (`format_spec.md`, `tone_guide.md`) sit AFTER the variable content, so the split-at-`{entity_content}` pattern yields a prefix that silently won't cache. Real value requires moving the docs into the head of the template prompt — a `preset_map` change (different ownership surface), not a module edit. content-analyzer already caches (its ~20k-token vocab head is above the minimum, and the branch's `$`-fix makes the split engage on scraped `$`-content). | Low-medium (cost; company-profile template only) | 2026-07-15 |
+| 55 | **No relevance-ranked selection of pages into Step 5** (new capability — step-4 or analyzer-input) — analyzer `max_content_chars` (200k) + writer `max_source_chars` (100k) cap input by BLIND head-truncation in pool order (first-N pages win); url-relevance passed 301/301 items in the calibration, so nothing ranks pages. Push Gaming reached the analyzer with 98,806 tokens / 223 pages. A top-N-relevant page selector before Step 5 would cut input cost at 400-500/day scale AND improve output quality (best pages, not first pages). NOT built in the step5-token-economics unit (would be a new module/step — scope + architectural review first). | Medium (input cost at scale + quality) | 2026-07-15 |
 
 ---
 
@@ -1933,3 +1937,70 @@ Claim extraction is a narrow regex set (numbers/dates/currency/company-verbs). Q
 
 ### Gating
 Gated **AFTER #50** ships. #50 disclosed the residual and reframed the score as a FLOOR; #51 closes it.
+
+## Item 52 — meta-output ships the entity name, not the planned meta (modules repo, Step 8)
+
+**Added:** 2026-07-15
+**Priority:** Medium (closes the meta loop at delivery — QA is green after FIX D but the SEO artifact is still wrong until this lands)
+**Touches:** `modules/step-8-bundling/meta-output/execute.js` (meta resolution `:104-105`, `assembleKeywords` `:14-45`)
+**Surfaced by:** `/code-review` of the `step5-token-economics` branch (CRITICAL finding), 2026-07-15.
+
+### Issue
+`meta-output/execute.js:104-105` reads meta from **only** the legacy top-level shape and falls back to the entity name:
+```js
+const metaTitle = (seoPlan.meta && seoPlan.meta.title) || entity.name;
+const metaDescription = (seoPlan.meta && seoPlan.meta.description) || '';
+```
+It does not read seo-planner's actual output (`seo_plan_json.sections.meta.meta_{title,description}.candidate`) and does not read content-writer's newly-emitted `meta_title` / `meta_description` pool fields (added in the step5-token-economics branch, v1.6.2). `assembleKeywords` (`:38`) has the parallel per-section blindness — it reads only top-level `seoPlanJson.target_keywords`, missing the per-section `target_keywords` + `keyword_summary_table` that seo-planner actually emits.
+
+### Why this matters (the loop is closed at QA but not at delivery)
+The `step5-token-economics` branch made meta-compliance-checker (Step 6 QA) read the planner's validated meta candidate and PASS. loop-router (Step 7) therefore routes `proceed`. But meta-output (Step 8 — the customer-facing SEO metadata artifact) still emits `title = "ELK Studios"` (11 chars) / empty description on the exact same input. Net: after FIX D the QA gate green-lights output the deliverable still gets wrong — masking, not fixing, the failure at the delivery layer.
+
+### Fix
+Give meta-output the same resolution FIX D gave the checker + writer:
+1. Meta: read the writer's emitted `meta_title` / `meta_description` pool fields, OR `sections.meta.meta_{title,description}.candidate`, before the entity-name fallback. (content-writer's `resolveMetaFromPlanner` is the reference implementation; a shared helper across writer + meta-output + checker would de-duplicate three near-identical readers — consider it.)
+2. Keywords: aggregate per-section `target_keywords.{primary,secondary,long_tail}` + `keyword_summary_table[].keyword` in `assembleKeywords` (meta-compliance-checker's `extractHeadTerms` v1.0.1 is the reference).
+Pipeline-agnostic (generic fields, no section names). Update meta-output README (Rule 7).
+
+### Ownership note
+Out of the step5-token-economics unit's ownership (that unit was scoped to content-analyzer / content-writer / seo-planner / meta-compliance-checker). Step 8 bundling is a separate surface — filed here rather than reached across, per the unit's STOP-AND-REPORT discipline.
+
+## Item 53 — Skeleton `ai.complete` has no thinking/effort control for Claude-5 models (skeleton repo)
+
+**Added:** 2026-07-15
+**Priority:** Medium (cost + unblocks lowering the content-writer cap)
+**Touches:** `content-pipeline-v2/server/workers/stageWorker.js` (Anthropic request body — currently sends no `thinking` / `output_config.effort`)
+**Extends:** [[Item 21]] (prompt caching in `ai.complete`).
+
+### Issue
+Claude-5 models (sonnet-5, opus-4-8) run **adaptive thinking ON by default**, and thinking tokens count against `max_tokens`. `stageWorker.js` sends no `thinking` field and no effort control, so every sonnet call thinks ~10-12k tokens invisibly (`display:"omitted"` is the API default — which is exactly why this was invisible for a month, until the 2026-07-14 calibration surfaced it via truncated round-2 retries). This forced the content-writer max_tokens cap to 32768 (step5-token-economics FIX B) as a mitigation — the branch could only size the cap, not control the thinking.
+
+### Fix (scope as effort-tuning, not thinking-disable)
+Add an **`effort` quality/cost dial** to `ai.complete` (`output_config: { effort: "low"|"medium"|"high" }`), exposed as a per-module/per-card manifest option, and MEASURE the cost/quality tradeoff. Do NOT reflexively hard-disable thinking (an assumed cost fix) — effort tuning is the measured lever; some step-5 work may benefit from thinking. Once landed, content-writer's cap can drop back toward the text-only ceiling (~5-7k) and analyzer/seo-planner become safe on Claude-5 models (removing the LANDMINE noted in their v1.4.2 / v2.3.1 manifests).
+
+### Cross-ref
+step5-token-economics FIX B (content-writer cap 32768) + the manifest usage_notes LANDMINE on content-analyzer / seo-planner (16384 assumes haiku).
+
+## Item 54 — Cache adoption for content-writer / seo-planner needs a template-prompt restructure (template config)
+
+**Added:** 2026-07-15
+**Priority:** Low-medium (cost; company-profile template only)
+**Touches:** the template `preset_map` prompt for content-writer / seo-planner (NOT module code) — Supabase template config.
+
+### Issue
+Adopting the content-analyzer prompt-cache split (BACKLOG #21 pattern) for content-writer / seo-planner does not pay off as-is: the v4 writer prompt's stable head before `{entity_content}` is only ~900-1,100 tokens — below every cache minimum — and the big stable docs (`format_spec.md`, `tone_guide.md`) sit AFTER `{entity_content}`, so the split-at-`{entity_content}` prefix silently won't cache. Investigated in the step5-token-economics unit; not built (dead code otherwise).
+
+### Fix
+Restructure the **template prompt** so the large stable docs sit in the head, before `{entity_content}` — a `preset_map` change (different ownership surface: template config, not module code). Then the split-at-`{entity_content}` pattern yields a cacheable prefix. content-analyzer already benefits (its ~20k-token vocab head is above the cache minimum; the step5-token-economics `$`-fix makes the split engage on scraped `$`-content).
+
+## Item 55 — No relevance-ranked selection of pages into Step 5 (new capability)
+
+**Added:** 2026-07-15
+**Priority:** Medium (input cost at 400-500/day scale + output quality)
+**Touches:** new module/step — a top-N-relevant page selector between Step 4 and Step 5 (or an analyzer-input concern). Architectural — scope + brutal-critic + CTO review first.
+
+### Issue
+Input into Step 5 is bounded only by BLIND head-truncation: analyzer `max_content_chars` (200k chars ≈ 65-75k tokens) and writer `max_source_chars` (100k chars) keep the first-N pages in pool order. url-relevance passed 301/301 items in the 2026-07-14 calibration, so nothing ranks pages by relevance. Push Gaming reached the analyzer with 98,806 tokens / 223 pages — an input-cost problem at scale AND a quality problem (first pages, not best pages).
+
+### Decision (from the step5-token-economics investigation)
+ACCEPT large inputs and size the output caps for them (done: FIX A/A+/B); KEEP the current char caps. The real improvement — relevance-ranked top-N page selection before Step 5 — is a NEW capability, not sized in that unit. Build as a new selector module/step after architectural review; at haiku prices the current per-call input cost (~$0.10/entity worst case) plus the #21/`$`-fix cache saving on the stable vocab head make this a scale optimization, not urgent.
