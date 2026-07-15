@@ -131,6 +131,7 @@
     "section_count": "number",
     "has_citations": "boolean",
     "meta_title": "string",
+    "meta_description": "string",
     "content_preview": "string",
     "downloadable_fields": [],
     "detail_schema": {
@@ -152,6 +153,11 @@
         {
           "field": "meta_title",
           "label": "Meta Title",
+          "display": "text"
+        },
+        {
+          "field": "meta_description",
+          "label": "Meta Description",
           "display": "text"
         },
         {

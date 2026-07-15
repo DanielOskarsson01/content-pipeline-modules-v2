@@ -292,6 +292,44 @@ function assembleEntityContent(analyzerItem, plannerItem, sourceContent, allowed
   return parts.join('\n');
 }
 
+/**
+ * Resolve meta title + description from the seo-planner output, tolerating the
+ * shapes the planner actually emits. Priority:
+ *   1. seo_plan_json.meta.{title,description}                       (top-level, legacy)
+ *   2. seo_plan_json.sections.meta.meta_{title,description}.candidate
+ *      (seo-planner's real output — length-validated candidates it already built)
+ *   3. plannerItem.meta_{title,description}                         (flat field, legacy)
+ *   4. entity name (title only; description stays empty rather than invented)
+ *
+ * Emitting these onto the pool item lets meta-compliance-checker (priority-1
+ * read) see the PLANNED meta instead of the entity name / raw og:description —
+ * which is what made meta:fail a batch-wide constant in the 2026-07-14
+ * calibration (title "ELK Studios" = 11 chars, desc = 210+ char og:description).
+ * Pipeline-agnostic: reads generic fields, no section names or content-type
+ * vocabulary hardcoded.
+ *
+ * NOTE: Step 8 meta-output does NOT yet consume these fields — it still reads
+ * only seo_plan_json.meta.title (top-level, absent in the real shape) and falls
+ * back to entity.name, so the SEO deliverable is unchanged by this fix. Closing
+ * the loop at delivery is an out-of-scope meta-output change (Step 8, different
+ * ownership) — filed as BACKLOG #52.
+ */
+function resolveMetaFromPlanner(plannerItem, entityName) {
+  const plan = plannerItem && plannerItem.seo_plan_json;
+  const planMeta = plan && plan.sections && plan.sections.meta;
+  const metaTitle =
+    (plan && plan.meta && plan.meta.title) ||
+    (planMeta && planMeta.meta_title && planMeta.meta_title.candidate) ||
+    (plannerItem && plannerItem.meta_title) ||
+    entityName;
+  const metaDescription =
+    (plan && plan.meta && plan.meta.description) ||
+    (planMeta && planMeta.meta_description && planMeta.meta_description.candidate) ||
+    (plannerItem && plannerItem.meta_description) ||
+    '';
+  return { metaTitle, metaDescription };
+}
+
 async function execute(input, options, tools) {
   const { entities } = input;
   const { ai_model, ai_provider, prompt: promptTemplate, reference_docs, max_source_chars, temperature, max_tokens, allowed_slug_paths, requires_prompt_override, require_slug_paths } = options;
@@ -426,10 +464,9 @@ async function execute(input, options, tools) {
     }
 
     try {
-      // Get meta title from planner for reference (planner may be absent)
-      const metaTitle = plannerItem?.seo_plan_json?.meta?.title
-        || plannerItem?.meta_title
-        || entity.name;
+      // Get meta title + description from planner for reference (planner may be
+      // absent — falls back to entity name for the title, empty description).
+      const { metaTitle, metaDescription } = resolveMetaFromPlanner(plannerItem, entity.name);
 
       logger.info(`${entity.name}: writing content with ${ai_provider}/${ai_model} (${scrapedItems.length} source pages)`);
 
@@ -463,6 +500,7 @@ async function execute(input, options, tools) {
         section_count: sectionCount,
         has_citations: citations,
         meta_title: metaTitle,
+        meta_description: metaDescription,
         content_preview: contentPreview,
         // Full content for detail modal (prose rendering)
         content_markdown: contentMarkdown,
@@ -527,5 +565,6 @@ module.exports.__testing = {
   renderAllowedSlugsBlock,
   assembleEntityContent,
   buildPrompt,
+  resolveMetaFromPlanner,
   MANIFEST_DEFAULT_PROMPT,
 };

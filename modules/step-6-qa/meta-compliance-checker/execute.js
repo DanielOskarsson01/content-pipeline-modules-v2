@@ -85,11 +85,33 @@ function extractDescriptionFromFirstParagraph(markdown) {
 }
 
 /**
+ * Add every string in a target_keywords object to the term set. Handles
+ * primary (string or array), secondary (array), and long_tail (array); each
+ * value may be a string or missing. Pipeline-agnostic — no field is
+ * content-type specific.
+ */
+function addTargetKeywords(tk, terms) {
+  if (!tk || typeof tk !== 'object') return;
+  const push = v => { if (typeof v === 'string' && v.trim()) terms.add(v.trim().toLowerCase()); };
+  push(tk.primary);
+  if (Array.isArray(tk.primary)) tk.primary.forEach(push);
+  if (Array.isArray(tk.secondary)) tk.secondary.forEach(push);
+  if (Array.isArray(tk.long_tail)) tk.long_tail.forEach(push);
+}
+
+/**
  * Extract head_terms from seo_plan_json. Handles multiple shapes:
  *   - seo_plan_json.head_terms (array of strings)
- *   - seo_plan_json.target_keywords.primary (string)
- *   - seo_plan_json.target_keywords.secondary (array of strings)
- *   - seo_plan_json.keywords (array of strings)
+ *   - seo_plan_json.target_keywords.{primary,secondary,long_tail} (top-level)
+ *   - seo_plan_json.sections.<any>.target_keywords.{primary,secondary,long_tail}
+ *     (seo-planner emits keywords PER SECTION, not at top level — this is the
+ *     shape the 2026-07-14 calibration produced, which caused a batch-wide
+ *     "No head_terms found" auto-fail before this was read)
+ *   - seo_plan_json.keyword_summary_table[].keyword (the typed rollup)
+ *   - seo_plan_json.keywords (flat array of strings)
+ *
+ * Section iteration is generic (Object.values) — no section name is hardcoded,
+ * so it stays pipeline-agnostic across content types.
  */
 function extractHeadTerms(seoPlanJson) {
   if (!seoPlanJson) return [];
@@ -103,15 +125,21 @@ function extractHeadTerms(seoPlanJson) {
     }
   }
 
-  // target_keywords structure (from seo-planner)
-  if (seoPlanJson.target_keywords) {
-    const tk = seoPlanJson.target_keywords;
-    if (typeof tk.primary === 'string' && tk.primary.trim()) {
-      terms.add(tk.primary.trim().toLowerCase());
+  // Top-level target_keywords structure
+  addTargetKeywords(seoPlanJson.target_keywords, terms);
+
+  // Per-section target_keywords (seo-planner's actual output shape)
+  if (seoPlanJson.sections && typeof seoPlanJson.sections === 'object') {
+    for (const section of Object.values(seoPlanJson.sections)) {
+      if (section && typeof section === 'object') addTargetKeywords(section.target_keywords, terms);
     }
-    if (Array.isArray(tk.secondary)) {
-      for (const kw of tk.secondary) {
-        if (typeof kw === 'string' && kw.trim()) terms.add(kw.trim().toLowerCase());
+  }
+
+  // Typed keyword rollup table
+  if (Array.isArray(seoPlanJson.keyword_summary_table)) {
+    for (const row of seoPlanJson.keyword_summary_table) {
+      if (row && typeof row.keyword === 'string' && row.keyword.trim()) {
+        terms.add(row.keyword.trim().toLowerCase());
       }
     }
   }
@@ -185,7 +213,37 @@ async function execute(input, options, tools) {
       }
     }
 
-    // Priority 3: H1 for title, first paragraph for description
+    // Priority 3: the SEO plan's meta. Two shapes:
+    //   - plan.meta.{title,description} (top-level, legacy)
+    //   - plan.sections.meta.meta_{title,description}.candidate (seo-planner's
+    //     actual output — length-validated candidates the planner already built)
+    // This is the AUTHORITATIVE planned meta, so it beats the H1/first-paragraph
+    // HEURISTICS below (a guessed H1 title like "ELK Studios" is worse than the
+    // planner's validated candidate). It sits AFTER the writer's own meta fields
+    // (priority 1) — which, once content-writer emits the candidate, already
+    // carry it — and after explicit frontmatter (priority 2).
+    if (!metaTitle || !metaDescription) {
+      for (const item of seoItems) {
+        const plan = item.seo_plan_json;
+        if (!plan) continue;
+        if (plan.meta) {
+          if (!metaTitle && plan.meta.title) metaTitle = plan.meta.title;
+          if (!metaDescription && plan.meta.description) metaDescription = plan.meta.description;
+        }
+        const planMeta = plan.sections && plan.sections.meta;
+        if (planMeta) {
+          if (!metaTitle && planMeta.meta_title && planMeta.meta_title.candidate) {
+            metaTitle = planMeta.meta_title.candidate;
+          }
+          if (!metaDescription && planMeta.meta_description && planMeta.meta_description.candidate) {
+            metaDescription = planMeta.meta_description.candidate;
+          }
+        }
+      }
+    }
+
+    // Priority 4 (last resort): H1 for title, first paragraph for description.
+    // Only used when no explicit/planned meta exists — a heuristic guess.
     if (!metaTitle) {
       for (const item of contentItems) {
         if (item.content_markdown) {
@@ -199,17 +257,6 @@ async function execute(input, options, tools) {
         if (item.content_markdown) {
           const para = extractDescriptionFromFirstParagraph(item.content_markdown);
           if (para) { metaDescription = para; break; }
-        }
-      }
-    }
-
-    // Priority 4: check SEO plan for meta
-    if (!metaTitle || !metaDescription) {
-      for (const item of seoItems) {
-        const plan = item.seo_plan_json;
-        if (plan && plan.meta) {
-          if (!metaTitle && plan.meta.title) metaTitle = plan.meta.title;
-          if (!metaDescription && plan.meta.description) metaDescription = plan.meta.description;
         }
       }
     }
@@ -437,3 +484,5 @@ async function execute(input, options, tools) {
 }
 
 module.exports = execute;
+// Exported for unit tests only.
+module.exports.__testing = { extractHeadTerms, addTargetKeywords, extractMetaFromFrontmatter };
