@@ -308,11 +308,11 @@ function assembleEntityContent(analyzerItem, plannerItem, sourceContent, allowed
  * Pipeline-agnostic: reads generic fields, no section names or content-type
  * vocabulary hardcoded.
  *
- * NOTE: Step 8 meta-output does NOT yet consume these fields — it still reads
- * only seo_plan_json.meta.title (top-level, absent in the real shape) and falls
- * back to entity.name, so the SEO deliverable is unchanged by this fix. Closing
- * the loop at delivery is an out-of-scope meta-output change (Step 8, different
- * ownership) — filed as BACKLOG #52.
+ * Step 8 meta-output consumes these fields as of BACKLOG #52 (meta-output
+ * v1.0.1): its resolution chain is mirrored from meta-compliance-checker and
+ * invariant-tested (the same fixture through both modules ships === validated),
+ * so the SEO deliverable now carries the planned meta, not entity.name. The
+ * loop is closed at delivery.
  */
 function resolveMetaFromPlanner(plannerItem, entityName) {
   const plan = plannerItem && plannerItem.seo_plan_json;

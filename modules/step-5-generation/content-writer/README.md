@@ -163,7 +163,7 @@ Run 2: ai_model: gpt-4o, ai_provider: openai
 - `word_count` - total words in the written profile
 - `section_count` - number of H2/H3 sections
 - `has_citations` - boolean, whether [#n] references were found
-- `meta_title` - resolved from the SEO plan's validated candidate (v1.6.2: reads `seo_plan_json.sections.meta.meta_title.candidate`, then legacy `.meta.title`, then a flat field, then the entity name). Emitting the planned title lets meta-compliance-checker read it (priority-1) instead of falling back to the entity name. (Step 8 meta-output does **not** yet consume these fields — it still reads only the legacy top-level `seo_plan_json.meta.title` — so the delivered SEO metadata is unchanged until that separate fix lands; see BACKLOG #52.)
+- `meta_title` - resolved from the SEO plan's validated candidate (v1.6.2: reads `seo_plan_json.sections.meta.meta_title.candidate`, then legacy `.meta.title`, then a flat field, then the entity name). Emitting the planned title lets meta-compliance-checker read it (priority-1) instead of falling back to the entity name. (Step 8 meta-output consumes these fields as of BACKLOG #52 — meta-output v1.0.1, whose resolution chain is mirrored from meta-compliance-checker and invariant-tested — so the delivered SEO metadata now carries the planned meta too.)
 - `meta_description` - resolved the same way from the plan's `sections.meta.meta_description.candidate` (v1.6.2, new field). Empty when the plan carries no description (never invented).
 - `content_preview` - first 300 characters of the article (for card view)
 - `content_markdown` - the FULL article in Markdown (visible in detail modal only, rendered as prose)
