@@ -5,6 +5,8 @@
 **Module ID:** `content-writer` | **Step:** 5 (Generation) | **Category:** generation | **Cost:** expensive
 **Version:** 1.6.2 | **Data Operation:** add (➕)
 
+> **⚠ PROSE FLOOR — minimum model for shipped prose: opus.** sonnet reads acceptably but writes poorly (per Daniel + three external reviews, 2026-07-14). haiku is drafts only; sonnet is acceptable for internal drafts and for the QA-retry mechanics, but NOT for published output. Any template shipping haiku or sonnet prose to publication is below the floor. `max_tokens` stays 32,768 (the manifest max) to cover the invisible adaptive-thinking tokens opus/sonnet spend before writing — see the manifest `usage_notes`.
+
 ---
 
 ## Background
@@ -107,17 +109,17 @@ The difference between content-writer with and without reference docs is the dif
 |--------|---------|----------------|--------|
 | `prompt` | (writing template) | Customize for different content types (bios vs profiles vs reviews), different section requirements, or different citation formats | The full LLM writing instruction. Uses `{entity_content}` for analysis+plan+sources data and `{doc:filename}` for reference docs |
 | `reference_docs` | (none) | Always use tone_guide.md and format_spec.md if available. Add style examples for best results | Selected docs injected into prompt. Most impactful option for quality |
-| `ai_model` | sonnet | Haiku for drafts only - writing quality is noticeably lower. Sonnet for production. Opus for flagship content. gpt-4o as alternative | Model choice has the biggest quality impact of any option |
+| `ai_model` | haiku *(manifest default — below the prose floor)* | **Minimum for shipped prose: opus.** sonnet reads acceptably but writes poorly (Daniel + 3 external reviews, 2026-07-14); haiku is drafts only. haiku/sonnet are fine for internal drafts and the QA-retry mechanics, not for published output. A production template MUST set opus | Model choice has the biggest quality impact of any option — and below opus the prose is not publication-grade (see PROSE FLOOR) |
 | `ai_provider` | anthropic | Switch for model comparison or preference | Which API to call |
 | `max_source_chars` | 100,000 | Lower to 50k for cost control. Raise to 200-300k for companies with many detailed pages | Truncates assembled scraped source text. Controls how much raw material the writer has to work with |
-| `max_tokens` | 32,768 | Rarely — 32,768 is already the manifest max. Lower only for hard cost caps on haiku-only runs | Max LLM response length, covering BOTH visible markdown AND (on Claude-5 models like sonnet) invisible adaptive-thinking tokens. Sonnet retries think ~10-12k tokens before writing ~5-7k of text; 16,384 truncated 4/7 complete sonnet retries in the 2026-07-14 calibration, and truncation fails the run via the skeleton fail-closed guard. Streaming (verified in the skeleton) means the large cap does not risk an HTTP timeout (v1.6.2, was 16,384). Caveat: Sonnet 5 tokenizes ~30% higher than Haiku, so the token figures above (and any Haiku↔Sonnet comparison) are approximate, not same-unit — the ~11k thinking headroom survives the correction |
+| `max_tokens` | 32,768 | Rarely — 32,768 is already the manifest max. Lower only for hard cost caps on haiku-only runs | Max LLM response length, covering BOTH visible markdown AND (on Claude-5 models — opus for shipped prose, sonnet in QA-retry) invisible adaptive-thinking tokens. Sonnet retries think ~10-12k tokens before writing ~5-7k of text; 16,384 truncated 4/7 complete sonnet retries in the 2026-07-14 calibration, and truncation fails the run via the skeleton fail-closed guard. Streaming (verified in the skeleton) means the large cap does not risk an HTTP timeout (v1.6.2, was 16,384). Caveat: Sonnet 5 tokenizes ~30% higher than Haiku, so the token figures above (and any Haiku↔Sonnet comparison) are approximate, not same-unit — the ~11k thinking headroom survives the correction |
 
 ## Recipes
 
 ### Standard Profile
-Production-quality company profiles:
+Production-quality company profiles (opus is the prose floor for shipped output — see PROSE FLOOR):
 ```
-ai_model: sonnet
+ai_model: opus
 max_source_chars: 100000
 reference_docs: [tone_guide.md, format_spec.md]
 ```
