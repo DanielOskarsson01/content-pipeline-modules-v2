@@ -69,17 +69,19 @@ console.log('\n=== edge: empty reference docs ===');
   eq(cachePrefix + prompt, baseline, 'byte-identical with empty referenceDocs (placeholders stripped)');
 }
 
-console.log('\n=== edge: entity content with $-replacement-pattern sequences (the divergence bug) ===');
+console.log('\n=== edge: entity content with $-replacement-pattern sequences (fixed) ===');
 {
-  // buildPrompt uses String.replace(/{entity_content}/g, ent), which interprets
-  // $$, $&, $`, $' in `ent` as replacement patterns; the split path concatenates
-  // literally. Scraped casino/payments text is full of "$$". The self-check MUST
-  // detect the divergence and fall back to no-caching, keeping bytes identical.
+  // buildPrompt now uses a function-form replacer, so $$, $&, $`, $', $n in the
+  // entity content are inserted LITERALLY (no longer interpreted as replacement
+  // patterns). Scraped casino/payments text is full of "$$". Post-fix there is
+  // no divergence to fall back from: the split ENGAGES and stays byte-identical,
+  // so the ~20K-token vocab head actually caches on these entities.
   for (const tricky of ['price $$50', 'bonus $$$ deal', 'x $& y', 'a $` b', "c $' d"]) {
     const baseline = buildPrompt(TEMPLATE, tricky, DOCS);
     const { prompt, cachePrefix } = buildCachedPrompt(TEMPLATE, tricky, DOCS);
+    eq(baseline.includes(tricky), true, `content NOT mangled (present verbatim) for ${JSON.stringify(tricky)}`);
     eq(cachePrefix + prompt, baseline, `byte-identical for $-pattern entity ${JSON.stringify(tricky)}`);
-    eq(cachePrefix, '', `  → fell back to no-caching (no false-cache) for ${JSON.stringify(tricky)}`);
+    eq(cachePrefix.length > 0, true, `  → cache split ENGAGES (fixed) for ${JSON.stringify(tricky)}`);
   }
   // Sanity: a normal (no-$) entity still DOES cache-split (we didn't break the happy path).
   const ok = buildCachedPrompt(TEMPLATE, 'normal entity, no dollar signs', DOCS);

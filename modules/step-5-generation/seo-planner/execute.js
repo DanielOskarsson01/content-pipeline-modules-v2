@@ -34,12 +34,18 @@ const { fetchKeywordData, deriveSeedKeywords, renderKeywordMetricsTable } = requ
  * - {doc:filename} → reference doc content
  */
 function buildPrompt(promptTemplate, entityContent, referenceDocs, keywordResearchText, faqCount, keywordMetricsText) {
-  let prompt = promptTemplate.replace(/\{entity_content\}/g, entityContent);
+  // Function-form replacement everywhere a caller value is inserted, so
+  // $-sequences ($$, $&, $`, $', $n) in analysis JSON, research text, or docs
+  // are inserted literally instead of interpreted as replacement patterns
+  // (String.prototype.replace would otherwise mangle them — money "$$",
+  // "$&" in URLs, etc.). {keyword_metrics} below already did this.
+  const analysisContent = String(entityContent);
+  let prompt = promptTemplate.replace(/\{entity_content\}/g, () => analysisContent);
 
   // Replace {keyword_research} — research results, or fallback to keyword-summary.md, or empty notice
   const keywordFallback = (referenceDocs && referenceDocs['keyword-summary.md']) || '';
   const keywordData = keywordResearchText || keywordFallback || 'No keyword research data available.';
-  prompt = prompt.replace(/\{keyword_research\}/g, keywordData);
+  prompt = prompt.replace(/\{keyword_research\}/g, () => keywordData);
 
   // Replace {keyword_metrics} — quantitative keyword-data table. A function
   // replacer keeps $-sequences ($&, $1) in the table literal. No-op when the
@@ -52,10 +58,11 @@ function buildPrompt(promptTemplate, entityContent, referenceDocs, keywordResear
   // instructions remain authoritative.
   prompt = prompt.replace(/\{faq_count\}/g, String(faqCount ?? 0));
 
-  // Replace {doc:filename} placeholders
+  // Replace {doc:filename} placeholders (function-form: keep $-sequences literal)
   if (referenceDocs && typeof referenceDocs === 'object') {
     for (const [filename, content] of Object.entries(referenceDocs)) {
-      prompt = prompt.replace(new RegExp(`\\{doc:${escapeRegex(filename)}\\}`, 'g'), String(content));
+      const str = String(content);
+      prompt = prompt.replace(new RegExp(`\\{doc:${escapeRegex(filename)}\\}`, 'g'), () => str);
     }
   }
 

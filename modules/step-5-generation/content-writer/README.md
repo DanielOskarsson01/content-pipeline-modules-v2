@@ -3,7 +3,7 @@
 > Write content using analysis data, optional SEO plan, and scraped source content.
 
 **Module ID:** `content-writer` | **Step:** 5 (Generation) | **Category:** generation | **Cost:** expensive
-**Version:** 1.6.1 | **Data Operation:** add (➕)
+**Version:** 1.6.2 | **Data Operation:** add (➕)
 
 ---
 
@@ -110,6 +110,7 @@ The difference between content-writer with and without reference docs is the dif
 | `ai_model` | sonnet | Haiku for drafts only - writing quality is noticeably lower. Sonnet for production. Opus for flagship content. gpt-4o as alternative | Model choice has the biggest quality impact of any option |
 | `ai_provider` | anthropic | Switch for model comparison or preference | Which API to call |
 | `max_source_chars` | 100,000 | Lower to 50k for cost control. Raise to 200-300k for companies with many detailed pages | Truncates assembled scraped source text. Controls how much raw material the writer has to work with |
+| `max_tokens` | 32,768 | Rarely — 32,768 is already the manifest max. Lower only for hard cost caps on haiku-only runs | Max LLM response length, covering BOTH visible markdown AND (on Claude-5 models like sonnet) invisible adaptive-thinking tokens. Sonnet retries think ~10-12k tokens before writing ~5-7k of text; 16,384 truncated 4/7 complete sonnet retries in the 2026-07-14 calibration, and truncation fails the run via the skeleton fail-closed guard. Streaming (verified in the skeleton) means the large cap does not risk an HTTP timeout (v1.6.2, was 16,384). Caveat: Sonnet 5 tokenizes ~30% higher than Haiku, so the token figures above (and any Haiku↔Sonnet comparison) are approximate, not same-unit — the ~11k thinking headroom survives the correction |
 
 ## Recipes
 
@@ -162,7 +163,8 @@ Run 2: ai_model: gpt-4o, ai_provider: openai
 - `word_count` - total words in the written profile
 - `section_count` - number of H2/H3 sections
 - `has_citations` - boolean, whether [#n] references were found
-- `meta_title` - from SEO plan (displayed for quick reference)
+- `meta_title` - resolved from the SEO plan's validated candidate (v1.6.2: reads `seo_plan_json.sections.meta.meta_title.candidate`, then legacy `.meta.title`, then a flat field, then the entity name). Emitting the planned title lets meta-compliance-checker read it (priority-1) instead of falling back to the entity name. (Step 8 meta-output consumes these fields as of BACKLOG #52 — meta-output v1.0.1, whose resolution chain is mirrored from meta-compliance-checker and invariant-tested — so the delivered SEO metadata now carries the planned meta too.)
+- `meta_description` - resolved the same way from the plan's `sections.meta.meta_description.candidate` (v1.6.2, new field). Empty when the plan carries no description (never invented).
 - `content_preview` - first 300 characters of the article (for card view)
 - `content_markdown` - the FULL article in Markdown (visible in detail modal only, rendered as prose)
 

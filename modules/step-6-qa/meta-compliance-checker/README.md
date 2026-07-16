@@ -9,6 +9,7 @@ Validates that generated meta titles and meta descriptions meet SEO length requi
 | Category | qa |
 | Cost | cheap |
 | Data operation | transform (same items, enriched with QA verdicts) |
+| Version | 1.0.1 |
 
 ---
 
@@ -50,11 +51,12 @@ This module uses data-shape routing. It finds its input by checking which fields
 - **Content items**: items with `meta_title`, `meta_description`, or `content_markdown`
 - **SEO plan items**: items with `seo_plan_json`
 
-If `meta_title` / `meta_description` are not directly on items, the module tries to extract them from:
+If `meta_title` / `meta_description` are not directly on items, the module resolves them in this priority (v1.0.1):
 1. YAML frontmatter in `content_markdown` (title/meta_title and description/meta_description fields)
-2. First H1 heading (for title)
-3. First paragraph (for description)
-4. `seo_plan_json.meta.title` and `seo_plan_json.meta.description`
+2. The SEO plan's **validated meta candidates** — `seo_plan_json.meta.{title,description}` (legacy top-level) OR `seo_plan_json.sections.meta.meta_{title,description}.candidate` (seo-planner's actual output). This is the authoritative planned meta, so it beats the H1/first-paragraph guess below.
+3. First H1 heading (for title) / first paragraph (for description) — heuristic last resort.
+
+**Keyword source (v1.0.1):** `head_terms` are aggregated from `seo_plan_json.head_terms`, top-level `target_keywords`, **every section's `target_keywords`** (`sections.<any>.target_keywords.{primary,secondary,long_tail}` — seo-planner emits keywords per-section, not top-level), the `keyword_summary_table[].keyword` rollup, and a flat `keywords` array. Before v1.0.1 only the top-level shape was read, so seo-planner's per-section output produced a batch-wide "No head_terms found" auto-fail — meta:fail was a constant, not a signal.
 
 ---
 
