@@ -63,6 +63,10 @@ Tasks not yet scheduled for implementation.
 | 53 | **Skeleton `ai.complete` has no thinking/effort control for Claude-5 models** (skeleton repo) — sonnet-5/opus-4-8 run adaptive thinking ON by default, consuming `max_tokens` invisibly (~10-12k tokens/call), which forced content-writer's cap to 32768 and is the root cause the step5-token-economics branch could only mitigate. `display: "omitted"` is the default, which is why the ~11-12k thinking tokens/call were invisible for a month. Scope as **effort-tuning** (add an `effort` quality/cost dial to `ai.complete`, measured), NOT thinking-disable (assumed cost fix). Extends [[Item 21]] (prompt caching). Next skeleton unit, not backlog-rot. | Medium (cost + unblocks lowering the writer cap) | 2026-07-15 |
 | 54 | **Cache adoption for content-writer / seo-planner needs a template-prompt restructure** (template config, not module code) — the v4 writer prompt's stable head before `{entity_content}` is only ~900-1,100 tokens (below every cache minimum), and the big stable docs (`format_spec.md`, `tone_guide.md`) sit AFTER the variable content, so the split-at-`{entity_content}` pattern yields a prefix that silently won't cache. Real value requires moving the docs into the head of the template prompt — a `preset_map` change (different ownership surface), not a module edit. content-analyzer already caches (its ~20k-token vocab head is above the minimum, and the branch's `$`-fix makes the split engage on scraped `$`-content). | Low-medium (cost; company-profile template only) | 2026-07-15 |
 | 55 | **No relevance-ranked selection of pages into Step 5** (new capability — step-4 or analyzer-input) — analyzer `max_content_chars` (200k) + writer `max_source_chars` (100k) cap input by BLIND head-truncation in pool order (first-N pages win); url-relevance passed 301/301 items in the calibration, so nothing ranks pages. Push Gaming reached the analyzer with 98,806 tokens / 223 pages. A top-N-relevant page selector before Step 5 would cut input cost at 400-500/day scale AND improve output quality (best pages, not first pages). NOT built in the step5-token-economics unit (would be a new module/step — scope + architectural review first). | Medium (input cost at scale + quality) | 2026-07-15 |
+| 56 | **Async trigger→poll→download primitive** (new module — `dataset-fetcher`) — Bright Data's Datasets API POSTs a trigger, returns a `snapshot_id`, requires polling progress until ready, then downloads. api-fetcher (v1.1.0) can now POST+body and CHAIN endpoints via `{endpoint_id.field}`, but has NO poll-until-ready / retry-with-backoff between hops, so the download endpoint fires before the snapshot exists. POST+body does NOT fix this — it is the genuine new capability and the only real justification for a separate `dataset-fetcher` module. Apify's `run-sync-get-dataset-items` sidesteps it by being **synchronous** (one POST returns the items), which is why Apify needs only api-fetcher's POST support. Cross-ref [[Item 46]] (asset persistence) for the download side. See also SUBMODULE_BUILDOUT_PLAN §10: its gate is the Bright Data **Datasets** key scope; the key live in prod `.env` is the **Web Unlocker** key (`api.brightdata.com/request`) — a different product, different scope. The §10 gate remains UNTICKED. | Medium (new module; unblocks Bright-Data-Datasets-style providers) | 2026-07-17 |
+| 57 | **api-search and api-fetcher provider schemas have diverged** (modules repo, design tension) — api-search: `query_param` \| `bearer` \| `{env:VAR}` headers map. api-fetcher: `none` \| `query_param` \| `header` (raw) \| `bearer` (added v1.1.0) \| `basic` — still no header-map interpolation. Two ways to express one concept (provider auth + request shape), drifting apart. Rule 4 (self-contained modules, no cross-module imports) means the honest fix is a **decision** (converge on one provider-config schema, or accept the split deliberately), NOT a shared-code refactor. Record the tension; do not resolve it here. Related: [[Item 48]] (api-search custom-header auth). | Low-medium (design debt; nothing broken) | 2026-07-17 |
+| 58 | **Per-provider spend guardrail** (modules + skeleton) — paid dataset/API providers bill per call and neither api-search nor api-fetcher has a cost cap. A real run on 2026-07-16 hit **$0.72** before being aborted and was heading past **$6 on a $5 credit** — one greedy target starves everything else. NOT an expressibility blocker (the engines work); an **operational** gap that bites the moment paid providers go live. Needs a per-provider (and/or per-run) spend ceiling that fail-stops before the credit is exhausted. Cross-ref [[Item 56]] (dataset providers are the first paid-per-call case). | Medium (operational; blocks safe paid-provider rollout) | 2026-07-17 |
+| 59 | **Local `.env` and Hetzner prod `.env` are SEPARATE files — deploy never syncs them** (process hazard; both repos) — `deploy.sh`'s `rsync --delete` **excludes `.env`**, so a key present/absent locally says NOTHING about prod. A session that greps the local `.env` and reports on prod produces a confident **false negative**. This already happened: the 2026-07-16 Bright Data "BLOCKED" verdict was a local check reported as a prod fact. Rule: to know a prod env var, read it **on the box** (SSH `/opt/.../.env`), never infer from local. Sibling of the "verify-before-assume" discipline and the stale-`build-info` md5 lesson. | High (recurring false-negative source) | 2026-07-17 |
 
 ---
 
@@ -2013,3 +2017,65 @@ Input into Step 5 is bounded only by BLIND head-truncation: analyzer `max_conten
 
 ### Decision (from the step5-token-economics investigation)
 ACCEPT large inputs and size the output caps for them (done: FIX A/A+/B); KEEP the current char caps. The real improvement — relevance-ranked top-N page selection before Step 5 — is a NEW capability, not sized in that unit. Build as a new selector module/step after architectural review; at haiku prices the current per-call input cost (~$0.10/entity worst case) plus the #21/`$`-fix cache saving on the stable vocab head make this a scale optimization, not urgent.
+
+## Item 56 — Async trigger→poll→download primitive (new module: `dataset-fetcher`)
+
+**Added:** 2026-07-17
+**Priority:** Medium (new module; unblocks Bright-Data-Datasets-style paid providers)
+**Touches:** a new Step-3 module `dataset-fetcher` (NOT api-fetcher — different behaviour class). Architectural — scope + review first. Cross-ref [[Item 46]] (asset persistence for the download hop), [[Item 58]] (spend guardrail).
+
+### Issue
+Bright Data's **Datasets** API is asynchronous: POST a trigger → receive a `snapshot_id` → poll a progress endpoint until the snapshot is `ready` → GET/download the items. api-fetcher (v1.1.0) added POST+body and can chain endpoints via `{endpoint_id.field}`, but chaining is **fire-in-order with no wait**: there is no poll-until-ready, no retry-with-backoff, and no branch on a status field between hops. So a download endpoint chained after a trigger fires immediately — before the snapshot exists — and gets an empty/not-ready response.
+
+POST+body does **not** close this gap. It is the genuine new capability, and the only real architectural justification for a separate `dataset-fetcher` module. Apify's `run-sync-get-dataset-items` sidesteps the whole problem by being **synchronous** — one POST returns the dataset items in the response body — which is exactly why Apify needs only api-fetcher's new POST support and Bright Data Datasets does not.
+
+### What a `dataset-fetcher` needs beyond api-fetcher
+- POST a trigger, capture `snapshot_id` from the response.
+- Poll a status/progress endpoint on an interval with backoff and a max-wait ceiling.
+- Branch on a readiness field (`status === 'ready'`) before the download hop.
+- Download + (see [[Item 46]]) persist the result.
+
+### Note on the SUBMODULE_BUILDOUT_PLAN §10 gate
+§10's decision gate for this path is the Bright Data **Datasets** key **scope**. The key currently live in prod `.env` is the **Web Unlocker** key (`api.brightdata.com/request`) — a *different product* with a *different scope*, not a Datasets key. The §10 gate therefore remains **UNTICKED**: a single `$0.003` Datasets call is the cheap check that would confirm (or deny) the key scope before building. See also [[Item 59]] — do not confirm the key's presence/scope by reading the local `.env`.
+
+## Item 57 — api-search and api-fetcher provider schemas have diverged (modules repo)
+
+**Added:** 2026-07-17
+**Priority:** Low-medium (design debt; nothing broken)
+**Touches:** api-search + api-fetcher provider-config schemas. Rule 4 forbids the cross-module import that would be the "obvious" fix — so this is a **decision**, not a refactor.
+
+### Issue
+Two Step-1/Step-3 modules express the same concept (a provider's auth + request shape) with drifting schemas:
+
+- **api-search:** auth = `query_param` | `bearer` | a `{env:VAR}`-interpolated headers map.
+- **api-fetcher:** auth = `none` | `query_param` | `header` (raw value) | `bearer` (added v1.1.0) | `basic`. No header-map env interpolation.
+
+Adding `bearer` to api-fetcher (this unit) narrowed the gap but did not close it: api-search has env-interpolated header maps; api-fetcher has raw single headers + `basic`. Same idea, two vocabularies, drifting.
+
+### Why not just fix it
+Rule 4 (each module folder is completely self-contained; no cross-module imports) means the two schemas **cannot** share a parser without a shared-code violation. The honest options are: (a) deliberately converge both modules on one provider-config schema (duplicated but identical), or (b) accept the split as intentional because the modules serve different behaviour classes (keyword-search discovery vs identifier-driven enrichment). Either is a decision for a focused session — recorded here, **not resolved in the POST unit**. Related: [[Item 48]] (api-search custom-header auth).
+
+## Item 58 — Per-provider spend guardrail (modules + skeleton)
+
+**Added:** 2026-07-17
+**Priority:** Medium (operational; blocks safe paid-provider rollout)
+**Touches:** api-search + api-fetcher (per-provider call/cost cap) and/or the skeleton run layer (per-run ceiling). Cross-ref [[Item 56]] (dataset providers are the first paid-per-call case).
+
+### Issue
+Paid dataset/API providers bill per call, and neither api-search nor api-fetcher has any cost cap. `max_items` and `requests_per_minute` bound volume and rate but not **spend**. A real run on 2026-07-16 hit **$0.72** before being manually aborted and was on track to exceed **$6 against a $5 credit** — one greedy target (many identifiers × many endpoints) starves every other entity in the batch.
+
+This is not an expressibility blocker — the engines work correctly. It is an **operational** gap that becomes live the moment paid providers (Bright Data Datasets, paid Apify actors, paid search APIs) go into production. Needs a per-provider (and/or per-run) spend ceiling that **fail-stops** the run before the credit is exhausted, with a loud note in the summary. Design question: where the cap lives (module option vs skeleton run policy) given a batch spans multiple modules.
+
+## Item 59 — Local `.env` and Hetzner prod `.env` are separate files; deploy never syncs them (process hazard)
+
+**Added:** 2026-07-17
+**Priority:** High (recurring false-negative source)
+**Touches:** operational discipline for BOTH repos; no code change. A durable hazard note, filed so it stops recurring.
+
+### Issue
+`deploy.sh` deploys via `rsync --delete` that **excludes `.env`** (alongside `node_modules`, `.git`, `.DS_Store`). Consequence: the local `.env` and the production `.env` on Hetzner (`/opt/.../.env`) are **independent files that deploy never reconciles**. A key's presence, absence, or value locally says nothing about prod.
+
+A session that greps the **local** `.env` and reports a conclusion about **prod** produces a confident **false negative**. This already happened: the 2026-07-16 Bright Data "BLOCKED" verdict was a local check reported as a prod fact (the prod key was fine).
+
+### Rule
+To know a production env var, read it **on the box** (`ssh … cat /opt/.../.env` or the running process env), never infer it from the local `.env`. Sibling discipline to "verify-before-assume" and the stale-`build-info.json` → md5sum lesson (a deployed file's real state is read at the deployed location, not assumed from local). Cross-ref [[Item 56]] (the Bright Data Datasets key-scope check must be done against prod, not local).
