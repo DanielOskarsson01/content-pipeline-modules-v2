@@ -2,7 +2,7 @@
   "id": "api-fetcher",
   "name": "API Fetcher",
   "description": "Generic identifier-driven structured-API fetcher. Per-entity lookups against configured APIs (JSON + XML/RSS), multi-endpoint chaining, field mapping, raw-text flattening. Adding an API source = JSON config, not code.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "step": 3,
   "category": "enrichment",
   "cost": "medium",
@@ -19,7 +19,7 @@
       "type": "json",
       "label": "API Providers",
       "presets_enabled": true,
-      "description": "Array of provider config objects: id, name, response_format (json|xml), identifier_source ({entity_field, item_field}), optional auth, and endpoints[] (url, params, results_path, field_map, optional url_template / raw_text_template). Endpoints run in order; {identifier}, {max_items}, {endpoint_id.field} chain responses. No providers = loud no-op. See README for schema and examples.",
+      "description": "Array of provider config objects: id, name, response_format (json|xml), identifier_source ({entity_field, item_field}), optional auth (none|query_param|header|bearer|basic), and endpoints[] (url, params, results_path, field_map, optional method [GET|POST], body, url_template / raw_text_template). Endpoints run in order; {identifier}, {max_items}, {endpoint_id.field} chain into the url, params, and POST body. No providers = loud no-op. See README for schema and examples.",
       "default": []
     },
     {

@@ -93,6 +93,32 @@ function substitutePlaceholders(template, ctx) {
   return { text, unresolved };
 }
 
+// Substitute placeholders through every string leaf of a POST body (object, array, or
+// bare string), reusing substitutePlaceholders — so {identifier}/{max_items}/{endpoint.field}
+// interpolate without JSON braces colliding with the placeholder syntax. An object stays an
+// object (the platform's http.post JSON-stringifies it, so substituted values are JSON-escaped
+// — this is why an OBJECT body is preferred). A string stays a string (passthrough), so its
+// substituted values are inserted RAW/unescaped — a template using a string body must trust
+// its identifiers. Returns { value, unresolved }.
+function substituteBody(value, ctx) {
+  const unresolved = [];
+  function walk(v) {
+    if (typeof v === 'string') {
+      const r = substitutePlaceholders(v, ctx);
+      unresolved.push(...r.unresolved);
+      return r.text;
+    }
+    if (Array.isArray(v)) return v.map(walk);
+    if (v && typeof v === 'object') {
+      const out = {};
+      for (const [k, val] of Object.entries(v)) out[k] = walk(val);
+      return out;
+    }
+    return v; // numbers, booleans, null pass through untouched
+  }
+  return { value: walk(value), unresolved };
+}
+
 // ── raw_text flattening ─────────────────────────────────────────────
 
 function stringifyValue(v) {
@@ -136,6 +162,8 @@ function buildAuth(provider) {
     out.params[auth.key || 'key'] = val;
   } else if (auth.type === 'header') {
     out.headers[auth.key || 'Authorization'] = val;
+  } else if (auth.type === 'bearer') {
+    out.headers.Authorization = 'Bearer ' + val;
   } else if (auth.type === 'basic') {
     // Companies House pattern: API key as username, empty password.
     out.headers.Authorization = 'Basic ' + Buffer.from(`${val}:`).toString('base64');
@@ -380,12 +408,37 @@ async function runEndpointsForIdentifier(provider, identifier, authParts, extraP
     const qs = params.toString();
     const requestUrl = qs ? `${urlRes.text}${urlRes.text.includes('?') ? '&' : '?'}${qs}` : urlRes.text;
 
+    // Optional POST body. Each string leaf goes through the SAME placeholder substitution as
+    // the URL/params (raw, not encoded) — {identifier}/{max_items}/{endpoint.field} interpolate.
+    // An unresolved placeholder skips the endpoint, exactly like the URL/params.
+    const method = String(endpoint.method || 'GET').toUpperCase();
+    if (method !== 'GET' && method !== 'POST') {
+      // Only GET/POST are supported; an unknown verb is a config typo. Warn loudly rather than
+      // silently GET-ing (and dropping any body) — surfaces the misconfiguration to the operator.
+      logger.warn(`${provider.id}.${endpoint.id}: unsupported method "${method}" — treating as GET (only GET/POST supported)`);
+    }
+    let bodyToSend = '';
+    if (method === 'POST' && endpoint.body != null) {
+      const bodyRes = substituteBody(endpoint.body, ctx);
+      if (bodyRes.unresolved.length > 0) {
+        const reason = `${provider.id}.${endpoint.id}: skipped — unresolved placeholder(s) {${bodyRes.unresolved.join(', ')}} in body`;
+        logger.warn(reason);
+        notes.push(reason);
+        continue;
+      }
+      bodyToSend = bodyRes.value;
+    }
+
     // Fetch.
     let res;
     try {
       await rateLimiter();
-      logger.info(`${provider.id}.${endpoint.id}: GET ${urlRes.text}`);
-      res = await http.get(requestUrl, { timeout: 20000, headers: authParts.headers || {} });
+      const headers = authParts.headers || {};
+      logger.info(`${provider.id}.${endpoint.id}: ${method} ${urlRes.text}`);
+      // ponytail: single POST per endpoint, no async poll — Bright-Data-Datasets-style trigger/poll needs a separate primitive
+      res = method === 'POST'
+        ? await http.post(requestUrl, bodyToSend, { timeout: 20000, headers })
+        : await http.get(requestUrl, { timeout: 20000, headers });
     } catch (err) {
       errorCount++;
       logger.error(`${provider.id}.${endpoint.id}: ${err.message}`);

@@ -5,6 +5,8 @@
 **Module ID:** `seo-planner` | **Step:** 5 (Generation) | **Category:** planning | **Cost:** expensive
 **Version:** 2.3.1 | **Data Operation:** add (➕)
 
+> **⚠ MODEL FLOOR (inferred by analogy — UNVERIFIED) — recommended minimum model: sonnet.** Daniel's 2026-06 doc-non-compliance test covered content-analyzer, NOT seo-planner. seo-planner shares the same doc-following pattern (it reads `format_spec.md` / `tone_guide.md` and must honor a strict JSON output contract), so the risk that haiku reads its reference docs without complying is plausible here — but it has **not** been reproduced. Treat sonnet as the recommended floor pending a seo-planner-specific test; do not present it as proven. Moving to sonnet also means overriding `max_tokens` to 32,768 — the 16,384 default is haiku-sized (see the manifest `usage_notes`).
+
 ---
 
 ## Background
@@ -299,9 +301,9 @@ When changing seo-planner's OUTPUT FORMAT schema in a template prompt override, 
 | `research_queries` | (3 default queries) | Customize for specific industries, pipelines, or entity types | One query per line. Supports `{entity_name}` and `{entity_context}` placeholders. ≤5 queries recommended |
 | `prompt` | (SEO planning template) | Customize when you need different keyword strategies or industry-specific SEO patterns | The full LLM instruction. Uses `{entity_content}` for analysis JSON, `{keyword_research}` for research results, `{keyword_metrics}` for the quantitative keyword-data table (v2.3.0, opt-in), and `{doc:filename}` for reference docs |
 | `reference_docs` | (none) | Upload format spec, tone guide, or supplemental keyword data | Selected docs injected into prompt at `{doc:filename}` placeholders |
-| `ai_model` | haiku | Haiku for quick planning iterations. Sonnet for production | Planning is less sensitive to model quality than analysis or writing |
+| `ai_model` | haiku *(recommended floor: sonnet — inferred/UNVERIFIED)* | Recommended minimum sonnet by analogy to content-analyzer's tested doc-non-compliance finding (not yet tested on seo-planner). haiku for quick iterations only | Planning is structured, but the doc-following risk that broke content-analyzer on haiku plausibly applies here — see MODEL FLOOR |
 | `ai_provider` | anthropic | Switch for model comparison | Which API to call |
-| `max_tokens` | 16,384 | Raise only if plans truncate (rare — complete section-level plans run 4k-7k+ tokens). **Re-derive if you switch off haiku** | Max LLM response length. Sized for haiku (no thinking overhead). On a Claude-5 model, adaptive thinking eats this budget invisibly and 16,384 may truncate — truncation fails the run via the skeleton fail-closed guard (v2.3.1, was 8,192) |
+| `max_tokens` | 16,384 *(haiku-era; override to 32,768 when running sonnet)* | Set 32,768 whenever the module runs sonnet. The 16,384 default was sized for haiku (no thinking overhead); sonnet's adaptive thinking consumes the budget invisibly and 16,384 can truncate, which the skeleton fail-closed guard turns into a run failure | Max LLM response length. Covers visible JSON + (on a Claude-5 model) invisible thinking tokens (v2.3.1, was 8,192) |
 | `keyword_data_providers` | `[]` | Add real search-volume/difficulty/rank data (v2.3.0). Empty = layer off, no cost | Array of provider configs. See [Keyword Data Providers](#keyword-data-providers-v230) |
 | `max_seed_keywords` | 25 | Lower to trim cost; raise for broad entities | Cap on seed keywords per entity (cost guard; only when the layer is active) |
 | `max_metric_lookups_per_entity` | 100 | Lower to trim cost | Hard cap on keyword→metrics lookups per entity (cost guard) |
@@ -354,12 +356,13 @@ Then add a `{keyword_metrics}` placeholder to the template's `prompt` override t
 
 ## Recipes
 
-### Standard SEO Plan (v2.0.0 default)
-Web-researched keywords + AI planning:
+### Standard SEO Plan
+Web-researched keywords + AI planning (sonnet is the recommended floor — see MODEL FLOOR):
 ```
 keyword_research: true
 search_provider: perplexity
-ai_model: haiku
+ai_model: sonnet
+max_tokens: 32768
 reference_docs: [tone_guide.md, format_spec.md]
 ```
 Keyword packs (`keyword-summary.md`) are no longer needed — Perplexity replaces them.
@@ -373,7 +376,7 @@ reference_docs: [tone_guide.md, format_spec.md]
 ```
 
 ### Fast/Cheap Plan (no web research)
-Skip Perplexity for batch processing where cost matters:
+Skip Perplexity for batch processing where cost matters. **⚠ haiku is below the recommended (inferred/UNVERIFIED) sonnet floor — validate the plans follow your `format_spec.md` before trusting them.**
 ```
 keyword_research: false
 ai_model: haiku

@@ -153,7 +153,9 @@ function ytProvider() {
 
 async function main() {
   process.env.TEST_AF_YT_KEY = 'yt-key-abc';
+  process.env.TEST_AF_BEARER = 'tok-xyz';
   delete process.env.TEST_AF_MISSING_KEY;
+  delete process.env.TEST_AF_MISSING_BEARER;
 
   // ── 1. XML/RSS normalization: CDATA, attributes, namespaced + repeated tags ──
   console.log('\n[1] XML/RSS provider (podcast feed)');
@@ -451,6 +453,130 @@ async function main() {
     assert(MANIFEST.cost === 'medium', 'cost medium');
     assert(Array.isArray(MANIFEST.options_defaults.providers) && MANIFEST.options_defaults.providers.length === 0, 'default providers empty (inert, Rule 13)');
     assert(MANIFEST.output_schema.flagged_when && Array.isArray(MANIFEST.output_schema.flagged_when.status), 'flagged_when.status present');
+  }
+
+  // ── 17. GET is the default method (regression: no method -> http.get, never http.post) ──
+  console.log('\n[17] default method is GET (no method field)');
+  {
+    const p = {
+      id: 'getdefault', response_format: 'json', identifier_source: { entity_field: 'cid' },
+      endpoints: [{ id: 'e', url: 'https://api.test/list', params: { id: '{identifier}' }, results_path: 'items', field_map: { url: 'u' } }],
+    };
+    const tools = makeTools({ get: async () => json(200, { items: [{ u: 'https://r.test/1' }] }) });
+    const res = await execute(makeInput([{ name: 'X', cid: 'C1' }]), { ...defaults, providers: [p] }, tools);
+    assert(tools.calls.get.length === 1, 'endpoint with no method uses http.get');
+    assert(tools.calls.post.length === 0, 'http.post never called for a default (GET) endpoint');
+    assert(res.results[0].items.length === 1, 'GET path still maps items (unchanged behaviour)');
+  }
+
+  // ── 18. POST endpoint sends the body with placeholders interpolated ──
+  console.log('\n[18] POST endpoint sends interpolated body');
+  {
+    const p = {
+      id: 'poster', response_format: 'json', identifier_source: { entity_field: 'cid' },
+      endpoints: [{
+        id: 'run', method: 'POST', url: 'https://api.test/run-sync',
+        body: { query: '{identifier}', limit: '{max_items}' },
+        results_path: 'data', field_map: { url: 'link', title: 'name' },
+      }],
+    };
+    const tools = makeTools({
+      post: async () => json(200, { data: [{ link: 'https://r.test/a', name: 'A' }] }),
+    });
+    const res = await execute(
+      makeInput([{ name: 'X', cid: 'ID123' }]),
+      { ...defaults, providers: [p], max_items: 25 },
+      tools
+    );
+    assert(tools.calls.post.length === 1, 'POST endpoint calls http.post');
+    assert(tools.calls.get.length === 0, 'POST endpoint does not call http.get');
+    // body is passed as an object; the skeleton's http.post JSON-stringifies it downstream.
+    const sent = tools.calls.post[0].body;
+    assert(sent.query === 'ID123', '{identifier} interpolated into body');
+    assert(sent.limit === '25', '{max_items} interpolated into body (string, like params)');
+    assert(res.results[0].items.length === 1 && res.results[0].items[0].url === 'https://r.test/a', 'POST response mapped through field_map');
+  }
+
+  // ── 19. Top-level JSON array response maps via field_map with results_path omitted ──
+  console.log('\n[19] top-level array response, no results_path');
+  {
+    const p = {
+      id: 'toparray', response_format: 'json', identifier_source: { entity_field: 'cid' },
+      // no results_path — response is a bare top-level array (Apify run-sync-get-dataset-items shape)
+      endpoints: [{ id: 'e', url: 'https://api.test/items', params: { id: '{identifier}' }, field_map: { url: 'permalink', title: 'headline' } }],
+    };
+    const tools = makeTools({
+      get: async () => ({ status: 200, headers: {}, body: JSON.stringify([
+        { permalink: 'https://r.test/1', headline: 'One' },
+        { permalink: 'https://r.test/2', headline: 'Two' },
+      ]) }),
+    });
+    const res = await execute(makeInput([{ name: 'X', cid: 'C1' }]), { ...defaults, providers: [p] }, tools);
+    const items = res.results[0].items;
+    assert(items.length === 2, 'bare top-level array treated as the record list');
+    assert(items[0].url === 'https://r.test/1' && items[1].title === 'Two', 'field_map dot-paths resolve per array element');
+  }
+
+  // ── 20. bearer auth emits exactly "Authorization: Bearer <token>" ──
+  console.log('\n[20] bearer auth header');
+  {
+    const p = {
+      id: 'bear', response_format: 'json', identifier_source: { entity_field: 'cid' },
+      auth: { type: 'bearer', env_var: 'TEST_AF_BEARER' },
+      endpoints: [{ id: 'e', url: 'https://api.test/b', params: { id: '{identifier}' }, results_path: 'items', field_map: { url: 'u' } }],
+    };
+    const tools = makeTools({ get: async () => json(200, { items: [{ u: 'https://r.test/1' }] }) });
+    await execute(makeInput([{ name: 'X', cid: 'C1' }]), { ...defaults, providers: [p] }, tools);
+    const call = tools.calls.get.find((c) => c.url.includes('/b'));
+    assert(call && call.opts.headers.Authorization === 'Bearer tok-xyz', 'Authorization header is exactly "Bearer <token>"');
+  }
+
+  // ── 21. Missing env var for bearer -> provider skipped (same as other auth types) ──
+  console.log('\n[21] missing bearer env var skips provider');
+  {
+    const p = {
+      id: 'bearnokey', response_format: 'json', identifier_source: { entity_field: 'cid' },
+      auth: { type: 'bearer', env_var: 'TEST_AF_MISSING_BEARER' },
+      endpoints: [{ id: 'e', url: 'https://api.test/b', params: { id: '{identifier}' }, results_path: 'items', field_map: { url: 'u' } }],
+    };
+    const tools = makeTools({ get: async () => json(200, { items: [{ u: 'https://r.test/1' }] }) });
+    const res = await execute(makeInput([{ name: 'X', cid: 'C1' }]), { ...defaults, providers: [p] }, tools);
+    assert(tools.calls.get.length === 0, 'no HTTP call for bearer provider with missing env var');
+    assert(tools.logs.some((l) => l.level === 'warn' && /TEST_AF_MISSING_BEARER/.test(l.message)), 'warning names the missing bearer env var');
+    assert(res.results[0].items.length === 0, 'no items');
+  }
+
+  // ── 22. Unsupported method warns and falls back to GET ──
+  console.log('\n[22] unsupported method warns, falls back to GET');
+  {
+    const p = {
+      id: 'putish', response_format: 'json', identifier_source: { entity_field: 'cid' },
+      endpoints: [{ id: 'e', method: 'PUT', url: 'https://api.test/x', params: { id: '{identifier}' }, results_path: 'items', field_map: { url: 'u' } }],
+    };
+    const tools = makeTools({ get: async () => json(200, { items: [{ u: 'https://r.test/1' }] }) });
+    const res = await execute(makeInput([{ name: 'X', cid: 'C1' }]), { ...defaults, providers: [p] }, tools);
+    assert(tools.calls.get.length === 1 && tools.calls.post.length === 0, 'unsupported method falls back to GET (no POST)');
+    assert(tools.logs.some((l) => l.level === 'warn' && /unsupported method/i.test(l.message)), 'unsupported method is warned');
+    assert(res.results[0].items.length === 1, 'GET fallback still maps items');
+  }
+
+  // ── 23. POST body interpolates at depth (nested object, array, non-string leaves) ──
+  console.log('\n[23] POST body interpolation at depth');
+  {
+    const p = {
+      id: 'deep', response_format: 'json', identifier_source: { entity_field: 'cid' },
+      endpoints: [{
+        id: 'run', method: 'POST', url: 'https://api.test/deep',
+        body: { filter: { q: '{identifier}' }, tags: ['{identifier}', 'static'], limit: 5, active: true, note: null },
+        results_path: 'data', field_map: { url: 'u' },
+      }],
+    };
+    const tools = makeTools({ post: async () => json(200, { data: [{ u: 'https://r.test/1' }] }) });
+    await execute(makeInput([{ name: 'X', cid: 'ID9' }]), { ...defaults, providers: [p], max_items: 25 }, tools);
+    const sent = tools.calls.post[0].body;
+    assert(sent.filter && sent.filter.q === 'ID9', 'nested-object string leaf interpolated');
+    assert(Array.isArray(sent.tags) && sent.tags[0] === 'ID9' && sent.tags[1] === 'static', 'array string leaves interpolated');
+    assert(sent.limit === 5 && sent.active === true && sent.note === null, 'non-string leaves (number/boolean/null) pass through untouched');
   }
 
   console.log(`\n${'='.repeat(50)}\nTOTAL: ${pass} passed, ${fail} failed\n`);

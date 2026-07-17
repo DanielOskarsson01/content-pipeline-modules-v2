@@ -1150,3 +1150,21 @@ Architectural specs in "pending sign-off" state need active tracking to either a
 **Carried to the planning chat (review WARNING, out of ownership):** content-writer `execute.js:311-314` + `README.md:166` still say "Step 8 meta-output does NOT yet consume these fields (BACKLOG #52)" — falsified by this commit on the SAME branch. Needs a one-line doc amend (separate approved commit or at merge). Also open: #53 effort dial, #54 cache restructure, #55 page selection; FIX C identification still with the planning chat.
 
 **Updated by:** Claude (UNIT #52 execution session)
+
+### Session: 2026-07-17 — api-fetcher v1.1.0: POST + body + bearer (branch `step-3-api-fetcher-post`, stacked on `step5-model-floors`, NOT merged)
+
+**Status:** api-fetcher gains POST support (generic, Rule-13-clean). TDD, `/code-review` PASS/PROCEED (two WARNINGs closed), 75/75 mocked + credential-free live test green. Committed on `step-3-api-fetcher-post`, pushed; **merge deliberately NOT done**.
+
+**Branch/stacking:** cut off `step5-model-floors` (`4458a68`, verified 6a2d6da + one DOCS-ONLY commit — the 3 manifest.json edits are `usage_notes` strings only, defaults untouched; `4458a68` already pushed, origin==local). Stacked, NOT off main, because both units append to `BACKLOG.md` + `CLAUDE.md`; one merge carries both, no pointless conflict. Ownership honored: `modules/step-3-scraping/api-fetcher/*` + `BACKLOG.md` + `CLAUDE.md` only. api-search, step-5/6, and the skeleton untouched.
+
+**The change (four generic additions, per the investigation brief):** (1) optional endpoint `method` (default `GET`; unknown verb → GET **with a warn**, config-typo guard); (2) optional endpoint `body` (object or string) — each string leaf interpolated through the EXISTING `substitutePlaceholders`, so `{identifier}`/`{max_items}`/`{endpoint.field}` resolve; unresolved → skip the endpoint like url/params; (3) POST/GET dispatch at the single fetch site (`http.post(url, body, {timeout, headers})` vs `http.get`); (4) `bearer` branch in `buildAuth()` → `Authorization: Bearer <env>`. Response side needed NOTHING — `extractResults` already maps a bare top-level JSON array when `results_path` is omitted (the Apify `run-sync-get-dataset-items` shape). manifest 1.0.0→1.1.0 (defaults unchanged, `providers` description extended). README + module docs updated (Rule 7).
+
+**Design correction caught by TDD:** the brief's "pass the body through substitutePlaceholders" — read literally as stringify-then-substitute — is BROKEN: the placeholder regex `\{…\}` eats the outer JSON braces. Fix = `substituteBody()` walks the object/array and substitutes only string leaves, keeping it an object for the platform to JSON-serialize (which also makes object bodies injection-safe; string bodies are raw/unescaped — documented, operators prefer objects). Reviewer WARNINGs (string-body escaping + silent PUT→GET) both closed: README caveat + the unknown-method warn + two tests locking the recursion/non-string-leaf/unknown-method branches.
+
+**Ceiling marked (`ponytail:` at the fetch site):** single POST per endpoint, no async poll — Bright-Data-Datasets-style trigger→poll→download needs a separate primitive.
+
+**Filed, not built — BACKLOG #56–#59:** #56 async trigger→poll→download primitive (the real `dataset-fetcher` justification; Apify is synchronous so this unit suffices for it; SUBMODULE_BUILDOUT_PLAN §10 gate = Bright Data **Datasets** key scope, but the live prod key is the **Web Unlocker** key — different product, gate stays unticked); #57 api-search vs api-fetcher provider-schema divergence (a decision, not a Rule-4-violating refactor); #58 per-provider spend guardrail (a real 2026-07-16 run hit $0.72 heading past $6 on a $5 credit); #59 local `.env` ≠ Hetzner prod `.env` (deploy's `rsync --delete` excludes `.env`) — grepping local and reporting on prod is a confident false negative (already happened: the 2026-07-16 Bright Data "BLOCKED" verdict).
+
+**Decision:** Apify via api-fetcher POST is now expressible; Bright Data Datasets deferred pending the async-poll primitive (#56). Merge to main is a separate deliberate act (CI deploys on push-to-main).
+
+**Updated by:** Claude (api-fetcher POST unit — investigate-established → build → review → file → push, no merge)

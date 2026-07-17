@@ -5,6 +5,8 @@
 **Module ID:** `content-analyzer` | **Step:** 5 (Generation) | **Category:** analysis | **Cost:** expensive
 **Version:** 1.4.2 | **Data Operation:** add (+)
 
+> **⚠ MODEL FLOOR — minimum model: sonnet.** haiku-4-5 reads its reference taxonomy doc (`master_categories.md`) but does not comply with it: it fabricates categories instead of assigning from the configured list. Tested 2026-06, reproduced 100% of tries; sonnet resolves it. Any template running haiku on content-analyzer is misconfigured. Because the floor is a Claude-5 thinking model, a sonnet template must also override `max_tokens` to 32,768 — the 16,384 default is haiku-sized and truncates a thinking model (see the manifest `usage_notes`).
+
 ---
 
 ## Background
@@ -99,24 +101,25 @@ Other useful reference docs: classification guidelines, industry glossaries. The
 |--------|---------|----------------|--------|
 | `prompt` | (analysis template) | Customize when your taxonomy differs from default, or when you need different output fields | The full LLM instruction. Uses `{entity_content}` for scraped pages and `{doc:filename}` for reference docs |
 | `reference_docs` | (none) | Always upload master_categories.md at minimum. Add master_tags.md, classification guidelines as needed | Selected docs are injected into the prompt where `{doc:filename}` placeholders appear |
-| `ai_model` | haiku | Haiku is fast and cheap for structured extraction. Use Sonnet for higher accuracy on complex companies. Opus rarely needed for extraction | Quality vs cost tradeoff. Haiku is the recommended default for structured extraction |
+| `ai_model` | haiku *(below floor — see MODEL FLOOR)* | **Minimum model: sonnet.** haiku fabricates taxonomy categories despite reading the reference doc (tested 2026-06, 100% of tries). The `haiku` manifest default is a legacy value; a template MUST set sonnet (opus if you also want higher extraction accuracy on complex companies) | Below sonnet the module produces invented categories, so sonnet is a floor, not a cost preference |
 | `ai_provider` | anthropic | Switch to openai if you prefer GPT models or want to compare outputs | Which API to call |
 | `max_content_chars` | 200,000 | Lower to 30-50k for cost control on simple companies. Raise to 300-500k for companies with many long pages | Truncates assembled source text. 200k ~ 33,000 words, enough for most companies |
-| `max_tokens` | 16,384 | Raise only if analyses truncate (rare — complete outputs run 1.2k-6.6k tokens on 200+ page inputs). **Re-derive if you switch off haiku** | Max LLM response length. Sized for haiku (no thinking overhead). On a Claude-5 model, adaptive thinking eats this budget invisibly and 16,384 may truncate — and truncation fails the run via the skeleton fail-closed guard (v1.4.2, was 8,192) |
+| `max_tokens` | 16,384 *(haiku-era; override to 32,768 for the sonnet floor)* | Set 32,768 whenever the module runs sonnet — i.e. always, per the MODEL FLOOR. The 16,384 default was sized for haiku (no thinking overhead); sonnet's adaptive thinking consumes the budget invisibly and 16,384 truncates, which the skeleton fail-closed guard turns into a run failure | Max LLM response length. Covers visible JSON + (on a Claude-5 model) invisible thinking tokens (v1.4.2, was 8,192) |
 
 ## Recipes
 
 ### Standard Analysis
-Balanced for most companies:
+Balanced for most companies (sonnet is the capability floor — see MODEL FLOOR):
 ```
-ai_model: haiku
+ai_model: sonnet
 ai_provider: anthropic
 max_content_chars: 200000
+max_tokens: 32768
 reference_docs: [master_categories.md, master_tags.md]
 ```
 
 ### Quick Draft Analysis
-Fast iteration, check categories before committing:
+Fast wiring/smoke-test only. **⚠ haiku is below the capability floor — the categories it returns are fabricated (not from the master list) and must NOT be trusted or approved. Re-run on sonnet before relying on any output.**
 ```
 ai_model: haiku
 ai_provider: anthropic
@@ -134,11 +137,12 @@ reference_docs: [master_categories.md, master_tags.md]
 ```
 
 ### Categorization Only
-When you only need categories, not full analysis:
+When you only need categories, not full analysis (sonnet is mandatory here — categorization is the exact task haiku fails):
 ```
-ai_model: haiku
+ai_model: sonnet
 ai_provider: anthropic
 max_content_chars: 50000
+max_tokens: 32768
 prompt: (modified to only return categories section)
 reference_docs: [master_categories.md]
 ```
