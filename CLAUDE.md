@@ -1168,3 +1168,19 @@ Architectural specs in "pending sign-off" state need active tracking to either a
 **Decision:** Apify via api-fetcher POST is now expressible; Bright Data Datasets deferred pending the async-poll primitive (#56). Merge to main is a separate deliberate act (CI deploys on push-to-main).
 
 **Updated by:** Claude (api-fetcher POST unit — investigate-established → build → review → file → push, no merge)
+
+### Session: 2026-07-18 — U1-A built: content-delivery generic Step-9 module (branch `u1a-content-delivery`, NOT merged)
+
+**Status:** Built the ONE generic Step-9 delivery module from `UNIT_5_5_STEP9_10_DELIVERY_DESIGN.md` §1–§2 (U1-A). TDD, `/code-review` PROCEED, committed on branch `u1a-content-delivery` off main (`b0ed5c4`), pushed; **NOT merged** (merge to main = CI deploy, planning-chat's call). Ownership honored: only `modules/step-9-distribution/content-delivery/*` + this log — json-output, the skeleton, and every step 1–8 module untouched.
+
+**The module (`content-delivery` v1.0.0):** step 9, `item_key: entity_name`, `add` + `requires_items`, cost medium, `providers: []` default. Rule-13 generic — branches only on a provider's `type` field, never on a name or a destination concept ("webhook" is a config id in the README example only, never in `execute.js`). Selects the deliverable pool item by FIELD SHAPE (`final_json` from json-output), never `source_submodule`. `json_post` verb, single pass: builds the envelope `{entity_name, run_id, delivered_at, payload:<parsed final_json>}` (`run_id` verified reachable via `input.run_id` — skeleton per-entity input_data `submoduleRuns.js:699-704` → `stageWorker.js:491/541`) and POSTs via `tools.http.post`. Errors are ITEMS not throws (a non-2xx response AND a thrown network/timeout both → failed item; other entities continue; `_partialItems` pushed per entity, Rule 10). Loud config validation (no id / unsupported type / no endpoint / unset `{env:VAR}` skipped up-front; empty providers = loud no-op; no-`final_json` entity = reported `skipped`). Secrets: resolved endpoint/headers never logged or emitted (provider id only), tested.
+
+**Deliberate deviation from the design (planning-chat decision):** auth uses api-search's proven headers-map (`{env:VAR}` interpolation) pattern, NOT the design's `auth:{type,header,env_var}`. One auth dialect across modules. Recorded in the module README + decision_log.
+
+**TDD:** `test-content-delivery.js`, 33 assertions mocked/offline, all green (happy/envelope, no-providers no-op, missing-`final_json` skip, HTTP 500 + network failure, missing-env skip, secret non-leak, field-shape selection, missing-endpoint skip, `$`-safe interpolation). Independent `/code-review` = PROCEED; all three review items folded (module `CLAUDE.md`, endpoint pre-skip, `$`-safety test).
+
+**Not built (deferred, in README):** `file_upload`/`row_upsert` verbs, URL `{field}` templating (ponytail-noted in `execute.js`), retry loop. A webhook needs only POST.
+
+**Next (U1 sequence, UNIT_5_5 §6):** U1-B (template: json-output + content-delivery on one clean entity, provider `u1-webhook`), U1-C (`DELIVERY_WEBHOOK_URL` in prod `.env`; Open Q1 = pick the test endpoint), U1-D (run auto 0→10, Daniel accepts it arrived). Merge to main gated on the planning-chat's wave call.
+
+**Updated by:** Claude (U1-A build session)
