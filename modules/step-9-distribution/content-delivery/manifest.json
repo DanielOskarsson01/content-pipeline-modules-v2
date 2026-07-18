@@ -1,0 +1,52 @@
+{
+  "id": "content-delivery",
+  "name": "Content Delivery",
+  "description": "Deliver each entity's bundled artifact to a configured endpoint. Generic transport: the code knows HTTP verbs, payload assembly, and header interpolation — not any specific destination. Destinations (a webhook, a CMS, …) are provider config a template supplies. No providers configured = nothing delivered, with a loud message.",
+  "version": "1.0.0",
+  "step": 9,
+  "category": "distribution",
+  "cost": "medium",
+  "data_operation_default": "add",
+  "pool_precondition": "requires_items",
+  "usage_notes": "Configure one or more providers. Each provider: { id, name, type:'json_post', endpoint, method:'POST', headers?, source_field?:'final_json', envelope? }. Secrets go in `headers` as {env:VAR} tokens (e.g. {\"X-Delivery-Secret\": \"{env:DELIVERY_WEBHOOK_SECRET}\"}) — never literal keys; auth 'none' = omit `headers`. The `endpoint` also supports {env:VAR}. A provider referencing an unset env var is skipped with a warning. Empty `providers` = no delivery.",
+
+  "requires_columns": [],
+
+  "options": [
+    {
+      "name": "providers",
+      "type": "json",
+      "label": "Delivery providers",
+      "presets_enabled": true,
+      "description": "JSON array of provider configs. Each: { id, name, type:'json_post', endpoint (URL or {env:VAR}), method:'POST', headers?:{ Name:'{env:VAR}' }, source_field?:'final_json', envelope?:true }. See README for the schema and the webhook example.",
+      "default": []
+    }
+  ],
+
+  "options_defaults": {
+    "providers": []
+  },
+
+  "item_key": "entity_name",
+
+  "output_schema": {
+    "display_type": "table",
+    "selectable": false,
+    "entity_name": "string (required)",
+    "provider_id": "string",
+    "delivery_status": "string (delivered | failed | skipped)",
+    "http_status": "number",
+    "detail_schema": {
+      "header_fields": [
+        "entity_name",
+        "provider_id",
+        { "field": "delivery_status", "display": "badge" },
+        "http_status"
+      ],
+      "sections": [
+        { "field": "error", "label": "Error", "display": "prose" },
+        { "field": "reason", "label": "Skip reason", "display": "prose" }
+      ]
+    }
+  }
+}
