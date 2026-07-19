@@ -25,6 +25,36 @@ For each entity:
 An entity with **no `final_json` item** is reported as `skipped` (loudly, in the
 summary and logs) — never a silent empty success.
 
+## Input contract — how `final_json` reaches the pool
+
+This module consumes one field: **`final_json`**, produced by `json-output` at
+Step 8. It declares it in the manifest:
+
+```json
+"requires_columns": ["final_json"]
+```
+
+That declaration is load-bearing, not cosmetic. `json-output` marks `final_json`
+as a `downloadable_field`, so after it runs the skeleton **strips `final_json`
+from the pool item** and preserves it in `submodule_run_item_data` (keeping the
+pool lean). By the time Step 9 executes, the pool item no longer carries
+`final_json` inline. The skeleton's §7b enrichment path
+(`content-pipeline-v2/server/workers/stageWorker.js`) **rehydrates** any field
+named in `requires_columns` back onto the pool item *before* `execute()` runs —
+matching each item by `item_key` (`entity_name`) against the stored `item_data`.
+(§7b's enabling gate is a non-empty `requires_columns`; it then only fetches the
+subset of those fields actually missing from the pool items.)
+This is the identical mechanism `content-analyzer` uses to get `text_content`
+back after it too is stripped.
+
+`entity_name` is deliberately **not** in `requires_columns`: it is the module's
+`item_key`, always present on the pool item, and is never stripped.
+
+> If `requires_columns` were empty, §7b would be gated off (`requiresColumns.length > 0`
+> is the only trigger) and the selector at `execute.js` would find no `final_json`
+> in the pool — every entity would `skip` despite json-output having produced the
+> artifact. That was the U1 delivery blocker; the one-line declaration is the fix.
+
 ## Options
 
 | Option | Type | Default | Meaning |
@@ -141,4 +171,5 @@ planning chat; recorded here and in the decision_log.
 (mocked, offline, no credentials) — happy path/envelope, no-providers no-op,
 missing-`final_json` skip, delivery failures (HTTP + network), missing-env skip,
 secret non-leak, field-shape selection, missing-`endpoint` skip, `$`-safe
-interpolation. 33 assertions.
+interpolation, and the strip→rehydrate contract
+(`requires_columns:["final_json"]`). 40 assertions.
