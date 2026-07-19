@@ -159,7 +159,7 @@ reference_docs: [master_categories.md]
 
 **Output fields per entity:**
 - `entity_name` - entity name (carried from input)
-- `status` - `analyzed` or `error`
+- `status` - `analyzed` or `error` (`error` includes a **hollow analysis** — one the model returned as valid-but-empty JSON with no usable extracted content; v1.4.3 fails it loud instead of shipping it green)
 - `summary_preview` - auto-generated preview from the first few meaningful values in the analysis
 - `word_count` - total source words analyzed
 - `model_used` - which AI model was used (e.g., "anthropic/haiku")
@@ -234,6 +234,7 @@ reference_docs: [master_categories.md]
 - **Single-language assumption** - The default prompt is in English and expects English-language source text. Non-English companies may need a modified prompt
 - **No cross-entity intelligence** - Each company is analyzed independently. The model doesn't know what categories other companies received, so consistency depends on the reference doc
 - **JSON parse fragility** - LLMs occasionally return malformed JSON. The module handles markdown code fence wrapping but deeply malformed responses fail with raw_response included for debugging
+- **Hollow-analysis content gate (v1.4.3, M2 — always on)** - shape-valid is not content-valid. If the model returns a *valid-but-empty* analysis (e.g. `{}` or `{ categories: [], key_facts: {} }` — parses fine, but carries no usable extracted value), the module now fails **loud**: the entity gets `meta.status:'error'` and turns red, instead of shipping an empty analysis as success. "Usable" is defined from the downstream requirement, not arbitrarily: content-writer and seo-planner both serialize the *entire* `analysis_json` into their prompt, so an empty analysis cascades into a hollow profile one step downstream — this is the producer-side twin of the seo-planner hollow-plan gate. The gate names no field (the schema is fully dynamic, per Rule 13); it fails only when *every* leaf is empty, and one real string/number/boolean anywhere makes the analysis usable (so a partly-populated analysis still passes). **Boundary:** this covers the parsed-but-empty case only — a *non-JSON* response (parse fails) keeps its existing raw-text path (its raw text still flows to content-writer via the whole-item fallback), so it is degraded, not empty. Not a salvage: no default substitution, no retry-into-empty, no warning downgrade.
 - **Vocabulary fidelity gate (v1.4.1, opt-in)** - the optional `vocabulary_checks` option turns the "garbage taxonomy" risk above into a loud failure instead of a silent pass. When configured (e.g. `categories.primary[].slug=master_categories.md`), the module (a) pre-flight FAILS the run before any LLM call if a referenced vocab doc is missing/empty, and (b) FAILS any entity whose assigned slug at a configured path is not present in the named doc. Leave empty (default) and the gate is inert — the module behaves exactly as before. The slug-membership check is deliberately lenient (it never rejects a slug that appears in the doc) so it cannot false-fail a valid run; its job is to catch grossly-invented slugs. Operator note: the vocab doc must contain each allowed slug as a contiguous token (e.g. `casino-platforms`, not `casino - platforms`) — the real master_categories.md / master_tags.md formats already satisfy this.
 
 ## What Happens Next

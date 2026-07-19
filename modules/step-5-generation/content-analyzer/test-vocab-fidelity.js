@@ -75,7 +75,7 @@ const base = { ...MANIFEST.options_defaults };
   // Manifest sanity (config part of W1.3)
   // ----------------------------------------------------------------------
   console.log('\n=== Manifest sanity ===');
-  assert(MANIFEST.version === '1.4.2', `manifest version bumped to 1.4.2 (got ${MANIFEST.version})`);
+  assert(MANIFEST.version === '1.4.3', `manifest version bumped to 1.4.3 (got ${MANIFEST.version})`);
   assert(MANIFEST.options.some(o => o.name === 'vocabulary_checks'), 'vocabulary_checks option present');
   assert(MANIFEST.options_defaults.vocabulary_checks === '', 'vocabulary_checks default is empty string');
 
