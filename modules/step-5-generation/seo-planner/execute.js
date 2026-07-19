@@ -190,6 +190,53 @@ function validateMeta(meta) {
 }
 
 /**
+ * CONTENT gate (C2 / prod run d9c21199, 2026-07-19). The JSON parse above
+ * validates SHAPE only; a valid-but-empty object is a HOLLOW plan that flows
+ * downstream as untargeted content and trips meta-compliance-checker's
+ * "No head_terms found in SEO plan" on every pass — yet the run still went green.
+ *
+ * "Hollow" is defined from the load-bearing consumer requirement, not arbitrarily:
+ * a plan is hollow iff it yields ZERO usable keyword/head terms. That is the exact
+ * condition under which meta-compliance-checker (step-6 QA) emits the prod failure.
+ * Keywords are the one requirement with NO downstream fallback — content-writer's
+ * resolveMetaFromPlanner and meta-output both fall meta title back to the entity
+ * name, and FAQs are optional (faq_count may be 0) — so keyword absence is the
+ * signal that actually breaks the pipeline, and meta/faqs presence must NOT rescue
+ * a keyword-empty plan.
+ *
+ * This mirrors meta-compliance-checker's extractHeadTerms shapes 1:1 (head_terms,
+ * top-level target_keywords, per-section target_keywords, keyword_summary_table,
+ * flat keywords), so "usable here" == "the checker would find a head term". Rule 4
+ * self-contained copy — no cross-module import (seo-planner is step 5, the checker
+ * step 6); keep the two in sync if either's shapes change.
+ */
+function hasUsableKeywords(plan) {
+  if (!plan || typeof plan !== 'object') return false;
+  const usable = (v) => typeof v === 'string' && v.trim().length > 0;
+  const fromTargetKeywords = (tk) => {
+    if (!tk || typeof tk !== 'object') return false;
+    if (usable(tk.primary)) return true;
+    if (Array.isArray(tk.primary) && tk.primary.some(usable)) return true;
+    if (Array.isArray(tk.secondary) && tk.secondary.some(usable)) return true;
+    if (Array.isArray(tk.long_tail) && tk.long_tail.some(usable)) return true;
+    return false;
+  };
+
+  if (Array.isArray(plan.head_terms) && plan.head_terms.some(usable)) return true;
+  if (fromTargetKeywords(plan.target_keywords)) return true;
+  if (plan.sections && typeof plan.sections === 'object') {
+    for (const section of Object.values(plan.sections)) {
+      if (section && typeof section === 'object' && fromTargetKeywords(section.target_keywords)) return true;
+    }
+  }
+  if (Array.isArray(plan.keyword_summary_table) &&
+      plan.keyword_summary_table.some(row => row && usable(row.keyword))) return true;
+  if (Array.isArray(plan.keywords) && plan.keywords.some(usable)) return true;
+
+  return false;
+}
+
+/**
  * Flatten SEO plan JSON into display-friendly fields.
  *
  * The manifest default emits target_keywords + meta + faqs + keyword_distribution
@@ -641,6 +688,21 @@ async function execute(input, options, tools) {
           `Raw retry response (first 2000 chars): ${JSON.stringify(rawSnippet)}`
         );
         throw parseErr;
+      }
+
+      // CONTENT gate: the parse validated JSON shape only. A valid-but-empty
+      // plan (0 usable keywords) is HOLLOW — fail LOUD here at the source rather
+      // than flatten empties to "Not specified" and ship status:'success'
+      // (C2 / run d9c21199). Throwing routes into the existing catch below, which
+      // emits meta.status:'error' — honored by the skeleton
+      // (content-pipeline-v2/server/utils/entityRunStatus.js:23 → entity 'failed'),
+      // so the entity turns red at the source with no skeleton change. This is a
+      // SECOND gate for the valid-but-empty case completeWithJsonRetry's throw-path
+      // can't catch — NOT a salvage: no defaults, no retry-into-empty, no warning.
+      if (!hasUsableKeywords(plan)) {
+        throw new Error(
+          'SEO plan has no usable keywords/head_terms — model returned non-conforming (empty) output'
+        );
       }
 
       // Attach the quantitative keyword-data as an ADDITIVE audit-trail field.
