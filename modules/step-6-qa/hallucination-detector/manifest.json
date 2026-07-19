@@ -2,7 +2,7 @@
   "id": "hallucination-detector",
   "name": "Hallucination Detector",
   "description": "Compare generated content claims against original source material to flag statements that aren't supported by any source.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "step": 6,
   "category": "qa",
   "cost": "medium",
@@ -56,6 +56,13 @@
       "default": 10,
       "min": 1,
       "max": 25
+    },
+    {
+      "name": "allow_empty_content",
+      "type": "boolean",
+      "label": "Allow empty content",
+      "description": "When true, an entity with no content_markdown skips with a pass (nothing to verify). When false (default), missing content fails closed -- content was expected but is absent, and a QA gate must not certify content it never read.",
+      "default": false
     }
   ],
 
@@ -64,7 +71,8 @@
     "ai_model": "haiku",
     "ai_provider": "anthropic",
     "max_source_chars": 100000,
-    "claims_per_batch": 10
+    "claims_per_batch": 10,
+    "allow_empty_content": false
   },
 
   "item_key": "entity_name",
