@@ -10,7 +10,7 @@
   "pool_precondition": "requires_items",
   "usage_notes": "Configure one or more providers. Each provider: { id, name, type:'json_post', endpoint, method:'POST', headers?, source_field?:'final_json', envelope? }. Secrets go in `headers` as {env:VAR} tokens (e.g. {\"X-Delivery-Secret\": \"{env:DELIVERY_WEBHOOK_SECRET}\"}) — never literal keys; auth 'none' = omit `headers`. The `endpoint` also supports {env:VAR}. A provider referencing an unset env var is skipped with a warning. Empty `providers` = no delivery.",
 
-  "requires_columns": [],
+  "requires_columns": ["final_json"],
 
   "options": [
     {

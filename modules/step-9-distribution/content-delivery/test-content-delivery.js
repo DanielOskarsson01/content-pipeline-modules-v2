@@ -12,6 +12,9 @@
  *   5. missing env var for a header — provider skipped with a warn (api-search convention), no HTTP
  *   6. secrets — resolved header value absent from every log line and every output item
  *   7. field-shape selection — a pool with markdown-output + json-output items picks the final_json item
+ *   8. provider without endpoint — skipped up-front, no per-entity failures
+ *   9. $-safe env interpolation — $&/$$/$1 in an env value not corrupted
+ *  10. strip → rehydrate contract — stripped item skips; rehydrated item (requires_columns:["final_json"]) delivers
  */
 
 const execute = require('./execute.js');
@@ -211,6 +214,45 @@ function allItems(res) {
     await execute(input, { providers }, tools);
     assert(tools.calls.post[0].opts.headers['X-Key'] === 'a$&b$$c$1d', 'header value with $&/$$/$1 interpolated verbatim (function-form replace)');
     delete process.env.T9_KEY;
+  }
+
+  // ---- Test 10: strip → rehydrate contract (requires_columns:["final_json"]) ----
+  // At Step 9 the pool item arrives with final_json STRIPPED (json-output marks it
+  // downloadable; the skeleton moves it to submodule_run_item_data). The manifest's
+  // requires_columns:["final_json"] makes the skeleton's §7b enrichment Object.assign
+  // it back onto the item BEFORE execute() runs. This test simulates both states at
+  // the module boundary: stripped → skip; rehydrated → the selector at execute.js:116
+  // picks it and delivers. (execute() sees the item the skeleton hands it; §7b itself
+  // is the skeleton's job and is exercised there.)
+  console.log('\nTest 10: stripped item skips; rehydrated item delivers (requires_columns contract)');
+  {
+    // Guard the manifest value the fix hinges on: reverting requires_columns to []
+    // would silently disable the skeleton's §7b rehydration and re-break delivery.
+    const manifest = require('./manifest.json');
+    assert(Array.isArray(manifest.requires_columns) && manifest.requires_columns.includes('final_json'),
+      'manifest declares requires_columns:["final_json"] (enables skeleton §7b rehydration)');
+    assert(!manifest.requires_columns.includes('entity_name'),
+      'entity_name NOT declared (it is the item_key, never stripped)');
+
+    const providers = [{ id: 'w', type: 'json_post', endpoint: 'https://x.test/h', source_field: 'final_json', envelope: true }];
+
+    // (a) BEFORE §7b: json-output's pool item with final_json stripped away.
+    const strippedItem = { entity_name: 'Acme', source_submodule: 'json-output' }; // no final_json
+    const toolsA = makeTools(() => ({ status: 200, headers: {}, body: 'ok' }));
+    const resA = await execute(makeInput([{ name: 'Acme', items: [strippedItem] }]), { providers }, toolsA);
+    assert(toolsA.calls.post.length === 0, 'stripped item (no final_json) → no POST');
+    assert(allItems(resA).some(i => i.entity_name === 'Acme' && i.delivery_status === 'skipped'), 'stripped item → reported skipped (the U1 blocker without rehydration)');
+
+    // (b) AFTER §7b: the same item, with final_json Object.assign'd back on (as the
+    // skeleton enrichment does when requires_columns names it), keyed by entity_name.
+    const rehydratedItem = { ...strippedItem };
+    Object.assign(rehydratedItem, { final_json: JSON.stringify({ name: 'Acme', delivered_via: 'rehydration' }) });
+    let postedBody = null;
+    const toolsB = makeTools((url, body) => { postedBody = body; return { status: 200, headers: {}, body: 'ok' }; });
+    const resB = await execute(makeInput([{ name: 'Acme', items: [rehydratedItem] }]), { providers }, toolsB);
+    assert(toolsB.calls.post.length === 1, 'rehydrated item → exactly one POST (selector at execute.js:116 finds final_json)');
+    assert(postedBody && postedBody.payload && postedBody.payload.delivered_via === 'rehydration', 'delivered the rehydrated final_json payload');
+    assert(allItems(resB).some(i => i.entity_name === 'Acme' && i.delivery_status === 'delivered'), 'rehydrated item → delivered');
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

@@ -12,6 +12,19 @@ When you change `execute.js` or `manifest.json`, update `README.md` AND
 - a new transport verb (`file_upload`/`row_upsert`) → the `type` branch in `execute.js` + README "Not built in v1"
 - output item fields (`delivery_status`/`http_status`/`error`/`reason`) → manifest `output_schema` + README "Output"
 
+## Input contract (do not regress)
+
+`requires_columns: ["final_json"]` is **load-bearing**, not cosmetic. json-output
+marks `final_json` as a `downloadable_field`, so the skeleton strips it from the
+pool item into `submodule_run_item_data`. The skeleton's §7b enrichment
+(`content-pipeline-v2/server/workers/stageWorker.js`; enabling gate is a
+non-empty `requires_columns`, then it fetches only the declared fields actually
+missing) rehydrates it back onto the item, keyed by
+`item_key` (`entity_name`), before `execute()` runs — the same path
+content-analyzer uses for `text_content`. Empty `requires_columns` disables §7b →
+the selector finds no `final_json` → every entity skips (the U1 blocker). Do not
+add `entity_name` (it's the item_key, never stripped). Tested (test 10).
+
 ## Invariants (tested — do not regress)
 
 - **Secrets**: resolved `endpoint`/`headers` values never logged or emitted (test 6).
