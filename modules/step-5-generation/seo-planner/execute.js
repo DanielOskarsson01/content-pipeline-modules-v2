@@ -190,6 +190,56 @@ function validateMeta(meta) {
 }
 
 /**
+ * Keyword FIELD names are the pipeline-agnostic contract; section CONTAINER names
+ * (overview / category_sections / tag_sections / sections / credentials …) are
+ * TEMPLATE-specific and must NEVER be enumerated in this generic module (Rule 13).
+ *
+ * So we HARVEST every non-empty string reachable under any key named
+ * `target_keywords`, `keywords`, or `head_terms`, wherever it nests, whether the
+ * value is a string, a flat string[] (the company-profile shape), or a
+ * {primary,secondary,long_tail} object (the legacy shape). Plus the typed
+ * `keyword_summary_table[].keyword` rollup. `keyword_sources`/`notes`/`meta` are
+ * NOT keyword fields (exact key match), so research provenance and prose are
+ * never mistaken for keywords.
+ *
+ * This REPLACES the earlier fixed-shape enumeration, which broke every time a
+ * template nested keywords differently (top-level → `sections.*` → the prod
+ * `overview`/`category_sections`/`tag_sections` arrays that tripped run
+ * f4d501bd's "non-conforming (empty) output" on a plan that was actually rich).
+ */
+const KEYWORD_FIELD_KEYS = new Set(['target_keywords', 'keywords', 'head_terms']);
+
+function harvestKeywordStrings(node, out) {
+  if (typeof node === 'string') { const s = node.trim(); if (s) out.push(s); return; }
+  if (Array.isArray(node)) { for (const v of node) harvestKeywordStrings(v, out); return; }
+  if (node && typeof node === 'object') { for (const v of Object.values(node)) harvestKeywordStrings(v, out); }
+}
+
+/**
+ * Collect every keyword string in a plan, container-shape-agnostically.
+ * Rule 4 self-contained copy — meta-compliance-checker (step 6) carries an
+ * IDENTICAL collector; keep the two in sync if either changes (module Rule 8).
+ */
+function collectPlanKeywords(plan) {
+  const out = [];
+  const walk = (node, depth) => {
+    if (depth > 8 || !node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { for (const v of node) walk(v, depth + 1); return; }
+    for (const [key, val] of Object.entries(node)) {
+      if (KEYWORD_FIELD_KEYS.has(key)) harvestKeywordStrings(val, out);
+      else walk(val, depth + 1);
+    }
+  };
+  walk(plan, 0);
+  if (plan && Array.isArray(plan.keyword_summary_table)) {
+    for (const row of plan.keyword_summary_table) {
+      if (row && typeof row.keyword === 'string' && row.keyword.trim()) out.push(row.keyword.trim());
+    }
+  }
+  return out;
+}
+
+/**
  * CONTENT gate (C2 / prod run d9c21199, 2026-07-19). The JSON parse above
  * validates SHAPE only; a valid-but-empty object is a HOLLOW plan that flows
  * downstream as untargeted content and trips meta-compliance-checker's
@@ -203,37 +253,10 @@ function validateMeta(meta) {
  * name, and FAQs are optional (faq_count may be 0) — so keyword absence is the
  * signal that actually breaks the pipeline, and meta/faqs presence must NOT rescue
  * a keyword-empty plan.
- *
- * This mirrors meta-compliance-checker's extractHeadTerms shapes 1:1 (head_terms,
- * top-level target_keywords, per-section target_keywords, keyword_summary_table,
- * flat keywords), so "usable here" == "the checker would find a head term". Rule 4
- * self-contained copy — no cross-module import (seo-planner is step 5, the checker
- * step 6); keep the two in sync if either's shapes change.
  */
 function hasUsableKeywords(plan) {
   if (!plan || typeof plan !== 'object') return false;
-  const usable = (v) => typeof v === 'string' && v.trim().length > 0;
-  const fromTargetKeywords = (tk) => {
-    if (!tk || typeof tk !== 'object') return false;
-    if (usable(tk.primary)) return true;
-    if (Array.isArray(tk.primary) && tk.primary.some(usable)) return true;
-    if (Array.isArray(tk.secondary) && tk.secondary.some(usable)) return true;
-    if (Array.isArray(tk.long_tail) && tk.long_tail.some(usable)) return true;
-    return false;
-  };
-
-  if (Array.isArray(plan.head_terms) && plan.head_terms.some(usable)) return true;
-  if (fromTargetKeywords(plan.target_keywords)) return true;
-  if (plan.sections && typeof plan.sections === 'object') {
-    for (const section of Object.values(plan.sections)) {
-      if (section && typeof section === 'object' && fromTargetKeywords(section.target_keywords)) return true;
-    }
-  }
-  if (Array.isArray(plan.keyword_summary_table) &&
-      plan.keyword_summary_table.some(row => row && usable(row.keyword))) return true;
-  if (Array.isArray(plan.keywords) && plan.keywords.some(usable)) return true;
-
-  return false;
+  return collectPlanKeywords(plan).length > 0;
 }
 
 /**

@@ -193,6 +193,33 @@ async function main() {
     checks += 5;
   }
 
+  // keywords: the REAL prod shape (run f4d501bd) — top-level section containers,
+  // target_keywords as flat string[], per-tag `keywords`. The old fixed-shape
+  // extractor returned [] here and would have shipped a keyword-stripped deliverable.
+  {
+    const entities = [{
+      name: 'Hacksawgaming',
+      items: [
+        { source_submodule: 'seo-planner', seo_plan_json: {
+          overview: { target_keywords: ['rng game supplier for online casinos'], keyword_sources: ['Q1'], notes: 'lead paragraph' },
+          category_sections: { primary_category_game_providers: { target_keywords: ['slot games supplier'], keyword_sources: ['Q1'] } },
+          tag_sections: { slots: { keywords: ['slot game providers'], keyword_sources: ['Q2'] } },
+          credentials: { target_keywords: ['certified'], keyword_sources: ['Q1'] },
+          meta: { meta_title: 'Hacksaw Gaming — RNG Game Supplier', keyword_sources: ['Q1'] },
+        } },
+      ],
+    }];
+    const res = await metaOutputItem(entities);
+    const keywordsJson = JSON.parse(res.meta_json).keywords;
+    assert(keywordsJson.includes('rng game supplier for online casinos'), 'overview flat-array keyword aggregated');
+    assert(keywordsJson.includes('slot games supplier'), 'category_sections flat-array keyword aggregated');
+    assert(keywordsJson.includes('slot game providers'), 'tag_sections per-tag keyword aggregated');
+    assert(keywordsJson.includes('certified'), 'credentials keyword aggregated');
+    assert(!keywordsJson.includes('q1') && !keywordsJson.includes('q2'), 'keyword_sources provenance NOT shipped as a keyword');
+    assert(!keywordsJson.some(k => /lead paragraph/.test(k)), 'notes prose NOT shipped as a keyword');
+    checks += 6;
+  }
+
   console.log(`meta-output/test-meta-resolution: PASS (${checks} assertions)`);
 }
 

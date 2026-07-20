@@ -100,57 +100,59 @@ function addTargetKeywords(tk, terms) {
 }
 
 /**
- * Extract head_terms from seo_plan_json. Handles multiple shapes:
- *   - seo_plan_json.head_terms (array of strings)
- *   - seo_plan_json.target_keywords.{primary,secondary,long_tail} (top-level)
- *   - seo_plan_json.sections.<any>.target_keywords.{primary,secondary,long_tail}
- *     (seo-planner emits keywords PER SECTION, not at top level — this is the
- *     shape the 2026-07-14 calibration produced, which caused a batch-wide
- *     "No head_terms found" auto-fail before this was read)
- *   - seo_plan_json.keyword_summary_table[].keyword (the typed rollup)
- *   - seo_plan_json.keywords (flat array of strings)
+ * Keyword FIELD names are the pipeline-agnostic contract; section CONTAINER names
+ * (overview / category_sections / tag_sections / sections / credentials …) are
+ * TEMPLATE-specific and must NEVER be enumerated here (Rule 13 by analogy). So we
+ * HARVEST every non-empty string reachable under any key named `target_keywords`,
+ * `keywords`, or `head_terms`, wherever it nests, whether the value is a string,
+ * a flat string[] (the company-profile prod shape) or a
+ * {primary,secondary,long_tail} object (the legacy shape). `keyword_sources`/
+ * `notes`/`meta` are NOT keyword fields (exact key match), so research provenance
+ * and prose are never mistaken for keywords.
  *
- * Section iteration is generic (Object.values) — no section name is hardcoded,
- * so it stays pipeline-agnostic across content types.
+ * Rule 4 self-contained copy — seo-planner (step 5) carries an IDENTICAL collector
+ * for its content gate; keep the two in sync if either changes (seo-planner Rule 8).
+ */
+const KEYWORD_FIELD_KEYS = new Set(['target_keywords', 'keywords', 'head_terms']);
+
+function harvestKeywordStrings(node, out) {
+  if (typeof node === 'string') { const s = node.trim(); if (s) out.push(s); return; }
+  if (Array.isArray(node)) { for (const v of node) harvestKeywordStrings(v, out); return; }
+  if (node && typeof node === 'object') { for (const v of Object.values(node)) harvestKeywordStrings(v, out); }
+}
+
+function collectPlanKeywords(plan) {
+  const out = [];
+  const walk = (node, depth) => {
+    if (depth > 8 || !node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { for (const v of node) walk(v, depth + 1); return; }
+    for (const [key, val] of Object.entries(node)) {
+      if (KEYWORD_FIELD_KEYS.has(key)) harvestKeywordStrings(val, out);
+      else walk(val, depth + 1);
+    }
+  };
+  walk(plan, 0);
+  if (plan && Array.isArray(plan.keyword_summary_table)) {
+    for (const row of plan.keyword_summary_table) {
+      if (row && typeof row.keyword === 'string' && row.keyword.trim()) out.push(row.keyword.trim());
+    }
+  }
+  return out;
+}
+
+/**
+ * Extract head_terms (deduped, lowercased) from seo_plan_json — container-shape-
+ * agnostic. Covers head_terms, top-level and per-section `target_keywords`
+ * (object OR flat array), per-tag `keywords`, keyword_summary_table, and flat
+ * `keywords`, at any nesting depth. See collectPlanKeywords above.
  */
 function extractHeadTerms(seoPlanJson) {
-  if (!seoPlanJson) return [];
-
+  if (!seoPlanJson || typeof seoPlanJson !== 'object') return [];
   const terms = new Set();
-
-  // Direct head_terms array
-  if (Array.isArray(seoPlanJson.head_terms)) {
-    for (const t of seoPlanJson.head_terms) {
-      if (typeof t === 'string' && t.trim()) terms.add(t.trim().toLowerCase());
-    }
+  for (const s of collectPlanKeywords(seoPlanJson)) {
+    const t = s.trim().toLowerCase();
+    if (t) terms.add(t);
   }
-
-  // Top-level target_keywords structure
-  addTargetKeywords(seoPlanJson.target_keywords, terms);
-
-  // Per-section target_keywords (seo-planner's actual output shape)
-  if (seoPlanJson.sections && typeof seoPlanJson.sections === 'object') {
-    for (const section of Object.values(seoPlanJson.sections)) {
-      if (section && typeof section === 'object') addTargetKeywords(section.target_keywords, terms);
-    }
-  }
-
-  // Typed keyword rollup table
-  if (Array.isArray(seoPlanJson.keyword_summary_table)) {
-    for (const row of seoPlanJson.keyword_summary_table) {
-      if (row && typeof row.keyword === 'string' && row.keyword.trim()) {
-        terms.add(row.keyword.trim().toLowerCase());
-      }
-    }
-  }
-
-  // Flat keywords array
-  if (Array.isArray(seoPlanJson.keywords)) {
-    for (const kw of seoPlanJson.keywords) {
-      if (typeof kw === 'string' && kw.trim()) terms.add(kw.trim().toLowerCase());
-    }
-  }
-
   return [...terms];
 }
 

@@ -2,7 +2,7 @@
   "id": "meta-output",
   "name": "Meta Output",
   "description": "Assemble validated SEO metadata from the entity pool: meta title and description (resolved in the same priority order meta-compliance-checker validates -- writer meta fields, frontmatter, planner meta/candidates, heuristics), keywords array from categories/tags/per-section target keywords, Open Graph tags (og:title, og:description, og:type), and optional Twitter Card tags.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "step": 8,
   "category": "seo",
   "cost": "cheap",

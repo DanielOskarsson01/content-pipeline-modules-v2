@@ -176,6 +176,52 @@ function assertHollowError(entity, label) {
   }
 
   // ---------------------------------------------------------------------------
+  // REAL PROD SHAPE — run f4d501bd (Hacksawgaming, sonnet-5): the company-profile
+  // prompt nests keywords under TOP-LEVEL section containers (overview /
+  // category_sections / tag_sections / credentials), with target_keywords as flat
+  // string[] and per-tag `keywords`. The old fixed-shape gate found ZERO here and
+  // threw "non-conforming (empty) output" on a keyword-RICH plan. Must succeed.
+  // ---------------------------------------------------------------------------
+  console.log('\n=== Real prod shape: section-nested keyword arrays → success ===');
+  {
+    const { entity } = await runWithPlan({
+      research_status: 'Usable keyword research returned.',
+      overview: {
+        target_keywords: ['RNG game supplier for online casinos', 'iGaming content provider'],
+        keyword_sources: ['Q1', 'Q1'],
+        notes: 'Lead with the primary phrase in the first paragraph.',
+      },
+      category_sections: {
+        primary_category_game_providers: { target_keywords: ['slot games supplier', 'scratch cards provider'], keyword_sources: ['Q1', 'Q1'] },
+        secondary_category_social_gaming_solutions: { target_keywords: [], keyword_sources: [], notes: 'No research keyword — analysis facts only.' },
+      },
+      tag_sections: {
+        slots: { keywords: ['slot games supplier', 'slot game providers'], keyword_sources: ['Q1', 'Q2'] },
+        jackpot: { keywords: [], keyword_sources: [], notes: 'Rely on analysis facts only.' },
+      },
+      credentials: { target_keywords: ['certified', 'multi-jurisdiction', 'award-winning'], keyword_sources: ['Q1', 'Q1', 'Q1'] },
+      meta: { meta_title: 'Hacksaw Gaming — RNG Game Supplier | OnlyiGaming', meta_description: 'x'.repeat(155), keyword_sources: ['Q1'] },
+      tone_notes_for_content_writer: ["Third person only; no 'we/our.'"],
+    });
+    assertSuccess(entity, 'real-company-profile-shape');
+  }
+
+  // Hollow variant of the SAME shape: every keyword array empty, but notes and
+  // keyword_sources (["Q1"]) populated. Provenance/prose must NOT be counted as
+  // keywords — this must still fail LOUD (the gate stays meaningful).
+  console.log('\n=== Hollow section-nested shape (only sources/notes) → error ===');
+  {
+    const { entity } = await runWithPlan({
+      overview: { target_keywords: [], keyword_sources: ['Q1', 'Q2'], notes: 'prose only' },
+      category_sections: { primary_category_x: { target_keywords: [], keyword_sources: ['Q1'] } },
+      tag_sections: { slots: { keywords: [], keyword_sources: ['Q3'] } },
+      credentials: { target_keywords: [], keyword_sources: [] },
+      meta: { meta_title: 'A Real-Looking Title', keyword_sources: ['Q1'] },
+    });
+    assertHollowError(entity, 'section-nested-but-empty');
+  }
+
+  // ---------------------------------------------------------------------------
   // THROW CASE — completeWithJsonRetry's existing loud-fail path is untouched.
   // Model returns markdown/prose both times → parse throws → caught → error.
   // ---------------------------------------------------------------------------
