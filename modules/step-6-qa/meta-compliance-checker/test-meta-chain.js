@@ -54,6 +54,30 @@ async function main() {
   checks += 5;
 }
 
+// extractHeadTerms: the REAL prod shape (run f4d501bd, Hacksawgaming) — top-level
+// section containers, target_keywords as flat string[], per-tag `keywords`. The
+// old fixed-shape extractor found ZERO here (=> "No head_terms found" every pass).
+{
+  const plan = {
+    overview: { target_keywords: ['rng game supplier for online casinos', 'igaming content provider'], keyword_sources: ['Q1', 'Q1'], notes: 'lead with the primary phrase' },
+    category_sections: {
+      primary_category_game_providers: { target_keywords: ['slot games supplier', 'scratch cards provider'], keyword_sources: ['Q1'] },
+      secondary_social: { target_keywords: [], keyword_sources: [], notes: 'analysis facts only' },
+    },
+    tag_sections: { slots: { keywords: ['slot game providers'], keyword_sources: ['Q2'] } },
+    credentials: { target_keywords: ['certified', 'multi-jurisdiction'], keyword_sources: ['Q1'] },
+    meta: { meta_title: 'Hacksaw Gaming — RNG Game Supplier', keyword_sources: ['Q1'] },
+  };
+  const terms = extractHeadTerms(plan);
+  assert(terms.includes('rng game supplier for online casinos'), 'overview flat-array target_keywords harvested');
+  assert(terms.includes('slot games supplier'), 'category_sections flat-array target_keywords harvested');
+  assert(terms.includes('slot game providers'), 'tag_sections per-tag keywords harvested');
+  assert(terms.includes('certified'), 'credentials target_keywords harvested');
+  assert(!terms.includes('q1') && !terms.includes('q2'), 'keyword_sources provenance NOT counted as a keyword');
+  assert(!terms.some(t => /lead with the primary/.test(t)), 'notes prose NOT counted as a keyword');
+  checks += 6;
+}
+
 // addTargetKeywords: array-form primary + long_tail
 {
   const t = new Set();

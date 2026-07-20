@@ -154,54 +154,55 @@ function resolveMeta(items) {
 }
 
 /**
- * Extract keywords from a single seo_plan_json — mirrors the checker's
- * extractHeadTerms (v1.0.1): head_terms, top-level target_keywords,
- * per-section target_keywords (seo-planner's actual output shape),
- * keyword_summary_table, flat keywords. Section iteration is generic
- * (Object.values) — pipeline-agnostic.
+ * Extract keywords from a single seo_plan_json — container-shape-agnostic.
+ * Keyword FIELD names are the pipeline-agnostic contract; section CONTAINER names
+ * (overview / category_sections / tag_sections / sections / credentials …) are
+ * TEMPLATE-specific and must NEVER be enumerated here (Rule 13). So we HARVEST
+ * every non-empty string under any key named `target_keywords`, `keywords`, or
+ * `head_terms`, at any nesting depth (string, flat string[], or a
+ * {primary,secondary,long_tail} object), plus `keyword_summary_table[].keyword`.
+ * `keyword_sources`/`notes` are exact-key mismatches and are never counted.
+ *
+ * Kept 1:1 in sync with seo-planner's content gate and meta-compliance-checker's
+ * extractHeadTerms — all three carry an IDENTICAL collectPlanKeywords (Rule 4
+ * self-contained copies across step boundaries). Fixes run f4d501bd: the prior
+ * fixed-shape enumeration missed the prod overview/category_sections/tag_sections
+ * flat-array shape and would have shipped a keyword-stripped SEO-metadata deliverable.
  */
-function addTargetKeywords(tk, terms) {
-  if (!tk || typeof tk !== 'object') return;
-  const push = v => { if (typeof v === 'string' && v.trim()) terms.add(v.trim().toLowerCase()); };
-  push(tk.primary);
-  if (Array.isArray(tk.primary)) tk.primary.forEach(push);
-  if (Array.isArray(tk.secondary)) tk.secondary.forEach(push);
-  if (Array.isArray(tk.long_tail)) tk.long_tail.forEach(push);
+const KEYWORD_FIELD_KEYS = new Set(['target_keywords', 'keywords', 'head_terms']);
+
+function harvestKeywordStrings(node, out) {
+  if (typeof node === 'string') { const s = node.trim(); if (s) out.push(s); return; }
+  if (Array.isArray(node)) { for (const v of node) harvestKeywordStrings(v, out); return; }
+  if (node && typeof node === 'object') { for (const v of Object.values(node)) harvestKeywordStrings(v, out); }
+}
+
+function collectPlanKeywords(plan) {
+  const out = [];
+  const walk = (node, depth) => {
+    if (depth > 8 || !node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { for (const v of node) walk(v, depth + 1); return; }
+    for (const [key, val] of Object.entries(node)) {
+      if (KEYWORD_FIELD_KEYS.has(key)) harvestKeywordStrings(val, out);
+      else walk(val, depth + 1);
+    }
+  };
+  walk(plan, 0);
+  if (plan && Array.isArray(plan.keyword_summary_table)) {
+    for (const row of plan.keyword_summary_table) {
+      if (row && typeof row.keyword === 'string' && row.keyword.trim()) out.push(row.keyword.trim());
+    }
+  }
+  return out;
 }
 
 function extractPlanKeywords(seoPlanJson) {
-  if (!seoPlanJson) return [];
-
+  if (!seoPlanJson || typeof seoPlanJson !== 'object') return [];
   const terms = new Set();
-
-  if (Array.isArray(seoPlanJson.head_terms)) {
-    for (const t of seoPlanJson.head_terms) {
-      if (typeof t === 'string' && t.trim()) terms.add(t.trim().toLowerCase());
-    }
+  for (const s of collectPlanKeywords(seoPlanJson)) {
+    const t = s.trim().toLowerCase();
+    if (t) terms.add(t);
   }
-
-  addTargetKeywords(seoPlanJson.target_keywords, terms);
-
-  if (seoPlanJson.sections && typeof seoPlanJson.sections === 'object') {
-    for (const section of Object.values(seoPlanJson.sections)) {
-      if (section && typeof section === 'object') addTargetKeywords(section.target_keywords, terms);
-    }
-  }
-
-  if (Array.isArray(seoPlanJson.keyword_summary_table)) {
-    for (const row of seoPlanJson.keyword_summary_table) {
-      if (row && typeof row.keyword === 'string' && row.keyword.trim()) {
-        terms.add(row.keyword.trim().toLowerCase());
-      }
-    }
-  }
-
-  if (Array.isArray(seoPlanJson.keywords)) {
-    for (const kw of seoPlanJson.keywords) {
-      if (typeof kw === 'string' && kw.trim()) terms.add(kw.trim().toLowerCase());
-    }
-  }
-
   return [...terms];
 }
 

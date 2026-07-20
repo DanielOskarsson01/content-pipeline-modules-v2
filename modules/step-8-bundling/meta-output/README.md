@@ -9,7 +9,7 @@
 
 ### v1.0.1 (2026-07-16) — BACKLOG #52: ship the planned meta, not the entity name
 - Meta title/description now resolve in **the same priority order meta-compliance-checker validates** (the QA check is only honest if it verifies what ships): (1) direct `meta_title`/`meta_description` fields on any pool item (content-writer emits the planner candidate here since v1.6.2) → (2) YAML frontmatter in `content_markdown` → (3) `seo_plan_json.meta.{title,description}` (legacy), then `seo_plan_json.sections.meta.meta_{title,description}.candidate` (seo-planner's actual output) → (4) H1 / first-paragraph heuristics → (5) entity name / empty string (last resort, surfaced via length warnings).
-- Keyword assembly now mirrors the checker's `extractHeadTerms`: per-section `target_keywords` (seo-planner's actual shape), `keyword_summary_table[].keyword`, `head_terms`, flat `keywords` — in addition to the legacy top-level `target_keywords`. SEO-plan keywords are trimmed + lowercased for consistent dedup.
+- Keyword assembly mirrors the checker's `extractHeadTerms` via an identical `collectPlanKeywords` (v1.0.2): keyword strings are harvested under any `target_keywords`/`keywords`/`head_terms` key at any depth (string, flat `string[]`, or `{primary,secondary,long_tail}`), plus `keyword_summary_table[].keyword`. SEO-plan keywords are trimmed + lowercased for consistent dedup.
 - Previously only legacy top-level `seo_plan_json.meta.title` was read, so after FIX D the QA gate passed on the planner candidate while the deliverable still shipped `title="<entity name>"` / empty description.
 
 ---
@@ -138,7 +138,7 @@ include_twitter_tags: false
 **Keyword assembly sources:**
 - Categories: primary and secondary category slugs from analysis_json
 - Tags: existing tag slugs + suggested new tag labels from analysis_json
-- SEO keywords (mirrors meta-compliance-checker's extractHeadTerms): `head_terms`, top-level `target_keywords`, per-section `sections.*.target_keywords` (primary/secondary/long_tail), `keyword_summary_table[].keyword`, flat `keywords` -- from the first seo_plan_json with any extractable keywords; trimmed + lowercased
+- SEO keywords (v1.0.2, container-shape-agnostic, kept 1:1 in sync with meta-compliance-checker's extractHeadTerms via an identical `collectPlanKeywords`): every non-empty string under any key named `target_keywords`/`keywords`/`head_terms` at any nesting depth (string, flat `string[]`, or `{primary,secondary,long_tail}` object), plus `keyword_summary_table[].keyword` -- from the first seo_plan_json with any extractable keywords; trimmed + lowercased. Section **container** names are never enumerated (Rule 13); `keyword_sources`/`notes` are never counted. Fixes run `f4d501bd`, whose top-level `overview`/`category_sections`/`tag_sections` flat-array shape the prior fixed-shape extractor missed.
 
 **Red flags to watch for:**
 - Many entities with `status: warning` -- seo-planner may be generating titles/descriptions outside Google limits
