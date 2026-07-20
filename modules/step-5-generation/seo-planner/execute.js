@@ -418,14 +418,76 @@ function flattenPlan(plan) {
  * Extract a short context string from the analysis for research query interpolation.
  * Tries common fields across pipeline types (company profiles, news, etc.).
  */
+const CONTEXT_MAX_CHARS = 240;      // keep the research seed short (it fills "{entity} is in the {context} space")
+const CONTEXT_MAX_TERM_CHARS = 60;  // a descriptor term (slug/category/short fact), not a prose sentence
+
+/**
+ * Collect short, meaningful descriptor strings from anywhere in a value.
+ * Field-name-INDEPENDENT: it names no analysis key, so it does not rebreak when
+ * the analyzer's JSON shape changes (the previous version read primary_category/
+ * industry/description — keys the current analyzer does not emit — and collapsed
+ * to the bare entity name). Skips URLs and long prose; those aren't niche terms.
+ */
+function collectContextTerms(value, out, depth) {
+  if (out.length >= 40 || depth > 5) return;
+  if (typeof value === 'string') {
+    const s = value.trim();
+    if (s && s.length <= CONTEXT_MAX_TERM_CHARS && !/https?:\/\//i.test(s) && !s.includes('://')) out.push(s);
+    return;
+  }
+  if (Array.isArray(value)) { for (const v of value) collectContextTerms(v, out, depth + 1); return; }
+  if (value && typeof value === 'object') { for (const v of Object.values(value)) collectContextTerms(v, out, depth + 1); return; }
+}
+
+/**
+ * First non-empty, non-URL string anywhere in a value (any length). Fallback
+ * for a PROSE-ONLY analysis (one long `description`/`summary`, no short slug/
+ * fact leaves), so it still yields a meaningful research seed instead of
+ * collapsing to the bare entity name — the degenerate self-reference class the
+ * short-term harvest would otherwise re-introduce by shape.
+ */
+function firstProseLeaf(value, depth) {
+  if (depth > 5 || value == null) return '';
+  if (typeof value === 'string') {
+    const s = value.trim();
+    return (s && !/https?:\/\//i.test(s) && !s.includes('://')) ? s : '';
+  }
+  if (Array.isArray(value)) { for (const v of value) { const r = firstProseLeaf(v, depth + 1); if (r) return r; } return ''; }
+  if (typeof value === 'object') { for (const v of Object.values(value)) { const r = firstProseLeaf(v, depth + 1); if (r) return r; } return ''; }
+  return '';
+}
+
+/**
+ * Build the keyword-research context descriptor for an entity from the RICH
+ * analysis the analyzer actually produced (not a fixed field list). Reused-
+ * analysisContent (execute :666) is built AFTER this runs, so we harvest here,
+ * from the analyzerItem this already receives. Returns entity.name only when the
+ * analysis genuinely carries no usable text.
+ */
 function buildEntityContext(entity, analyzerItem) {
-  const analysis = analyzerItem.analysis_json || analyzerItem;
+  const analysis = (analyzerItem && analyzerItem.analysis_json) || analyzerItem || {};
+  const found = [];
+  collectContextTerms(analysis, found, 0);
+
+  const seen = new Set();
   const parts = [];
-  if (analysis.primary_category) parts.push(analysis.primary_category);
-  else if (analysis.categories?.length) parts.push(analysis.categories[0].name || analysis.categories[0]);
-  if (analysis.industry) parts.push(analysis.industry);
-  if (analysis.description) parts.push(analysis.description.slice(0, 100));
-  return parts.join(' — ') || entity.name;
+  let len = 0;
+  for (const term of found) {
+    const key = term.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (len + term.length + 2 > CONTEXT_MAX_CHARS) break;
+    parts.push(term);
+    len += term.length + 2;
+  }
+  if (parts.length > 0) return parts.join(', ');
+
+  // No short descriptor leaves — a prose-only analysis. Use the first
+  // substantial string, truncated, before falling back to the bare entity name.
+  const prose = firstProseLeaf(analysis, 0);
+  if (prose) return prose.slice(0, CONTEXT_MAX_CHARS).trim();
+
+  return (entity && entity.name) || '';
 }
 
 /**
@@ -437,9 +499,13 @@ function buildEntityContext(entity, analyzerItem) {
  * Marker matches: "Query 1 —", "Query 2 -", "Query 3 –" at start of a line.
  */
 function parseResearchQueries(template, entityName, entityContext) {
+  // Function-form replacement so $-sequences ($$, $&, $`, $', $n) in a harvested
+  // entity_context/name are inserted LITERALLY, not interpreted as replacement
+  // patterns (same hardening buildPrompt already uses; the generic context
+  // harvest makes arbitrary $-bearing terms reachable here).
   const interpolate = (s) => s
-    .replace(/\{entity_name\}/g, entityName)
-    .replace(/\{entity_context\}/g, entityContext);
+    .replace(/\{entity_name\}/g, () => entityName)
+    .replace(/\{entity_context\}/g, () => entityContext);
 
   const MARKER = /^Query\s+\d+\s*[—–-]/m;
 
@@ -520,7 +586,7 @@ function synthesizeResearch(results, searchProvider) {
 /**
  * Build the error-result item for a single entity when the run cannot proceed.
  */
-function buildErrorItem(entityName, errMsg) {
+function buildErrorItem(entityName, errMsg, rawResponse = '') {
   return {
     entity_name: entityName,
     status: 'error',
@@ -535,6 +601,9 @@ function buildErrorItem(entityName, errMsg) {
     tone_notes: '',
     warnings: '',
     error: errMsg,
+    // Forensic: the raw model output on a hollow/non-conforming plan, so the
+    // next failure is visible in output_data rather than inferred.
+    raw_response: rawResponse,
     seo_plan_json: null,
   };
 }
@@ -700,9 +769,15 @@ async function execute(input, options, tools) {
       // SECOND gate for the valid-but-empty case completeWithJsonRetry's throw-path
       // can't catch — NOT a salvage: no defaults, no retry-into-empty, no warning.
       if (!hasUsableKeywords(plan)) {
-        throw new Error(
+        // Capture the model's (parsed) output so a hollow plan is diagnosable in
+        // minutes, not inferred. completeWithJsonRetry discards the raw text on a
+        // successful parse (only the parse-FAILURE path preserves it), so the
+        // parsed plan IS the faithful record of the non-conforming shape here.
+        const gateErr = new Error(
           'SEO plan has no usable keywords/head_terms — model returned non-conforming (empty) output'
         );
+        gateErr.rawText = JSON.stringify(plan);
+        throw gateErr;
       }
 
       // Attach the quantitative keyword-data as an ADDITIVE audit-trail field.
@@ -759,10 +834,16 @@ async function execute(input, options, tools) {
       logger.error(`${entity.name}: SEO planning failed — ${err.message}`);
       errors.push(`${entity.name}: ${err.message}`);
 
+      // Preserve the raw model output when the failure path carried it (the
+      // content-gate hollow throw and completeWithJsonRetry's parse-failure
+      // throw both attach err.rawText). Capped so a runaway response can't bloat
+      // the row.
+      const rawResponse = typeof err.rawText === 'string' ? err.rawText.slice(0, 12000) : '';
+
       results.push({
         entity_name: entity.name,
-        items: [buildErrorItem(entity.name, err.message)],
-        meta: { status: 'error' },
+        items: [buildErrorItem(entity.name, err.message, rawResponse)],
+        meta: rawResponse ? { status: 'error', raw_response: rawResponse } : { status: 'error' },
       });
       if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
     }
@@ -786,4 +867,4 @@ async function execute(input, options, tools) {
 
 module.exports = execute;
 // Exported for test harness use only — not part of the public submodule interface.
-module.exports.__testing = { parseJsonResponse, completeWithJsonRetry, parseResearchQueries, buildPrompt, MANIFEST_DEFAULT_PROMPT };
+module.exports.__testing = { parseJsonResponse, completeWithJsonRetry, parseResearchQueries, buildPrompt, buildEntityContext, MANIFEST_DEFAULT_PROMPT };
