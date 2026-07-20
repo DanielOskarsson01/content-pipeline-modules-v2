@@ -265,6 +265,38 @@ function flattenAnalysis(analysis) {
 }
 
 // ---------------------------------------------------------------------------
+// M2 / A4 — hollow-analysis CONTENT gate (pipeline-agnostic)
+//
+// parseJsonResponse validates JSON SHAPE only; a valid-but-empty object is a
+// HOLLOW analysis. Same class as seo-planner's C2/A1, one module UPSTREAM.
+// "Usable" is defined from the downstream consumer requirement, not arbitrarily:
+// content-writer (assembleEntityContent) and seo-planner both serialize the
+// ENTIRE analysis_json into their LLM prompt, so the analysis is usable iff it
+// carries at least ONE real extracted value anywhere in its structure. The
+// schema is fully dynamic (flattenAnalysis adapts to whatever the prompt
+// produces), so — per Rule 13 — the gate names NO field; it checks for any
+// non-empty content leaf (the same notion buildPreview uses to decide there is
+// something to preview). Empty object, or an object whose every leaf is
+// null/""/[]/{} → hollow. One real string/number/boolean anywhere → usable.
+// ---------------------------------------------------------------------------
+
+/** True iff `value` is (or recursively contains) a real, non-empty content leaf. */
+function hasContentLeaf(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value === 'boolean') return true;      // an explicit boolean is a fact
+  if (Array.isArray(value)) return value.some(hasContentLeaf);
+  if (typeof value === 'object') return Object.values(value).some(hasContentLeaf);
+  return false;
+}
+
+/** A parsed analysis is usable iff it is an object carrying ≥1 content leaf. */
+function hasUsableAnalysis(analysis) {
+  return !!analysis && typeof analysis === 'object' && hasContentLeaf(analysis);
+}
+
+// ---------------------------------------------------------------------------
 // W1.3 — vocabulary-fidelity gate helpers (pipeline-agnostic)
 //
 // These helpers carry NO content-type knowledge. The paths and doc names come
@@ -480,6 +512,26 @@ async function execute(input, options, tools) {
           section_analysis: rawText,
           _dynamic_sections: [{ field: 'section_analysis', label: 'Analysis', display: 'prose' }],
         };
+      }
+
+      // CONTENT gate (M2 / A4): the parse above validated JSON shape only. A
+      // valid-but-empty analysis (a parsed object with no usable extracted
+      // value) is HOLLOW — content-writer and seo-planner serialize the whole
+      // analysis_json into their prompt, so an empty object ships a hollow
+      // profile one step downstream. Fail LOUD here at the source, mirroring
+      // seo-planner's A1 content gate: throw into the outer catch, which emits
+      // meta.status:'error' (skeleton honors it —
+      // content-pipeline-v2/server/utils/entityRunStatus.js:23 → entity
+      // 'failed'), turning the entity red at the source with no skeleton change.
+      // NOT a salvage: no default substitution, no retry-into-empty, no warning
+      // downgrade. Scope is the parsed-but-hollow case only: a non-JSON response
+      // (analysis === null) keeps its existing raw-text path — its raw model
+      // text is carried on section_analysis and still flows to content-writer
+      // via that consumer's whole-item fallback, so it is degraded, not empty.
+      if (analysis !== null && !hasUsableAnalysis(analysis)) {
+        throw new Error(
+          'Analysis is empty — model returned valid JSON with no usable extracted content (hollow analysis)'
+        );
       }
 
       // W1.3 fidelity gate: every assigned slug at each configured path must

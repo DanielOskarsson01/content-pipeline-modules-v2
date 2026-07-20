@@ -277,6 +277,7 @@ async function execute(input, options, tools) {
     pass_threshold = 0.9,
     max_source_chars = 100000,
     claims_per_batch = 10,
+    allow_empty_content = false,
   } = otherOptions;
 
   // Verification prompt is code-locked (W2.3) -- NOT template-overridable.
@@ -299,25 +300,59 @@ async function execute(input, options, tools) {
     const contentItems = (entity.items || []).filter(item => item.content_markdown);
     const sourceItems = (entity.items || []).filter(item => item.text_content);
 
-    // --- Edge case: no content_markdown ---
+    // --- Edge case: no content_markdown -- fail closed (A3 / MODERATE M1) ---
+    // content_markdown is base-hydrated and requires_items skips empty-pool
+    // entities upstream, so reaching here with no content means generation
+    // produced nothing -- content was expected but is absent, an ERROR, not
+    // "nothing to check." A QA gate must never emit "pass" for content it never
+    // read: this is the silent-salvage class in its most dangerous form. Fail
+    // closed with qa_pass:false (a QA verdict that routes/flags like any other
+    // fail -- NOT meta.status:error). allow_empty_content restores the legacy
+    // skip-with-pass for pipelines that legitimately have no content to check.
     if (contentItems.length === 0) {
-      logger.warn(`${entity.name}: no content_markdown found -- skipping`);
-      results.push({
+      if (allow_empty_content) {
+        logger.warn(`${entity.name}: no content_markdown found -- skipping (allow_empty_content=true)`);
+        results.push({
+          entity_name: entity.name,
+          items: [{
+            entity_name: entity.name,
+            qa_pass: true,
+            hallucination_score: 1,
+            verified_claims_count: 0,
+            total_claims_count: 0,
+            flagged_claims_count: 0,
+            flagged_claims: [],
+            flagged_claims_text: '',
+            partial_claims_text: '',
+            summary_text: 'No content_markdown found -- nothing to verify. Skipped (allow_empty_content=true).',
+          }],
+          meta: { qa_pass: true, hallucination_score: 1, skipped: true, skip_reason: 'no_content_allowed' },
+        });
+        continue;
+      }
+
+      logger.error(
+        `${entity.name}: no content_markdown found -- failing closed ` +
+        `(content expected but absent; set allow_empty_content to skip with a pass)`
+      );
+      const noContentResult = {
         entity_name: entity.name,
         items: [{
           entity_name: entity.name,
-          qa_pass: true,
-          hallucination_score: 1,
+          qa_pass: false,
+          hallucination_score: 0,
           verified_claims_count: 0,
           total_claims_count: 0,
           flagged_claims_count: 0,
           flagged_claims: [],
           flagged_claims_text: '',
           partial_claims_text: '',
-          summary_text: 'No content_markdown found -- nothing to verify. Skipped.',
+          summary_text: 'No content_markdown found -- content was expected but is absent, so no claims could be verified. Failing closed (unverifiable is not verified). Set allow_empty_content to skip with a pass.',
         }],
-        meta: { qa_pass: true, hallucination_score: 1, skipped: true, skip_reason: 'no_content' },
-      });
+        meta: { qa_pass: false, hallucination_score: 0, error: 'no_content' },
+      };
+      results.push(noContentResult);
+      if (tools._partialItems) tools._partialItems.push(...noContentResult.items);
       continue;
     }
 

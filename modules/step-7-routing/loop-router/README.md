@@ -14,11 +14,11 @@ Read QA verdicts from Step 6 submodules and route failed entities back to the ap
 
 ## What This Module Does
 
-Aggregates QA verdicts from all Step 6 submodules (keyword-sufficiency-checker, meta-compliance-checker, citation-coverage-checker, hallucination-detector) and applies a priority-ordered routing table to produce a single decision per entity:
+Aggregates QA verdicts from all Step 6 submodules (keyword-sufficiency-checker, meta-compliance-checker, citation-coverage-checker, hallucination-detector, qa-structural) and applies a priority-ordered routing table to produce a single decision per entity:
 
 - **approve** -- all QA checks passed, entity is ready for bundling/distribution
 - **loop_discovery** -- route back to Step 1 for better/more source material
-- **loop_generation** -- route back to Step 5 (Content Writer) to regenerate meta fields
+- **loop_generation** -- route back to Step 5 (Content Writer) to regenerate meta fields or fix structural compliance
 - **loop_tone** -- route back to Step 5 (Tone/SEO Editor) to improve keyword integration
 - **flag_manual** -- too complex for automated routing, needs human review
 
@@ -40,8 +40,9 @@ Rules are evaluated in priority order. First match wins.
 | 4a | ...but source pages < `min_source_pages` | `flag_manual` | Can't add citations without more sources |
 | 5 | Keyword sufficiency failed | `loop_tone` | Rewrite with better keyword integration |
 | 6 | Meta compliance failed | `loop_generation` | Regenerate meta title/description |
-| 7 | All checks passed | `approve` | Ready for bundling and distribution |
-| 8 | No QA results found | configurable | `default_no_qa` option (default: `flag_manual`) |
+| 7 | Structural compliance failed | `loop_generation` | Regenerate content with the required structure |
+| 8 | All checks passed | `approve` | Ready for bundling and distribution |
+| 9 | No QA results found | configurable | `default_no_qa` option (default: `flag_manual`) |
 
 ---
 
@@ -57,7 +58,7 @@ Rules are evaluated in priority order. First match wins.
 
 This module uses data-shape routing. It finds its input by checking which fields exist on pool items:
 
-- **QA result items**: items with `qa_pass`, `keyword_score`, `citation_score`, `hallucination_score`, or `meta_title_ok`
+- **QA result items**: items with `qa_pass`, `keyword_score`, `citation_score`, `hallucination_score`, `meta_title_ok`, or `structural_score`
 - **Source page items**: items with `text_content` or `_blob_ref` (counted to determine if discovery loops are viable)
 - **Loop count**: read from `entity.loop_count` or `entity.meta.loop_count` (set by the skeleton on rework)
 
@@ -168,7 +169,7 @@ source_page_count: 18
 | `failed_checks` | string | Comma-separated list of failed checks, or "none" |
 | `loop_count` | number | How many times this entity has been looped previously |
 | `source_page_count` | number | Number of source pages (text_content or _blob_ref items) available |
-| `qa_scores` | object | Structured per-check verdicts: `{ keyword, citation, hallucination, meta }` — each value is `pass`, `fail`, or `missing` |
+| `qa_scores` | object | Structured per-check verdicts: `{ keyword, citation, hallucination, meta, structural }` — each value is `pass`, `fail`, or `missing` |
 | `failure_reason` | string/null | Machine-readable failure reason (e.g., `max_loops_exceeded`, `multiple_failures`) for downstream terminal-state tracking |
 | `config_overrides` | object | Reserved for future per-entity config overrides (currently empty `{}`) |
 
@@ -244,6 +245,6 @@ Routing decisions inform the operator (or future automated skeleton logic):
 
 - **Spec**: `Content-Pipeline/specs/SUBMODULE_DEVELOPMENT.md`
 - **Pattern**: Data-shape routing (field existence on items, never `source_submodule`)
-- **Dependencies**: Upstream Step 6 QA submodules (keyword-sufficiency-checker, meta-compliance-checker, citation-coverage-checker, hallucination-detector)
+- **Dependencies**: Upstream Step 6 QA submodules (keyword-sufficiency-checker, meta-compliance-checker, citation-coverage-checker, hallucination-detector, qa-structural)
 - **No external API calls**: All routing is local decision logic
 - **No AI calls**: Purely deterministic rule-based routing

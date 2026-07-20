@@ -22,8 +22,9 @@
  *   5. Insufficient sources        -> flag_manual (can't fix with loops)
  *   6. Keyword sufficiency failure -> loop_tone (rewrite with better keywords)
  *   7. Meta compliance failure     -> loop_generation (regenerate meta fields)
- *   8. All pass                    -> approve
- *   9. No QA results               -> configurable (default: flag_manual)
+ *   8. Structural compliance failure -> loop_generation (regenerate structure)
+ *   9. All pass                    -> approve
+ *  10. No QA results               -> configurable (default: flag_manual)
  *
  * No external dependencies -- pure decision logic.
  */
@@ -137,7 +138,7 @@ function formatQaSummary(summary) {
 /**
  * Apply routing rules in priority order and return a decision.
  *
- * @param {object} summary - { keyword, meta, citation, hallucination }
+ * @param {object} summary - { keyword, meta, citation, hallucination, structural }
  * @param {number} loopCount - how many times this entity has been looped
  * @param {number} sourcePageCount - number of source pages available
  * @param {object} opts - { max_loops, min_source_pages, default_no_qa }
@@ -152,6 +153,7 @@ function route(summary, loopCount, sourcePageCount, opts) {
   if (summary.meta === 'fail') failures.push('meta');
   if (summary.citation === 'fail') failures.push('citation');
   if (summary.hallucination === 'fail') failures.push('hallucination');
+  if (summary.structural === 'fail') failures.push('structural');
 
   // Count how many checks actually ran (not "missing")
   const checksRun = Object.values(summary).filter(v => v !== 'missing').length;
@@ -240,7 +242,15 @@ function route(summary, loopCount, sourcePageCount, opts) {
     };
   }
 
-  // Rule 7: All checks that ran have passed
+  // Rule 7: Structural compliance failure -> loop back to content generation
+  if (summary.structural === 'fail') {
+    return {
+      decision: 'loop_generation',
+      route_reason: 'Generated content fails structural compliance (missing/incorrect headings, sections, or markers). Routing back to Step 5 (Content Writer) to regenerate with the required structure.',
+    };
+  }
+
+  // Rule 8: All checks that ran have passed
   if (failures.length === 0) {
     return {
       decision: 'approve',

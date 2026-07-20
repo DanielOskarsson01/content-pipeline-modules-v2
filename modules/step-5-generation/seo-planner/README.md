@@ -45,6 +45,20 @@ Adds an **additive** `keyword_data_providers` layer that grounds the plan in **r
 
 **Cost guards** (only apply when the layer is active): `max_seed_keywords` (25), `max_metric_lookups_per_entity` (100), `per_run_budget_usd` (1.0 — refuses paid lookups past the cap, warns, continues with free providers), and `metrics_required` (loud warning if the layer produces nothing — never silent). A provider with missing credentials is **config-present-but-inert** (warning + skip, never a failure). Pipeline-agnostic per Rule 13: the GSC site URL, DataForSEO locale, and provider selection are all template config; the manifest carries no domain, vertical, or content-type assumptions. Tested in `test-keyword-data.js` (82 assertions; the real RS256 JWT signing path is exercised with a throwaway keypair). **GSC live-verify deferred** (the service-account key was not resolvable in the build shell) — see [Limitations](#limitations--edge-cases).
 
+### v2.3.2: Hollow-plan content gate (2026-07-19, Program A / A1 — fixes C2)
+
+`completeWithJsonRetry` (v2.2.1) is fail-loud only when the model returns **no JSON at all** — it throws, and the entity turns red. It does **not** catch the case where the model returns a **valid-but-empty JSON object**: the parse succeeds, so no throw fires. Before v2.3.2 seo-planner validated JSON **shape** but never **content** — it flattened the empties (`target_keywords.primary || 'Not specified'`) and emitted `status:'success'`. Prod run `d9c21199` (2026-07-19, sonnet-5) did exactly this: an untargeted profile (0 keywords, 0 FAQs, `""` meta title) shipped **green**, while meta-compliance-checker failed every pass with *"No head_terms found in SEO plan"*. The QA gate detected the problem; nothing acted on it.
+
+v2.3.2 adds a **second gate** — a CONTENT assertion after the parse. If the plan yields **zero usable keyword/head terms**, seo-planner fails **loud**: it emits `meta.status:'error'`, which the skeleton honors (`content-pipeline-v2/server/utils/entityRunStatus.js:23` → entity `'failed'`), turning the entity red **at the source with no skeleton change**. This is **not** a salvage — no defaults are substituted, there is no retry-into-empty, and it is never downgraded to a warning. A hollow plan is an error, full stop.
+
+**What "hollow" means (defined from the downstream requirement, not arbitrarily).** A plan is hollow **iff** it yields no usable keyword/head term — the exact condition under which meta-compliance-checker (step-6 QA) emits *"No head_terms found in SEO plan"*. The gate mirrors that checker's `extractHeadTerms` shapes 1:1 (`head_terms`, top-level `target_keywords.{primary,secondary,long_tail}`, per-section `sections.<any>.target_keywords`, `keyword_summary_table[].keyword`, flat `keywords`), so "usable here" == "the checker would find a head term."
+
+**The boundary (both directions tested):**
+- **Keywords absent → error, even if `meta`/`faqs` are present.** Keywords are the one requirement with **no downstream fallback** — content-writer's `resolveMetaFromPlanner` and meta-output both fall the meta title back to the entity name, and FAQs are optional (`faq_count` may be 0). So meta/faqs presence must **not** rescue a keyword-empty plan.
+- **Keywords present → success, even if `meta` is empty.** A keyword-bearing plan is usable; the empty meta resolves via its downstream fallback. This prevents false-failing real plans that emit meta as `sections.meta.*.candidate` rather than top-level `plan.meta`.
+
+Note the flatten `primary || 'Not specified'` tell is a **symptom**, not the definition: a plan carrying only per-section keywords displays "Not specified" for the top-level primary yet is **not** hollow (the checker finds the per-section terms). That is exactly why the gate reads the checker's full shape set, not flatten's narrow `target_keywords.primary`. Additive by design: a real, populated plan (e.g. run `9f12bb8a`) is unchanged — only hollow plans change behavior. Tested in `test-hollow-plan.js` (27 assertions).
+
 ### v2.2.1: Corrective JSON retry (2026-06-13)
 
 The defensive parser (v2.2.0) recovers JSON when markdown *headings leak into* an otherwise-JSON response. It cannot recover when the model returns the entire plan as **markdown prose** (no JSON object at all) — observed 2026-06-13 on a template whose prompt had lost its `OUTPUT FORMAT`/JSON-contract section, so sonnet produced a readable report instead of JSON. v2.2.1 adds `completeWithJsonRetry`: on a parse failure it re-issues the call **once** at `temperature: 0` with a strict JSON-only correction that includes the prior (invalid) response and asks the model to re-output the same information as a single JSON object (a reformat, which models comply with reliably). On a second failure it still throws loudly, preserving `rawText`. The retry is pipeline-agnostic — it names no content-type-specific keys, only constrains the output format — so it protects every template against prompt drift and stochastic markdown. The root-cause fix for a missing JSON contract still lives in the template prompt (the `OUTPUT FORMAT` section); this retry is the second line of defense. Tested in `test-json-retry.js`.
@@ -405,7 +419,7 @@ research_queries:
 
 **Output fields per entity:**
 - `entity_name` - company name
-- `status` - `planned` or `error`
+- `status` - `planned` or `error` (`error` includes a **hollow plan** — one the model returned as valid-but-empty JSON with no usable keywords; v2.3.2 fails it loud instead of shipping it green)
 - `primary_keyword` - the top target keyword
 - `keyword_plan_preview` - summary of keyword distribution (e.g., "3 categories, 4 tags, 12 unique keywords")
 - `meta_title` - proposed meta title
@@ -502,6 +516,7 @@ research_queries:
 - **Autocomplete is unofficial** - The `autocomplete` kind uses Google's undocumented suggest endpoint; it may rate-limit (429 → warning, skipped) or change without notice. Treat it as best-effort free seed expansion, never a hard dependency
 - **Research query failures don't fail the module** - Individual query failures are caught and logged. If all queries fail, the module falls back to `keyword-summary.md` (if uploaded) or proceeds with no keyword data. Check logs if results look generic
 - **≤5 queries recommended** - More queries are allowed but multiply cost linearly. The module logs a warning if >5 queries are configured
+- **Hollow plans fail loud, not soft (v2.3.2)** - A *valid-but-empty* plan (parses fine, but carries no usable keyword/head term) is treated as an **error**, not a warning: the entity gets `meta.status:'error'` and turns red. Keyword content is load-bearing (meta-compliance-checker fails "No head_terms found" without it), so unlike meta-length this is not soft. `meta`/`faqs` present but zero keywords still fails; keywords present with empty `meta` still passes (meta title has a downstream fallback). See the [v2.3.2 changelog](#v232-hollow-plan-content-gate-2026-07-19-program-a--a1--fixes-c2)
 - **Meta length validation is soft** - The module warns about meta title/description lengths but doesn't force compliance. Some LLMs consistently produce titles slightly over 60 characters
 - **Language-specific SEO** - Default prompt assumes English SEO conventions. Other languages have different title length norms, keyword patterns, and FAQ structures
 - **No duplicate keyword detection** - If multiple companies in the same run target the same keywords, the planner doesn't coordinate. Each entity is planned independently

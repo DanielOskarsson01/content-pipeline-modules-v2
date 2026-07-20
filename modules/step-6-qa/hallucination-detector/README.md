@@ -55,6 +55,7 @@ This module uses data-shape routing. It finds its input by checking which fields
 | `ai_provider` | string | `anthropic` | LLM provider | Change if using a different provider (e.g. Mercury, Gemini). |
 | `max_source_chars` | number | 100000 | Max source text to include in LLM context | Increase if sources are large and claims reference distant content. Decrease to save tokens. |
 | `claims_per_batch` | number | 10 | Claims verified per LLM call | Lower to 5 for more reliable results. Higher values use fewer API calls but may reduce accuracy. |
+| `allow_empty_content` | boolean | `false` | When `false`, an entity with no `content_markdown` **fails closed** (`qa_pass: false`) — content was expected but is absent, and a QA gate must not certify content it never read. When `true`, such an entity skips with a pass (nothing to verify). | Set `true` only for pipelines that legitimately produce entities with no content to check. |
 
 > **Verification prompt is code-locked (W2.3).** The fact-checking prompt is a
 > truth metric standardized system-wide — it is inlined in `execute.js`
@@ -89,7 +90,7 @@ Each unsupported claim is rated by severity:
 
 ### Special cases
 
-- No content_markdown available = skip with pass (nothing to verify)
+- No content_markdown available = **fail closed** (`qa_pass: false`) by default — content was expected but is absent, so nothing could be verified (set `allow_empty_content` to skip with a pass instead)
 - No source text_content available = skip with pass and warning (cannot verify without sources)
 - No factual claims detected = automatic pass (content has no verifiable facts)
 - LLM call fails = claims treated as unsupported (fail-safe)
