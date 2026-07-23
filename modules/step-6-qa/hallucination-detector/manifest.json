@@ -2,7 +2,7 @@
   "id": "hallucination-detector",
   "name": "Hallucination Detector",
   "description": "Compare generated content claims against original source material to flag statements that aren't supported by any source.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "step": 6,
   "category": "qa",
   "cost": "medium",
@@ -28,7 +28,7 @@
       "type": "select",
       "label": "AI Model",
       "description": "Which model to use for claim verification.",
-      "default": "haiku",
+      "default": "sonnet",
       "values": ["haiku", "sonnet", "opus", "gpt-4o-mini", "gpt-4o"]
     },
     {
@@ -68,7 +68,7 @@
 
   "options_defaults": {
     "pass_threshold": 0.9,
-    "ai_model": "haiku",
+    "ai_model": "sonnet",
     "ai_provider": "anthropic",
     "max_source_chars": 100000,
     "claims_per_batch": 10,

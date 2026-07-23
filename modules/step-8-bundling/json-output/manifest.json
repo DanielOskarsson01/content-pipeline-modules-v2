@@ -2,7 +2,7 @@
   "id": "json-output",
   "name": "JSON Output",
   "description": "Assemble structured JSON per entity from all pipeline data (content-analyzer analysis, seo-planner keywords/meta, content-writer markdown). Supports Strapi-ready or flat format. Toggle inclusion of markdown, analysis, SEO plan, and key facts flattening independently.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "step": 8,
   "category": "data",
   "cost": "cheap",
@@ -11,7 +11,7 @@
   "depends_on": ["content-analyzer", "seo-planner", "content-writer"],
   "usage_notes": "Use 'strapi' format for CMS import, 'flat' for data analysis. Disable include_markdown if you only need structured data without article text.",
 
-  "requires_columns": [],
+  "requires_columns": ["seo_plan_json", "analysis_json"],
 
   "options": [
     {
