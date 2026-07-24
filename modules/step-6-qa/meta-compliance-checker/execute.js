@@ -198,8 +198,14 @@ async function execute(input, options, tools) {
     let metaTitle = null;
     let metaDescription = null;
 
-    // Priority 1: direct fields on any item
+    // Priority 1: direct fields on GENERATED items only — those that also carry
+    // content_markdown (the generated-content field shape; scraped page items carry
+    // og:description/meta-tag scrapes but never content_markdown). Run cb49ef80:
+    // ~45 scraped items preceded the writer's in pool order, so this loop graded a
+    // scraped 102-char tagline ("We are a premium supplier…") instead of the
+    // writer's validated 151-char meta.
     for (const item of contentItems) {
+      if (!item.content_markdown) continue;
       if (item.meta_title && !metaTitle) metaTitle = item.meta_title;
       if (item.meta_description && !metaDescription) metaDescription = item.meta_description;
     }
