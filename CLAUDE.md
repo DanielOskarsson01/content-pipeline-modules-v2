@@ -207,7 +207,7 @@ const markdownItems = (entity.items || []).filter(item => item.content_markdown)
 const items = entity.items.filter(item => item.source_submodule === 'content-writer');
 ```
 
-All six Step 8 submodules use `requires_columns: []`, `item_key: "entity_name"`, `data_operation_default: "add"`.
+Step 8 bundlers declare the heavy fields they consume in `requires_columns` — json-output and markdown-output use `requires_columns: ["seo_plan_json", "analysis_json"]` (an empty `[]` disables §7b rehydration entirely). `item_key: "entity_name"` and `data_operation_default: "add"` still hold for all six.
 
 | Submodule | Input shapes | Output |
 |-----------|--------------|--------|
