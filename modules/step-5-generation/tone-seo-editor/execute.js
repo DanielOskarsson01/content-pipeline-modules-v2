@@ -407,6 +407,10 @@ async function execute(input, options, tools) {
         provider: ai_provider,
         temperature,
         max_tokens,
+        // BACKLOG #53 / run cb49ef80: an editing pass needs no extended thinking —
+        // adaptive thinking burned ~17–24k invisible tokens and truncated output at
+        // the 32768 cap. The skeleton adapter gates this by model family.
+        thinking: { type: 'disabled' },
       });
 
       // The LLM returns revised markdown directly
