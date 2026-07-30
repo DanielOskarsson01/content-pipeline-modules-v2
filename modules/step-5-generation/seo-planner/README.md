@@ -545,6 +545,22 @@ After the user reviews and approves the SEO plan, items enter the working pool w
 
 The user can re-run seo-planner with different settings (different keyword pack) without re-running the analyzer. This is the cheapest step in the chain, so iteration here costs very little.
 
+## Prompt caching (v2.4.0, BACKLOG #21)
+
+The planner splits its assembled prompt before the FIRST per-entity
+placeholder (`{entity_content}`, `{keyword_research}`, or
+`{keyword_metrics}`): the stable head (instructions, `{faq_count}`, `{doc:}`
+refs placed before it) is sent as an Anthropic prompt-cache block
+(`cache_prefix`). `cachePrefix + prompt` is byte-identical to the old single
+prompt — billing only; a runtime self-check falls back to the uncached single
+prompt on any divergence. The JSON-correction retry deliberately strips
+`cache_prefix` (the correction prompt is standalone). A prefix below the
+model's cacheable minimum silently won't cache; the module logs when that
+happens. **To benefit, move reference docs/stable rules BEFORE the first
+per-entity placeholder in the template** — the current company-profile
+template has them after `{entity_content}`, so nothing caches until it is
+restructured.
+
 ## Technical Reference
 
 - **Step:** 5 (Generation)

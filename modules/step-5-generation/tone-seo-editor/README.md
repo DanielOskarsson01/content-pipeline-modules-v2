@@ -194,6 +194,20 @@ Downstream Step 8 bundling submodules (markdown-output, html-output, json-output
 
 If the editing quality is insufficient, the operator can re-run tone-seo-editor with different settings (different tone style, different temperature) without re-running content-writer.
 
+## Prompt caching + $-sequence fix (v1.3.0, BACKLOG #21)
+
+`buildPrompt` now inserts the article, keyword targets, tone instructions and
+`{doc:}` content with function-form replacement, so `$`-sequences (`$$`,
+`$&`, `` $` ``, `$'`, `$n`) are inserted literally instead of being
+interpreted as replacement patterns (same fix class as c5b0ef6; previously
+the edited article was silently mangled around money amounts). The editor
+also splits its prompt before the first per-entity placeholder
+(`{content_markdown}`/`{keyword_targets}`) and sends the stable head as an
+Anthropic `cache_prefix` — byte-identical reassembly guarded at runtime. The
+current template's head is ~170 chars, far below the cacheable minimum, so
+caching stays inert (and logged) until the template moves stable bulk ahead
+of the article.
+
 ## Technical Reference
 
 - **Step:** 5 (Generation)

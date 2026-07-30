@@ -2,7 +2,7 @@
   "id": "content-writer",
   "name": "Content Writer",
   "description": "AI-powered long-form content generation. Writes content using analysis (required), optional SEO plan (keyword distribution), and scraped source content (raw material for specific details). Produces markdown output. Requires content-analyzer; seo-planner is optional.",
-  "version": "1.6.2",
+  "version": "1.7.0",
   "step": 5,
   "category": "generation",
   "cost": "expensive",

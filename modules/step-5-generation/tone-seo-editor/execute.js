@@ -175,15 +175,21 @@ function escapeRegex(str) {
  * Build the full editing prompt from template + inputs.
  */
 function buildPrompt(promptTemplate, contentMarkdown, keywordTargets, toneInstructions, referenceDocs) {
+  // Function-form replacement everywhere a caller value is inserted, so
+  // $-sequences ($$, $&, $`, $', $n) in the article, keyword targets, or docs
+  // are inserted literally instead of interpreted as replacement patterns
+  // (String.prototype.replace would otherwise mangle them — money "$$" is
+  // routine in the edited articles). Same fix class as c5b0ef6 (step 5).
   let prompt = promptTemplate;
-  prompt = prompt.replace(/\{content_markdown\}/g, contentMarkdown);
-  prompt = prompt.replace(/\{keyword_targets\}/g, keywordTargets);
-  prompt = prompt.replace(/\{tone_instructions\}/g, toneInstructions);
+  prompt = prompt.replace(/\{content_markdown\}/g, () => contentMarkdown);
+  prompt = prompt.replace(/\{keyword_targets\}/g, () => keywordTargets);
+  prompt = prompt.replace(/\{tone_instructions\}/g, () => toneInstructions);
 
   // Replace {doc:filename} placeholders with actual doc content
   if (referenceDocs && typeof referenceDocs === 'object') {
     for (const [filename, content] of Object.entries(referenceDocs)) {
-      prompt = prompt.replace(new RegExp(`\\{doc:${escapeRegex(filename)}\\}`, 'g'), String(content));
+      const str = String(content);
+      prompt = prompt.replace(new RegExp(`\\{doc:${escapeRegex(filename)}\\}`, 'g'), () => str);
     }
   }
   // Clean up any unreplaced {doc:...} placeholders
@@ -191,6 +197,36 @@ function buildPrompt(promptTemplate, contentMarkdown, keywordTargets, toneInstru
 
   return prompt;
 }
+
+/**
+ * Cache-aware variant (BACKLOG #21, mirrors content-analyzer ff28469). Splits
+ * the template before the FIRST per-entity placeholder so the STABLE head
+ * (instructions, {tone_instructions}, {doc:} refs placed before it) can be
+ * sent as an Anthropic prompt-cache block. cachePrefix + prompt is
+ * BYTE-IDENTICAL to buildPrompt() output — caching changes billing only.
+ * No per-entity placeholder, a placeholder at position 0, or any divergence
+ * falls back to the full single prompt with an empty prefix.
+ */
+function buildCachedPrompt(promptTemplate, contentMarkdown, keywordTargets, toneInstructions, referenceDocs) {
+  const full = buildPrompt(promptTemplate, contentMarkdown, keywordTargets, toneInstructions, referenceDocs);
+  const VARYING = ['{content_markdown}', '{keyword_targets}'];
+  const cut = Math.min(...VARYING.map(p => {
+    const i = promptTemplate.indexOf(p);
+    return i === -1 ? Infinity : i;
+  }));
+  if (cut !== Infinity && cut > 0) {
+    const cachePrefix = buildPrompt(promptTemplate.slice(0, cut), contentMarkdown, keywordTargets, toneInstructions, referenceDocs);
+    const prompt = buildPrompt(promptTemplate.slice(cut), contentMarkdown, keywordTargets, toneInstructions, referenceDocs);
+    // BULLETPROOF GUARD: only cache-split when it reassembles to the EXACT
+    // single-prompt bytes; any divergence falls back to no caching.
+    if (cachePrefix + prompt === full) return { prompt, cachePrefix };
+  }
+  return { prompt: full, cachePrefix: '' };
+}
+
+// ~4096 tokens — the largest documented per-model cache minimum. A shorter
+// prefix is silently not cached by the API; we log so the no-op is visible.
+const MIN_CACHEABLE_PREFIX_CHARS = 16384;
 
 /**
  * Compare original and revised content line-by-line.
@@ -399,10 +435,16 @@ async function execute(input, options, tools) {
     try {
       logger.info(`${entity.name}: editing content with ${ai_provider}/${ai_model} (tone: ${tone_style}, temp: ${temperature})`);
 
-      const prompt = buildPrompt(promptTemplate, truncatedMarkdown, keywordTargets, toneInstructions, reference_docs);
+      // Split the stable template head for Anthropic prompt caching (BACKLOG
+      // #21). cachePrefix + prompt is byte-identical to the old single prompt.
+      const { prompt, cachePrefix } = buildCachedPrompt(promptTemplate, truncatedMarkdown, keywordTargets, toneInstructions, reference_docs);
+      if (cachePrefix && cachePrefix.length < MIN_CACHEABLE_PREFIX_CHARS) {
+        logger.info(`${entity.name}: cache prefix is ${cachePrefix.length} chars — below the ~${MIN_CACHEABLE_PREFIX_CHARS}-char cacheable minimum, so prompt caching will not engage. To enable it, move stable instructions and {doc:} reference docs BEFORE {content_markdown} in the prompt template.`);
+      }
 
       const response = await ai.complete({
         prompt,
+        cache_prefix: cachePrefix || undefined,
         model: ai_model,
         provider: ai_provider,
         temperature,
@@ -552,4 +594,4 @@ async function execute(input, options, tools) {
 
 module.exports = execute;
 // Exported for test harness use only — not part of the public submodule interface.
-module.exports.__testing = { validateMarkerPreservation };
+module.exports.__testing = { validateMarkerPreservation, buildPrompt, buildCachedPrompt };
