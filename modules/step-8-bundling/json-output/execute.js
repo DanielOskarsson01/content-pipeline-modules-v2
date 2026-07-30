@@ -7,6 +7,9 @@
  * Data-shape routing: finds input by field presence, never by source_submodule.
  */
 
+// M2: QA verdict travels WITH the content (additive metadata, never a gate).
+const { collectQaVerdict } = require('../../_shared/qa-verdict.js');
+
 /**
  * Build Strapi-ready JSON structure.
  * Nests content under CMS-friendly field names.
@@ -112,6 +115,7 @@ async function execute(input, options, tools) {
     include_markdown = true,
     include_analysis = true,
     include_seo_plan = true,
+    include_qa = true,
     flatten_key_facts = false,
   } = options;
   const { logger, progress } = tools;
@@ -156,6 +160,12 @@ async function execute(input, options, tools) {
         jsonObj = buildStrapiFormat(entity.name, data, opts);
       }
 
+      // M2: attach the QA verdict so the human reviewing the bundle can SEE
+      // there is a decision to make. Additive metadata — never blocks delivery;
+      // omitted entirely when the pool carries no QA shapes.
+      const qaVerdict = include_qa ? collectQaVerdict(entity.items) : null;
+      if (qaVerdict) jsonObj.qa = qaVerdict;
+
       const jsonString = JSON.stringify(jsonObj, null, 2);
       const sizeKb = Math.round(Buffer.byteLength(jsonString, 'utf8') / 1024 * 10) / 10;
       const fieldCount = countFields(jsonObj);
@@ -170,6 +180,8 @@ async function execute(input, options, tools) {
           has_markdown: markdownItems.length > 0,
           has_analysis: analysisItems.length > 0,
           has_seo_plan: seoItems.length > 0,
+          has_qa: !!qaVerdict,
+          qa_flagged: qaVerdict ? String(qaVerdict.flagged) : '',
         }],
         meta: { field_count: fieldCount, json_size_kb: sizeKb },
       };

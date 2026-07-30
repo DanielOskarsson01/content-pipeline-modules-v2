@@ -12,6 +12,8 @@ const yaml = require('js-yaml');
 // Shared canonical marker grammar (W1.5) — single source of truth for the
 // heading-bracket regex, also used by tone-seo-editor's preservation gate.
 const { headingMarkerRegex } = require('../../_shared/marker-parser.js');
+// M2: QA verdict travels WITH the content (additive metadata, never a gate).
+const { collectQaVerdict } = require('../../_shared/qa-verdict.js');
 
 /**
  * Strip [Type Marker] prefixes from headings.
@@ -96,8 +98,18 @@ function removeMetaSection(markdown) {
 /**
  * Build YAML frontmatter from entity name and analysis data.
  */
-function buildFrontmatter(entityName, analysisItems) {
+function buildFrontmatter(entityName, analysisItems, qaVerdict) {
   const fm = { title: entityName };
+
+  // M2: surface the QA verdict where the human reviewing the file sees it.
+  // Additive — absent entirely when the pool carries no QA shapes.
+  if (qaVerdict) {
+    fm.qa_verdict = qaVerdict.verdict;
+    fm.qa_flagged = qaVerdict.flagged;
+    if (qaVerdict.failed_checks && qaVerdict.failed_checks.length > 0) {
+      fm.qa_failed_checks = qaVerdict.failed_checks;
+    }
+  }
 
   if (analysisItems.length > 0) {
     const analysis = analysisItems.at(-1).analysis_json;
@@ -204,7 +216,7 @@ async function execute(input, options, tools) {
       let finalMarkdown = content.trim();
       const hasFrontmatter = include_frontmatter;
       if (include_frontmatter) {
-        finalMarkdown = buildFrontmatter(entity.name, analysisItems) + finalMarkdown;
+        finalMarkdown = buildFrontmatter(entity.name, analysisItems, collectQaVerdict(entity.items)) + finalMarkdown;
       }
 
       const wordCount = countWords(finalMarkdown);
