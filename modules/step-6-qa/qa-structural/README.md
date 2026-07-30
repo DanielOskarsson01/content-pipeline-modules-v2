@@ -148,6 +148,26 @@ Entities that pass flow into the remaining Step 6 QA modules -- hallucination-de
 
 The `violations` field gives content-writer clear feedback on what to fix -- "Too few H2 sections" or "Section X below 100 words" -- making automated rewrite loops possible.
 
+## Taxonomy-leakage checks (v1.1.0, M3)
+
+Two always-on heading checks were added after taxonomy markers were found in
+DELIVERED prod output (`## [Tag: scratchcards] [Suggested tag] Scratchcard
+Games Provider Heritage`, and earlier `Api API Integration`):
+
+- **Check 6 — marker leakage:** a heading with a SECOND bracketed marker
+  after the type marker, or a literal `[Suggested tag]` anywhere in a
+  heading. `[Suggested tag]` is marker-grammar vocabulary (like the
+  `[Tag:]`/`[Primary Category:]` prefixes the Step 8 bundlers parse), never
+  legitimate heading text.
+- **Check 7 — duplicated-token artifacts:** consecutive case-insensitive
+  duplicate words in a heading (`Api API …`). Bracketed markers are stripped
+  first so `[Tag: api] API Integration` does not false-positive.
+
+Both follow the step-6 convention: they lower `structural_score` and can flip
+`qa_pass` to false (flag/route via loop-router) but never fail the entity or
+block delivery. Counts surface in meta as `marker_leak_headings` /
+`dup_token_headings`.
+
 ## Technical Reference
 
 - **Step:** 6 (QA)

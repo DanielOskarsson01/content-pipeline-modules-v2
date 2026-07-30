@@ -2,7 +2,7 @@
   "id": "qa-structural",
   "name": "Structural Compliance Checker",
   "description": "Check format spec adherence: heading hierarchy, section count, FAQ presence, word count per section, and total word count. Pure structural checks, no LLM needed.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "step": 6,
   "category": "qa",
   "cost": "cheap",
