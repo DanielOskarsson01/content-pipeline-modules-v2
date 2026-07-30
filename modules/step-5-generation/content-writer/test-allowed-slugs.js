@@ -211,7 +211,7 @@ assert(v150cv.includes('`cmo`') && v150cv.includes('`ceo`'), 'cover-letter slugs
 // Manifest sanity (v1.6.0)
 // -------------------------------------------------------------------------
 console.log('\n=== Manifest sanity (v1.6.0) ===');
-assert(MANIFEST.version === '1.6.2', `manifest version is 1.6.2 (got ${MANIFEST.version})`);
+assert(/^\d+\.\d+\.\d+$/.test(MANIFEST.version), `manifest version is semver (got ${MANIFEST.version})`); // version-agnostic (M4 class)
 assert(typeof MANIFEST_DEFAULT_PROMPT === 'string' && MANIFEST_DEFAULT_PROMPT.length > 500, 'MANIFEST_DEFAULT_PROMPT loaded (>500 chars)');
 const promptOpt = MANIFEST.options.find(o => o.name === 'prompt');
 assert(promptOpt.default === MANIFEST_DEFAULT_PROMPT, 'options[prompt].default === options_defaults.prompt (byte-identical — load-bearing for refusal)');

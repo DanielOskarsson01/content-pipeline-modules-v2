@@ -49,7 +49,11 @@ function makeTools(revisedText) {
       error: (m) => logs.push({ level: 'error', message: m }),
     },
     progress: { update: () => {} },
-    ai: { complete: async (opts) => { captured.prompt = opts.prompt; captured.model = opts.model; captured.temperature = opts.temperature; return { text: revisedText }; } },
+    // captured.prompt = the model-visible input. Since the #21 cache split
+    // (tone-seo-editor v1.3.0) the stable template head travels as
+    // cache_prefix and the API reassembles cache_prefix + prompt
+    // byte-identically — so the capture concatenates both.
+    ai: { complete: async (opts) => { captured.prompt = (opts.cache_prefix || '') + opts.prompt; captured.model = opts.model; captured.temperature = opts.temperature; return { text: revisedText }; } },
     _partialItems: [],
   };
 }
