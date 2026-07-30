@@ -163,10 +163,15 @@ Games Provider Heritage`, and earlier `Api API Integration`):
   duplicate words in a heading (`Api API …`). Bracketed markers are stripped
   first so `[Tag: api] API Integration` does not false-positive.
 
-Both follow the step-6 convention: they lower `structural_score` and can flip
-`qa_pass` to false (flag/route via loop-router) but never fail the entity or
-block delivery. Counts surface in meta as `marker_leak_headings` /
-`dup_token_headings`.
+Both sit OUTSIDE the score ratio (score semantics are unchanged from v1.0,
+so threshold-tuned templates are not diluted) and instead force `qa_pass` to
+false directly when they fire — at the 0.8 default a pure leak would
+otherwise score 7/8 and ship silently. Step-6 convention respected: qa_pass
+false is a flag that loop-router routes on; the entity is never failed and
+delivery is never blocked. Check 7 fires only on case-DIFFERING consecutive
+duplicates ("Api API"), so identical-case repeats ("Pago Pago") and
+hyphenated names ("Baden-Baden") do not false-positive. Counts surface in
+meta as `marker_leak_headings` / `dup_token_headings`.
 
 ## Technical Reference
 

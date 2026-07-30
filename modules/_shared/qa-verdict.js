@@ -34,9 +34,13 @@ function collectQaVerdict(items) {
   if (router) {
     qa.verdict = router.decision;
     const fc = router.failed_checks;
-    qa.failed_checks = Array.isArray(fc)
-      ? fc.map(s => String(s).trim()).filter(Boolean)
-      : String(fc || '').split(',').map(s => s.trim()).filter(Boolean);
+    // loop-router emits the SENTINEL 'none' for approved entities — that is
+    // "no failed checks", not a check named none. Filter it out so clean
+    // bundles carry failed_checks: [].
+    qa.failed_checks = (Array.isArray(fc)
+      ? fc.map(s => String(s).trim())
+      : String(fc || '').split(',').map(s => s.trim())
+    ).filter(s => s && s.toLowerCase() !== 'none');
   } else {
     qa.verdict = failed.length > 0 ? 'qa_failed' : 'qa_passed';
     qa.failed_checks = failed.map(it => it.source_submodule || 'unknown-check');

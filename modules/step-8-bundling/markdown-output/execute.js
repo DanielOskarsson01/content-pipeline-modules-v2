@@ -213,10 +213,16 @@ async function execute(input, options, tools) {
       // 'inline' = keep as-is
 
       // 4. Build frontmatter
+      // QA verdict is collected regardless of frontmatter so a flagged entity
+      // still surfaces on the item row when include_frontmatter is off
+      // (adversarial-review finding: otherwise a markdown-only template ships
+      // flagged content with zero QA trace).
+      const qaVerdict = collectQaVerdict(entity.items);
+
       let finalMarkdown = content.trim();
       const hasFrontmatter = include_frontmatter;
       if (include_frontmatter) {
-        finalMarkdown = buildFrontmatter(entity.name, analysisItems, collectQaVerdict(entity.items)) + finalMarkdown;
+        finalMarkdown = buildFrontmatter(entity.name, analysisItems, qaVerdict) + finalMarkdown;
       }
 
       const wordCount = countWords(finalMarkdown);
@@ -231,6 +237,7 @@ async function execute(input, options, tools) {
           word_count: wordCount,
           section_count: sectionCount,
           has_frontmatter: hasFrontmatter,
+          qa_flagged: qaVerdict ? String(qaVerdict.flagged) : '',
           content_preview: preview,
         }],
         meta: { word_count: wordCount, section_count: sectionCount },

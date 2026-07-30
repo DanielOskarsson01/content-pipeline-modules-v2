@@ -40,6 +40,19 @@ console.log('\n=== collectQaVerdict: router + checker shapes ===');
   ok(qa.scores && qa.scores.meta === 'fail', 'scores carried from router qa_scores');
 }
 
+console.log('\n=== collectQaVerdict: approved run — the "none" sentinel is NOT a check name ===');
+{
+  const approvedRouter = {
+    entity_name: 'Acme', source_submodule: 'loop-router',
+    decision: 'approve', failed_checks: 'none',
+    qa_scores: { meta: 'pass', citation: 'pass', structural: 'pass', hallucination: 'pass' },
+  };
+  const qa = collectQaVerdict([CONTENT_ITEM, ...QA_ITEMS.slice(0, 2), approvedRouter]);
+  ok(qa.verdict === 'approve', 'verdict approve');
+  ok(qa.failed_checks.length === 0, `failed_checks is [] for the 'none' sentinel (got ${JSON.stringify(qa.failed_checks)})`);
+  ok(qa.flagged === false, 'clean approved run is not flagged');
+}
+
 console.log('\n=== collectQaVerdict: checkers only (no router in pool) ===');
 {
   const qa = collectQaVerdict([CONTENT_ITEM, ...QA_ITEMS.slice(0, 4)]);
@@ -86,6 +99,16 @@ console.log('\n=== collectQaVerdict: no QA shapes → null (block omitted) ===')
     ok(md.includes('meta_compliance'), 'frontmatter names the failed checks');
     const noQa = await markdownOutput({ entities: [{ name: 'Acme', items: [CONTENT_ITEM] }] }, {}, tools);
     ok(!noQa.results[0].items[0].final_markdown.includes('qa_'), 'QA-less pool → no qa_ frontmatter keys');
+  }
+
+  console.log('\n=== markdown-output: qa_flagged survives include_frontmatter=false ===');
+  {
+    const res = await markdownOutput({ entities: [{ name: 'Acme', items: [CONTENT_ITEM, ...QA_ITEMS] }] }, { include_frontmatter: false }, tools);
+    const item = res.results[0].items[0];
+    ok(!item.final_markdown.startsWith('---'), 'no frontmatter emitted');
+    ok(item.qa_flagged === 'true', 'item row still carries qa_flagged (flagged content visible without frontmatter)');
+    const clean = await markdownOutput({ entities: [{ name: 'Acme', items: [CONTENT_ITEM] }] }, { include_frontmatter: false }, tools);
+    ok(clean.results[0].items[0].qa_flagged === '', 'QA-less pool → empty qa_flagged');
   }
 
   console.log(`\n=== Result: ${pass} pass, ${fail} fail ===`);

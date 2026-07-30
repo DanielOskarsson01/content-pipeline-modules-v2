@@ -219,14 +219,25 @@ function buildCachedPrompt(promptTemplate, contentMarkdown, keywordTargets, tone
     const prompt = buildPrompt(promptTemplate.slice(cut), contentMarkdown, keywordTargets, toneInstructions, referenceDocs);
     // BULLETPROOF GUARD: only cache-split when it reassembles to the EXACT
     // single-prompt bytes; any divergence falls back to no caching.
-    if (cachePrefix + prompt === full) return { prompt, cachePrefix };
+    if (cachePrefix + prompt === full) return { prompt, cachePrefix, splitReason: 'split' };
+    return { prompt: full, cachePrefix: '', splitReason: 'diverged' };
   }
-  return { prompt: full, cachePrefix: '' };
+  return { prompt: full, cachePrefix: '', splitReason: cut === 0 ? 'placeholder_at_start' : 'no_placeholder' };
 }
 
-// ~4096 tokens — the largest documented per-model cache minimum. A shorter
-// prefix is silently not cached by the API; we log so the no-op is visible.
+// ~4096 tokens — the largest documented per-model cache minimum (sonnet-5's
+// own minimum is undocumented and likely lower). A shorter prefix may
+// silently not cache; ai_usage cache_write/read tokens are the ground truth.
 const MIN_CACHEABLE_PREFIX_CHARS = 16384;
+
+/** Make every no-cache outcome visible instead of silent (review finding). */
+function logCacheSplit(logger, entityName, cachePrefix, reason, placeholderHint) {
+  if (reason === 'diverged') {
+    logger.warn(`${entityName}: cache split fell back — reassembly diverged from the single-pass prompt. Caching disabled for this call; model input unchanged.`);
+  } else if (cachePrefix && cachePrefix.length < MIN_CACHEABLE_PREFIX_CHARS) {
+    logger.info(`${entityName}: cache prefix is ${cachePrefix.length} chars (< ~${MIN_CACHEABLE_PREFIX_CHARS} chars ≈ 4096 tokens, the largest documented per-model cache minimum) — caching may not engage on this model; ai_usage cache_write/read tokens are the ground truth. To enlarge it, move stable instructions and {doc:} reference docs BEFORE ${placeholderHint} in the prompt template.`);
+  }
+}
 
 /**
  * Compare original and revised content line-by-line.
@@ -437,10 +448,14 @@ async function execute(input, options, tools) {
 
       // Split the stable template head for Anthropic prompt caching (BACKLOG
       // #21). cachePrefix + prompt is byte-identical to the old single prompt.
-      const { prompt, cachePrefix } = buildCachedPrompt(promptTemplate, truncatedMarkdown, keywordTargets, toneInstructions, reference_docs);
-      if (cachePrefix && cachePrefix.length < MIN_CACHEABLE_PREFIX_CHARS) {
-        logger.info(`${entity.name}: cache prefix is ${cachePrefix.length} chars — below the ~${MIN_CACHEABLE_PREFIX_CHARS}-char cacheable minimum, so prompt caching will not engage. To enable it, move stable instructions and {doc:} reference docs BEFORE {content_markdown} in the prompt template.`);
-      }
+      // Split ONLY on the anthropic path: the skeleton's openai/perplexity
+      // branches ignore cache_prefix and would silently DROP the stable head
+      // (adversarial-review finding); other providers get the plain single
+      // prompt, byte-identical to pre-1.3.0 behavior.
+      const { prompt, cachePrefix, splitReason } = ai_provider === 'anthropic'
+        ? buildCachedPrompt(promptTemplate, truncatedMarkdown, keywordTargets, toneInstructions, reference_docs)
+        : { prompt: buildPrompt(promptTemplate, truncatedMarkdown, keywordTargets, toneInstructions, reference_docs), cachePrefix: '', splitReason: 'non_anthropic_provider' };
+      logCacheSplit(logger, entity.name, cachePrefix, splitReason, '{content_markdown}');
 
       const response = await ai.complete({
         prompt,
