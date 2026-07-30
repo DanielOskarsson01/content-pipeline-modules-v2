@@ -69,7 +69,8 @@ const baseOptions = {
 // Manifest-load sanity
 // -------------------------------------------------------------------------
 console.log('\n=== Manifest sanity ===');
-assert(MANIFEST.version === '2.3.3', 'manifest version is 2.3.3');
+// Version-agnostic: an exact pin goes stale on every unrelated bump.
+assert(/^\d+\.\d+\.\d+$/.test(MANIFEST.version), `manifest version is semver (got ${MANIFEST.version})`);
 assert(typeof MANIFEST_DEFAULT_PROMPT === 'string' && MANIFEST_DEFAULT_PROMPT.length > 1000, 'MANIFEST_DEFAULT_PROMPT loaded (>1000 chars)');
 assert(MANIFEST.options.some(o => o.name === 'requires_prompt_override'), 'requires_prompt_override option present');
 assert(MANIFEST.options.some(o => o.name === 'faq_count'), 'faq_count option present');

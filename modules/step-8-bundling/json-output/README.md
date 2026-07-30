@@ -147,6 +147,20 @@ The JSON output is a terminal artifact ready for use outside the pipeline. Typic
 
 The JSON format is the most complete output -- it can contain everything the pipeline knows about an entity in a single file.
 
+## QA verdict block (v1.1.0, M2)
+
+Failing QA does not block delivery — a human decides whether the content
+ships. So the verdict now travels WITH the content: when the pool carries QA
+shapes, `final_json` gains a `qa` block — `verdict` (the Step 7 router
+decision, e.g. `flag_manual`), `failed_checks` (names), `scores`, per-checker
+`checks_passed`/`checks_failed` counts, and `flagged` (true when the router
+did not approve, or — with no router item — when any checker failed). Found
+by data shape (`decision`+`qa_scores` for the router item, `qa_pass` for
+checker items; shared collector in `modules/_shared/qa-verdict.js`). These
+are light pool fields — no `requires_columns` change. Additive: QA-less
+pipelines produce byte-identical bundles; `include_qa: false` turns it off.
+The item row also exposes `has_qa` and `qa_flagged` for the results table.
+
 ## Technical Reference
 
 - **Step:** 8 (Bundling)

@@ -70,7 +70,7 @@ const base = { ...MANIFEST.options_defaults };
   // Manifest sanity (config part of W1.2)
   // ----------------------------------------------------------------------
   console.log('\n=== Manifest sanity ===');
-  assert(MANIFEST.version === '1.6.2', `manifest version bumped to 1.6.2 (got ${MANIFEST.version})`);
+  assert(/^\d+\.\d+\.\d+$/.test(MANIFEST.version), `manifest version is semver (got ${MANIFEST.version})`); // version-agnostic (M4 class)
   assert(MANIFEST.options.some(o => o.name === 'require_slug_paths'), 'require_slug_paths option present');
   assert(MANIFEST.options_defaults.require_slug_paths === false, 'require_slug_paths default is false');
 

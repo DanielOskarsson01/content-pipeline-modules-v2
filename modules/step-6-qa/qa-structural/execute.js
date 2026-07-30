@@ -206,11 +206,63 @@ async function execute(input, options, tools) {
       violations.push(`${thinSections.length} section(s) below ${min_words_per_section} words: ${thinSections.join(', ')}`);
     }
 
+    // --- Check 6: taxonomy-marker leakage in headings (M3) ---
+    // Observed in delivered prod output: a prompt example leaked a SECOND
+    // bracketed marker into headings ("## [Tag: scratchcards] [Suggested tag]
+    // Scratchcard ..."), and nothing caught it. Detect (a) any heading whose
+    // title carries two leading bracketed markers, and (b) a literal
+    // "[Suggested tag]" anywhere in a heading — that string is marker-grammar
+    // vocabulary (like the [Tag:]/[Primary Category:] prefixes the Step 8
+    // bundlers parse), never legitimate heading text.
+    // These two are OUTSIDE the score ratio: (a) folding them in would dilute
+    // the denominator and silently loosen every threshold-tuned template, and
+    // (b) at the 0.8 default a pure marker leak would score 7/8 and PASS —
+    // the exact silent-shipping this check exists to stop. Instead they
+    // force qa_pass to false directly (flag/route; the entity is not failed
+    // and delivery is not blocked — the human decides).
+    const markerLeaks = [];
+    for (const s of structure.sections) {
+      if (/^\s*\[[^\]]+\]\s*\[[^\]]+\]/.test(s.title) || /\[suggested tag\]/i.test(s.title)) {
+        markerLeaks.push(s.title);
+      }
+    }
+    if (markerLeaks.length > 0) {
+      const shown = markerLeaks.slice(0, 5).map(t => `"${t}"`).join(', ');
+      const more = markerLeaks.length > 5 ? ` …and ${markerLeaks.length - 5} more` : '';
+      violations.push(`${markerLeaks.length} heading(s) leak taxonomy markers (second bracketed marker / literal [Suggested tag]): ${shown}${more}`);
+    }
+
+    // --- Check 7: duplicated-token artifacts in headings (M3) ---
+    // Observed: "Api API Integration" — a slug-derived word colliding with the
+    // heading text. Fires only on consecutive words equal case-INsensitively
+    // but NOT byte-identical ("Api API" yes; "Pago Pago" / "Baden-Baden" no) —
+    // the mechanical artifact always mixes cases, while legitimate repeated
+    // names repeat exactly. Bracketed markers are stripped first so
+    // "[Tag: api] API Integration" does not false-positive.
+    // ponytail: identical-case dups ("API API") are deliberately NOT flagged —
+    // widen only if that variant is ever observed in real output.
+    const dupTokenHeadings = [];
+    for (const s of structure.sections) {
+      const words = s.title.replace(/\[[^\]]*\]/g, ' ').split(/[^A-Za-z0-9'-]+/).filter(w => w.length >= 2);
+      if (words.some((w, i) => i > 0 && w !== words[i - 1] && w.toLowerCase() === words[i - 1].toLowerCase())) {
+        dupTokenHeadings.push(s.title);
+      }
+    }
+    if (dupTokenHeadings.length > 0) {
+      const shown = dupTokenHeadings.slice(0, 5).map(t => `"${t}"`).join(', ');
+      const more = dupTokenHeadings.length > 5 ? ` …and ${dupTokenHeadings.length - 5} more` : '';
+      violations.push(`${dupTokenHeadings.length} heading(s) contain duplicated-token artifacts (e.g. "Api API"): ${shown}${more}`);
+    }
+
     // --- Calculate structural_score and pass/fail ---
+    // Score semantics unchanged from v1.0 (same 5-check ratio); taxonomy
+    // leakage force-fails qa_pass without touching the score.
     const structuralScore = checksTotal > 0
       ? Math.round((checksPassed / checksTotal) * 100) / 100
       : 0;
-    const qaPassed = structuralScore >= pass_threshold;
+    const qaPassed = structuralScore >= pass_threshold
+      && markerLeaks.length === 0
+      && dupTokenHeadings.length === 0;
 
     // --- Build section report ---
     const reportLines = [];
@@ -252,6 +304,8 @@ async function execute(input, options, tools) {
         checks_passed: checksPassed,
         checks_total: checksTotal,
         thin_sections: thinSections.length,
+        marker_leak_headings: markerLeaks.length,
+        dup_token_headings: dupTokenHeadings.length,
       },
     };
     results.push(entityResult);

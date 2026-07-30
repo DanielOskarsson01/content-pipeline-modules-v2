@@ -37,20 +37,68 @@ const MANIFEST_DEFAULT_PROMPT = MANIFEST.options_defaults.prompt;
  * replacer function inserts the value literally.
  */
 function buildPrompt(promptTemplate, entityContent, referenceDocs) {
-  let prompt = promptTemplate.replace(/\{entity_content\}/g, () => entityContent);
+  return resolveDocs(promptTemplate.replace(/\{entity_content\}/g, () => entityContent), referenceDocs);
+}
 
-  // Replace {doc:filename} placeholders
+/**
+ * Resolve {doc:filename} placeholders + strip any that go unmatched. Shared by
+ * buildPrompt and buildCachedPrompt so both produce identical bytes.
+ */
+function resolveDocs(text, referenceDocs) {
+  let out = text;
   if (referenceDocs && typeof referenceDocs === 'object') {
     for (const [filename, content] of Object.entries(referenceDocs)) {
       const str = String(content);
-      prompt = prompt.replace(new RegExp(`\\{doc:${escapeRegex(filename)}\\}`, 'g'), () => str);
+      out = out.replace(new RegExp(`\\{doc:${escapeRegex(filename)}\\}`, 'g'), () => str);
     }
   }
+  return out.replace(/\{doc:[^}]+\}/g, '');
+}
 
-  // Clean up unreplaced {doc:...} placeholders
-  prompt = prompt.replace(/\{doc:[^}]+\}/g, '');
+/**
+ * Cache-aware variant (BACKLOG #21, mirrors content-analyzer ff28469). Splits
+ * the assembled prompt at {entity_content} so the STABLE head (instructions +
+ * any {doc:} reference docs placed before the entity content) can be sent as an
+ * Anthropic prompt-cache block; the VARIABLE per-entity tail is the uncached
+ * remainder. Returns { prompt, cachePrefix } where cachePrefix + prompt is
+ * BYTE-IDENTICAL to buildPrompt() output — caching changes billing only.
+ * Splits only when {entity_content} occurs exactly once; 0 or >1 occurrences
+ * fall back to the full single prompt with an empty prefix. A prefix below the
+ * model's cache minimum silently won't cache — harmless (the caller logs it).
+ *
+ * DEPLOY-ORDER DEPENDENCY (same as content-analyzer ff28469): the skeleton
+ * `ai.complete` must support `cache_prefix` (skeleton #21) BEFORE this is
+ * live — an OLD skeleton ignores `cache_prefix` and would send only the
+ * variable tail, DROPPING the stable head the model needs.
+ */
+function buildCachedPrompt(promptTemplate, entityContent, referenceDocs) {
+  const full = buildPrompt(promptTemplate, entityContent, referenceDocs);
+  const parts = promptTemplate.split('{entity_content}');
+  if (parts.length === 2) {
+    const cachePrefix = resolveDocs(parts[0], referenceDocs);
+    const prompt = resolveDocs(entityContent + parts[1], referenceDocs);
+    // BULLETPROOF GUARD: only cache-split when it reassembles to the EXACT
+    // single-prompt bytes; any divergence falls back to no caching.
+    if (cachePrefix + prompt === full) return { prompt, cachePrefix, splitReason: 'split' };
+    return { prompt: full, cachePrefix: '', splitReason: 'diverged' };
+  }
+  return { prompt: full, cachePrefix: '', splitReason: parts.length === 1 ? 'no_placeholder' : 'multiple_placeholders' };
+}
 
-  return prompt;
+// ~4096 tokens — the largest documented per-model cache minimum (sonnet-5's
+// own minimum is undocumented and likely lower). A shorter prefix may
+// silently not cache; ai_usage cache_write/read tokens are the ground truth.
+const MIN_CACHEABLE_PREFIX_CHARS = 16384;
+
+/** Make every no-cache outcome visible instead of silent (review finding). */
+function logCacheSplit(logger, entityName, cachePrefix, reason, placeholderHint) {
+  if (reason === 'diverged') {
+    logger.warn(`${entityName}: cache split fell back — reassembly diverged from the single-pass prompt. Caching disabled for this call; model input unchanged.`);
+  } else if (reason === 'multiple_placeholders') {
+    logger.info(`${entityName}: prompt template contains ${placeholderHint} more than once — cache split disabled (model input unchanged).`);
+  } else if (cachePrefix && cachePrefix.length < MIN_CACHEABLE_PREFIX_CHARS) {
+    logger.info(`${entityName}: cache prefix is ${cachePrefix.length} chars (< ~${MIN_CACHEABLE_PREFIX_CHARS} chars ≈ 4096 tokens, the largest documented per-model cache minimum) — caching may not engage on this model; ai_usage cache_write/read tokens are the ground truth. To enlarge it, move stable instructions and {doc:} reference docs BEFORE ${placeholderHint} in the prompt template.`);
+  }
 }
 
 function escapeRegex(str) {
@@ -473,12 +521,22 @@ async function execute(input, options, tools) {
       // Assemble scraped source content
       const sourceContent = assembleSourceContent(scrapedItems, maxChars);
 
-      // Assemble all three inputs
+      // Assemble all three inputs; split the stable template head for Anthropic
+      // prompt caching (BACKLOG #21). cachePrefix + prompt is byte-identical to
+      // the old single-prompt output — billing-only. Split ONLY on the
+      // anthropic path: the skeleton's openai/perplexity branches ignore
+      // cache_prefix and would silently DROP the stable head from the model
+      // input (adversarial-review finding); other providers get the plain
+      // single prompt, byte-identical to pre-1.7.0 behavior.
       const entityContent = assembleEntityContent(analyzerItem, plannerItem, sourceContent, allowed_slug_paths);
-      const prompt = buildPrompt(promptTemplate, entityContent, reference_docs);
+      const { prompt, cachePrefix, splitReason } = ai_provider === 'anthropic'
+        ? buildCachedPrompt(promptTemplate, entityContent, reference_docs)
+        : { prompt: buildPrompt(promptTemplate, entityContent, reference_docs), cachePrefix: '', splitReason: 'non_anthropic_provider' };
+      logCacheSplit(logger, entity.name, cachePrefix, splitReason, '{entity_content}');
 
       const response = await ai.complete({
         prompt,
+        cache_prefix: cachePrefix || undefined,
         model: ai_model,
         provider: ai_provider,
         temperature,
@@ -565,6 +623,7 @@ module.exports.__testing = {
   renderAllowedSlugsBlock,
   assembleEntityContent,
   buildPrompt,
+  buildCachedPrompt,
   resolveMetaFromPlanner,
   MANIFEST_DEFAULT_PROMPT,
 };

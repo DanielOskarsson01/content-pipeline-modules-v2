@@ -2,7 +2,7 @@
   "id": "seo-planner",
   "name": "SEO Planner",
   "description": "Keyword distribution planner. Selects target keywords from keyword research and produces a flat keyword plan: target_keywords (primary/secondary/long_tail), meta title and description, optional FAQs, tone notes, and warnings. Section-level distribution is template-driven via format_spec.md. The manifest default is project-agnostic; pipeline-specific shape (e.g. company-profile categories/tags/credentials) is added via template prompt overrides. Uses configurable web search (Perplexity Sonar by default) to ground keywords in actual search patterns. Requires content-analyzer.",
-  "version": "2.3.4",
+  "version": "2.4.0",
   "step": 5,
   "category": "planning",
   "cost": "expensive",

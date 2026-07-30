@@ -2,7 +2,7 @@
   "id": "json-output",
   "name": "JSON Output",
   "description": "Assemble structured JSON per entity from all pipeline data (content-analyzer analysis, seo-planner keywords/meta, content-writer markdown). Supports Strapi-ready or flat format. Toggle inclusion of markdown, analysis, SEO plan, and key facts flattening independently.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "step": 8,
   "category": "data",
   "cost": "cheap",
@@ -44,6 +44,13 @@
       "default": true
     },
     {
+      "name": "include_qa",
+      "type": "boolean",
+      "label": "Include QA verdict",
+      "description": "Attach the QA verdict (router decision, failed check names, flagged) from the pool's QA items as a qa block. Additive metadata - never blocks delivery.",
+      "default": true
+    },
+    {
       "name": "flatten_key_facts",
       "type": "boolean",
       "label": "Flatten key facts",
@@ -57,6 +64,7 @@
     "include_markdown": true,
     "include_analysis": true,
     "include_seo_plan": true,
+    "include_qa": true,
     "flatten_key_facts": false
   },
 

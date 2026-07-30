@@ -70,7 +70,9 @@ const base = {
   // Manifest sanity
   // ----------------------------------------------------------------------
   console.log('\n=== Manifest sanity ===');
-  assert(MANIFEST.version === '1.2.1', `manifest version bumped to 1.2.1 (got ${MANIFEST.version})`);
+  // Version-agnostic: pinning the exact version made this test fail on every
+  // unrelated bump (it was failing at base against 1.2.3). Assert semver shape.
+  assert(/^\d+\.\d+\.\d+$/.test(MANIFEST.version), `manifest version is semver (got ${MANIFEST.version})`);
 
   // ----------------------------------------------------------------------
   // Gate PASS: markers preserved

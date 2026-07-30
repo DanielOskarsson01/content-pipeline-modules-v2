@@ -134,6 +134,14 @@ The Markdown output is a terminal artifact -- it is ready for use outside the pi
 
 The other Step 8 modules (html-output, json-output, meta-output) can run in parallel on the same working pool to produce alternative output formats from the same source content.
 
+## QA verdict frontmatter (v1.1.0, M2)
+
+When `include_frontmatter` is on and the pool carries QA shapes, the YAML
+frontmatter gains `qa_verdict`, `qa_flagged`, and (when present)
+`qa_failed_checks` — same collector and semantics as json-output's `qa`
+block (`modules/_shared/qa-verdict.js`). Additive metadata, never a gate;
+QA-less pipelines produce byte-identical files.
+
 ## Technical Reference
 
 - **Step:** 8 (Bundling)

@@ -210,6 +210,19 @@ After the user reviews and approves the written content, articles enter the work
 
 For now, the approved content_markdown is the deliverable. Copy it, import it, or build a CMS connector for it.
 
+## Prompt caching (v1.7.0, BACKLOG #21)
+
+The writer splits its assembled prompt at `{entity_content}`: the stable head
+(instructions + any `{doc:}` reference docs placed before the entity content)
+is sent as an Anthropic prompt-cache block (`cache_prefix`), the per-entity
+tail stays uncached. `cachePrefix + prompt` is byte-identical to the old
+single prompt — caching changes billing only (a runtime self-check falls back
+to the uncached single prompt on any divergence). A prefix below the model's
+cacheable minimum (~1024–4096 tokens depending on model) silently won't
+cache; the module logs when that happens. **To actually benefit, the template
+must put its stable bulk (reference docs, writing rules) BEFORE
+`{entity_content}`** — a template whose head is a short intro caches nothing.
+
 ## Technical Reference
 
 - **Step:** 5 (Generation)
