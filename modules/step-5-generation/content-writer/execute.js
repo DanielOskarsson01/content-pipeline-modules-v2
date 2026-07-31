@@ -380,7 +380,7 @@ function resolveMetaFromPlanner(plannerItem, entityName) {
 
 async function execute(input, options, tools) {
   const { entities } = input;
-  const { ai_model, ai_provider, prompt: promptTemplate, reference_docs, max_source_chars, temperature, max_tokens, allowed_slug_paths, requires_prompt_override, require_slug_paths } = options;
+  const { ai_model, ai_provider, prompt: promptTemplate, reference_docs, max_source_chars, temperature, max_tokens, disable_thinking, allowed_slug_paths, requires_prompt_override, require_slug_paths } = options;
   const { logger, progress, ai } = tools;
 
   const maxChars = max_source_chars || 100000;
@@ -517,6 +517,9 @@ async function execute(input, options, tools) {
       const { metaTitle, metaDescription } = resolveMetaFromPlanner(plannerItem, entity.name);
 
       logger.info(`${entity.name}: writing content with ${ai_provider}/${ai_model} (${scrapedItems.length} source pages)`);
+      if (disable_thinking === true && ai_provider !== 'anthropic') {
+        logger.info(`${entity.name}: disable_thinking is set but ai_provider is '${ai_provider}' — the option is Anthropic-only and has no effect on this call`);
+      }
 
       // Assemble scraped source content
       const sourceContent = assembleSourceContent(scrapedItems, maxChars);
@@ -541,6 +544,12 @@ async function execute(input, options, tools) {
         provider: ai_provider,
         temperature,
         max_tokens,
+        // v1.8.0: opt-in thinking disable for A/B testing — ~80% of the writer's
+        // output tokens are invisible adaptive thinking on sonnet-5 (14,901 out
+        // for 1,792 words). Anthropic-gated like the cache split: non-Anthropic
+        // providers must never receive the param. Default false = byte-identical
+        // request to v1.7.0. The skeleton additionally gates by model family.
+        ...(disable_thinking === true && ai_provider === 'anthropic' && { thinking: { type: 'disabled' } }),
       });
 
       // Output is always markdown (v1.2.0+: markdown-only, no JSON output)
