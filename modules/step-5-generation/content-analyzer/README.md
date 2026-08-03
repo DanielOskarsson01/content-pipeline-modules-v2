@@ -225,6 +225,56 @@ reference_docs: [master_categories.md]
 - Many suggested_new tags - company may have niche offerings. Review for taxonomy gaps
 - Output is prose instead of JSON - prompt is wrong, LLM wrote an article instead of analyzing
 
+## Citation-Map Stability Across Loop Re-Runs (v1.5.0)
+
+Downstream articles cite sources inline as `[#n]`, minted against this module's
+`analysis_json.source_citations` numbering. A loop pass re-runs the analyzer,
+and the model regenerates that map nondeterministically — observed live on run
+`cb49ef80` (Hacksawgaming): 52 entries on loop 0, 19 on loop 1, from
+byte-similar input (`stop_reason: end_turn` both times — not truncation). The
+`add`-upsert then replaced the 52-entry map every existing ref was written
+against, so the round-2 rewrite's citations broke (27 broken refs, citation
+coverage 41.3% vs a 70% threshold).
+
+Since v1.5.0 the map is **append-only across re-runs**: when the input pool
+carries a previous `analysis_json.source_citations` (hydrated via
+`requires_columns`, which now includes `analysis_json`), the previous entries
+are preserved verbatim — same index, same URL — and only genuinely new URLs are
+appended after the previous max index. Refs minted against any earlier version
+of the map stay resolvable.
+
+- The previous map is selected as the candidate with the **highest max index**
+  among pool items (§7b hydration broadcasts `analysis_json` onto every
+  entity-keyed item, so stale copies can coexist; under append-only merging the
+  most-evolved map always has the highest max index).
+- The merge runs **after** the hollow-analysis gate — preserved citations can
+  never rescue a hollow analysis.
+- A fresh (loop-0) run is untouched: no previous map, model output kept as-is.
+- If a re-run's model output is valid JSON that omits `source_citations`, the
+  previous map is preserved rather than dropped.
+- Legacy-shaped maps (v1.0.0 plain URL strings, v1.2.0 `{claim, sources}`)
+  are never merged — the fix disengages and behaves exactly as pre-v1.5.0.
+
+**Known residuals (documented, not fixed here):**
+
+- **Non-JSON re-run responses still lose the map.** If the model answers in
+  prose instead of JSON on a re-run, the raw-text path ships
+  `analysis_json: null` and the add-upsert replaces the map — the pre-v1.5.0
+  collapse in full. Preserving the map there is NOT safe today because
+  content-writer and seo-planner branch on `analysis_json` *truthiness* for
+  their raw-text fallback — a citations-only object would silently suppress
+  that fallback. Closing this needs a fallback-aware change in those consumers
+  first.
+- **Downstream delivery of the merged map depends on skeleton §7b hydration.**
+  `analysis_json` is stripped to per-run item data and re-hydrated for
+  consumers; when multiple analyzer runs exist at the same step, the skeleton's
+  row selection ties on `step_index` and the winning copy is arbitrary. The
+  append-only guarantee is enforced *inside this module*; end-to-end
+  determinism needs a skeleton tiebreaker (loop_iteration / recency).
+- **URL-variant entries accumulate.** Dedup is by exact trimmed URL string, so
+  `http/https` or trailing-slash variants of the same page can accrete separate
+  indices across loops. The map stays resolvable; it just grows.
+
 ## Limitations & Edge Cases
 
 - **Token limits** - Very large companies with 20+ long pages may exceed model context. max_content_chars prevents crashes but means some pages are truncated

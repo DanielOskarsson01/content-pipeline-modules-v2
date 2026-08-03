@@ -319,6 +319,7 @@ async function execute(input, options, tools) {
             qa_pass: true,
             hallucination_score: 1,
             verified_claims_count: 0,
+            partial_claims_count: 0,
             total_claims_count: 0,
             flagged_claims_count: 0,
             flagged_claims: [],
@@ -342,6 +343,7 @@ async function execute(input, options, tools) {
           qa_pass: false,
           hallucination_score: 0,
           verified_claims_count: 0,
+          partial_claims_count: 0,
           total_claims_count: 0,
           flagged_claims_count: 0,
           flagged_claims: [],
@@ -366,6 +368,7 @@ async function execute(input, options, tools) {
           qa_pass: true,
           hallucination_score: 1,
           verified_claims_count: 0,
+          partial_claims_count: 0,
           total_claims_count: 0,
           flagged_claims_count: 0,
           flagged_claims: [],
@@ -393,6 +396,7 @@ async function execute(input, options, tools) {
           qa_pass: true,
           hallucination_score: 1,
           verified_claims_count: 0,
+          partial_claims_count: 0,
           total_claims_count: 0,
           flagged_claims_count: 0,
           flagged_claims: [],
@@ -499,9 +503,10 @@ async function execute(input, options, tools) {
     const partialClaims = allVerdicts.filter(v => v.verdict === 'partial');
     const unsupportedClaims = allVerdicts.filter(v => v.verdict === 'unsupported');
 
-    // Verified = supported + partial (partial counts as 0.5)
+    // Half-weighting of partials lives ONLY in the score. The counts report
+    // supported/partial/unsupported separately and sum to total -- never a
+    // rounded blend that disagrees with meta.supported.
     const verifiedValue = supportedClaims.length + partialClaims.length * 0.5;
-    const verifiedCount = Math.round(verifiedValue);
     const hallucinationScore = totalClaims > 0
       ? verifiedValue / totalClaims
       : 1;
@@ -567,7 +572,8 @@ async function execute(input, options, tools) {
         entity_name: entity.name,
         qa_pass: qaPassed,
         hallucination_score: parseFloat(hallucinationScore.toFixed(3)),
-        verified_claims_count: verifiedCount,
+        verified_claims_count: supportedClaims.length,
+        partial_claims_count: partialClaims.length,
         total_claims_count: totalClaims,
         flagged_claims_count: unsupportedClaims.length,
         flagged_claims: flaggedClaims,

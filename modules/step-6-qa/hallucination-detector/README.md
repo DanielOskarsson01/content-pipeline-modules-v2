@@ -146,7 +146,8 @@ claims_per_batch: 15
 entity_name: "Bet365"
 qa_pass: true
 hallucination_score: 0.952
-verified_claims_count: 20
+verified_claims_count: 19
+partial_claims_count: 2
 total_claims_count: 21
 flagged_claims_count: 0
 ```
@@ -157,7 +158,8 @@ flagged_claims_count: 0
 entity_name: "NewCasino"
 qa_pass: false
 hallucination_score: 0.714
-verified_claims_count: 10
+verified_claims_count: 9
+partial_claims_count: 2
 total_claims_count: 14
 flagged_claims_count: 3
 flagged_claims_text: "1. [HIGH] Revenue reached $2.1 billion in 2025.\n2. [MEDIUM] The company partners with over 40 game providers.\n3. [HIGH] NewCasino holds licenses in 12 regulated markets."
@@ -170,8 +172,9 @@ flagged_claims_text: "1. [HIGH] Revenue reached $2.1 billion in 2025.\n2. [MEDIU
 | `entity_name` | string | Entity this check applies to |
 | `qa_pass` | boolean | Whether hallucination_score meets the pass_threshold |
 | `hallucination_score` | number | Verification score from 0 to 1 (1.0 = all verified) |
-| `verified_claims_count` | number | Claims counted as verified (supported + partial * 0.5) |
-| `total_claims_count` | number | Total factual claims extracted from content |
+| `verified_claims_count` | number | Claims with "supported" verdict (matches `meta.supported`) |
+| `partial_claims_count` | number | Claims with "partial" verdict (half-weighted in the score only) |
+| `total_claims_count` | number | Total factual claims extracted from content (verified + partial + flagged) |
 | `flagged_claims_count` | number | Claims with "unsupported" verdict |
 | `flagged_claims` | array | Objects with `claim` and `severity` for each unsupported claim |
 | `flagged_claims_text` | string | Formatted list of unsupported claims with severity (detail view) |
