@@ -411,6 +411,12 @@ function findPreviousSourceCitations(items) {
   for (const item of items || []) {
     const cites = item && item.analysis_json && item.analysis_json.source_citations;
     if (!Array.isArray(cites) || cites.length === 0) continue;
+    // Legacy map shapes (plain URL strings, {claim, sources}) predate the
+    // {index, url} contract — merging them would corrupt the map (spread on a
+    // string yields char-index objects; missing indices collide with the
+    // checker's positional fallback). Not a usable previous map: skip, and the
+    // merge disengages to pre-v1.5.0 behavior.
+    if (!cites.every(c => c && typeof c === 'object' && c.url && Number(c.index) > 0)) continue;
     const max = cites.reduce((m, c) => Math.max(m, Number(c.index) || 0), 0);
     if (max > bestMax) { bestMax = max; best = cites; }
   }

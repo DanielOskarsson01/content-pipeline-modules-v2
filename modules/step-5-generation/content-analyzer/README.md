@@ -250,8 +250,30 @@ of the map stay resolvable.
 - The merge runs **after** the hollow-analysis gate — preserved citations can
   never rescue a hollow analysis.
 - A fresh (loop-0) run is untouched: no previous map, model output kept as-is.
-- If a re-run's model output omits `source_citations` entirely, the previous
-  map is preserved rather than dropped.
+- If a re-run's model output is valid JSON that omits `source_citations`, the
+  previous map is preserved rather than dropped.
+- Legacy-shaped maps (v1.0.0 plain URL strings, v1.2.0 `{claim, sources}`)
+  are never merged — the fix disengages and behaves exactly as pre-v1.5.0.
+
+**Known residuals (documented, not fixed here):**
+
+- **Non-JSON re-run responses still lose the map.** If the model answers in
+  prose instead of JSON on a re-run, the raw-text path ships
+  `analysis_json: null` and the add-upsert replaces the map — the pre-v1.5.0
+  collapse in full. Preserving the map there is NOT safe today because
+  content-writer and seo-planner branch on `analysis_json` *truthiness* for
+  their raw-text fallback — a citations-only object would silently suppress
+  that fallback. Closing this needs a fallback-aware change in those consumers
+  first.
+- **Downstream delivery of the merged map depends on skeleton §7b hydration.**
+  `analysis_json` is stripped to per-run item data and re-hydrated for
+  consumers; when multiple analyzer runs exist at the same step, the skeleton's
+  row selection ties on `step_index` and the winning copy is arbitrary. The
+  append-only guarantee is enforced *inside this module*; end-to-end
+  determinism needs a skeleton tiebreaker (loop_iteration / recency).
+- **URL-variant entries accumulate.** Dedup is by exact trimmed URL string, so
+  `http/https` or trailing-slash variants of the same page can accrete separate
+  indices across loops. The map stays resolvable; it just grows.
 
 ## Limitations & Edge Cases
 

@@ -156,6 +156,30 @@ function citationAt(map, index) {
     assert(map.length === 4, `merged from the newer map: 3 + 1 new = 4 (got ${map.length})`);
   }
 
+  console.log('--- Case 6: legacy-shaped previous maps are ignored, not corrupted ---');
+  {
+    // v1.0.0 plain-string and v1.2.0 {claim, sources} shapes (both still
+    // accepted by citation-coverage-checker) must not be merged — the fix
+    // disengages and the model's own map is kept as-is.
+    const legacyItem = {
+      entity_name: 'Alpha',
+      analysis_json: {
+        key_facts: { founded: '2015' },
+        source_citations: ['https://example.com/old1', 'https://example.com/old2', 'https://example.com/old3', 'https://example.com/old4'],
+      },
+    };
+    const tools = makeTools(remintedAnalysis);
+    const entity = { name: 'Alpha', items: [...sourceItems, legacyItem] };
+    const result = await execute({ entities: [entity] }, baseOptions, tools);
+    const map = result.results[0].items[0].analysis_json.source_citations;
+
+    assert(map.length === 2, `legacy map ignored — model's own 2 entries kept (got ${map.length})`);
+    assert(
+      map.every(c => c && typeof c === 'object' && c.url),
+      'output map contains no corrupted (char-index / string) entries'
+    );
+  }
+
   console.log('--- Case 4: merged citations must NOT rescue a hollow analysis ---');
   {
     const tools = makeTools({}); // hollow: valid JSON, nothing usable
