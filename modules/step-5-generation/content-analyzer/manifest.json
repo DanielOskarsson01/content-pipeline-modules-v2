@@ -2,7 +2,7 @@
   "id": "content-analyzer",
   "name": "Content Analyzer",
   "description": "Structural fact extraction from scraped content. Classifies into categories (fixed taxonomy), assigns tags, extracts key facts (people, licenses, awards, partnerships, offices, contact), and maps source citations. No summaries, opinions, or marketing prose — pure classification and extraction.",
-  "version": "1.4.3",
+  "version": "1.5.0",
   "step": 5,
   "category": "analysis",
   "cost": "expensive",
@@ -13,7 +13,8 @@
 
   "requires_columns": [
     "text_content",
-    "entity_name"
+    "entity_name",
+    "analysis_json"
   ],
   "options": [
     {

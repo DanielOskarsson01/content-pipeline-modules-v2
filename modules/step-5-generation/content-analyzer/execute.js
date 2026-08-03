@@ -392,6 +392,44 @@ function extractVocabSlugs(docContent) {
   return set;
 }
 
+/**
+ * Citation-map stability across loop re-runs (B2). The article's inline [#n]
+ * refs are minted against a specific source_citations numbering. A loop pass
+ * re-runs the analyzer, which regenerates the map nondeterministically
+ * (observed live: 52 entries -> 19 on byte-similar input), and the add-upsert
+ * destroys the numbering every existing ref was written against. Preserving
+ * the previous map verbatim and appending only genuinely new URLs makes the
+ * map append-only across iterations, so earlier refs stay resolvable.
+ */
+function findPreviousSourceCitations(items) {
+  // §7b hydration broadcasts analysis_json onto every entity-keyed item, so
+  // several (possibly stale) copies of the map can coexist in the pool. The
+  // most-evolved map is the one with the highest max index — under append-only
+  // merging a newer map is always a superset, so highest max wins.
+  let best = null;
+  let bestMax = -1;
+  for (const item of items || []) {
+    const cites = item && item.analysis_json && item.analysis_json.source_citations;
+    if (!Array.isArray(cites) || cites.length === 0) continue;
+    const max = cites.reduce((m, c) => Math.max(m, Number(c.index) || 0), 0);
+    if (max > bestMax) { bestMax = max; best = cites; }
+  }
+  return best;
+}
+
+function mergeSourceCitations(prev, next) {
+  const merged = prev.map(c => ({ ...c }));
+  const seen = new Set(prev.map(c => String(c.url || '').trim()).filter(Boolean));
+  let maxIndex = prev.reduce((m, c) => Math.max(m, Number(c.index) || 0), 0);
+  for (const c of Array.isArray(next) ? next : []) {
+    const url = String((c && c.url) || '').trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    merged.push({ ...c, index: ++maxIndex });
+  }
+  return merged;
+}
+
 async function execute(input, options, tools) {
   const { entities } = input;
   const { ai_model, ai_provider, max_content_chars, prompt: promptTemplate, reference_docs, temperature, max_tokens, vocabulary_checks } = options;
@@ -532,6 +570,16 @@ async function execute(input, options, tools) {
         throw new Error(
           'Analysis is empty — model returned valid JSON with no usable extracted content (hollow analysis)'
         );
+      }
+
+      // B2 citation-map stability: on a loop re-run the input pool carries this
+      // module's own previous analysis (hydrated via requires_columns). Merge
+      // AFTER the hollow gate so preserved citations can never rescue a hollow
+      // analysis, and re-flatten so the display sections show the merged map.
+      const prevCitations = findPreviousSourceCitations(items);
+      if (prevCitations && analysis !== null && typeof analysis === 'object') {
+        analysis.source_citations = mergeSourceCitations(prevCitations, analysis.source_citations);
+        flat = flattenAnalysis(analysis);
       }
 
       // W1.3 fidelity gate: every assigned slug at each configured path must
