@@ -28,7 +28,7 @@
       "label": "AI Model",
       "description": "Model for lead proposal. Haiku-class is the cheap default (testing convention); switch to sonnet/opus for higher-quality proposals in production.",
       "default": "haiku",
-      "values": ["haiku", "sonnet", "opus", "gpt-4o-mini", "gpt-4o"]
+      "values_from": "registry.models"
     },
     {
       "name": "ai_provider",
@@ -36,7 +36,7 @@
       "label": "AI Provider",
       "description": "Which LLM provider tools.ai routes to.",
       "default": "anthropic",
-      "values": ["anthropic", "openai"]
+      "values_from": "registry.providers"
     },
     {
       "name": "max_urls_per_entity",

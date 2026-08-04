@@ -23,13 +23,7 @@
       "label": "AI Model",
       "description": "Which model to use for content analysis. Haiku is fast and cheap for structured extraction.",
       "default": "haiku",
-      "values": [
-        "haiku",
-        "sonnet",
-        "opus",
-        "gpt-4o-mini",
-        "gpt-4o"
-      ]
+      "values_from": "registry.models"
     },
     {
       "name": "ai_provider",
@@ -37,10 +31,7 @@
       "label": "AI Provider",
       "description": "Which LLM provider to use.",
       "default": "anthropic",
-      "values": [
-        "anthropic",
-        "openai"
-      ]
+      "values_from": "registry.providers"
     },
     {
       "name": "reference_docs",
