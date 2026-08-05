@@ -6645,7 +6645,7 @@ Results feed into Step 7 (loop-router) for routing decisions. Typical configurat
 - **Depends on:** `content-writer`, `page-scraper` (per manifest; via data-shape routing, any module producing `text_content` -- e.g. browser-scraper -- also qualifies as a source)
 - **Input format:** pool items with `content_markdown` (content to check) and `text_content` (sources), found by field presence, never by `source_submodule`
 - **Output format:** one item per entity matching the output fields table above; `meta` additionally carries `supported` / `partial` / `unsupported` / `batches_sent` (and `skipped` + `skip_reason` on skip paths)
-- **Error handling:** LLM failures and unparseable responses fail safe (affected claims marked unsupported, run continues); missing content fails closed unless `allow_empty_content`; results are pushed to `tools._partialItems` so a timeout preserves per-entity progress
+- **Error handling:** LLM failures and unparseable responses fail safe (affected claims marked unsupported, run continues); missing content fails closed unless `allow_empty_content`; successfully-verified per-entity results are pushed to `tools._partialItems` so a timeout preserves completed entities (the skip and fail-closed paths return immediately and do not push)
 - **External dependencies:** none beyond `tools.ai.complete()` -- no direct HTTP calls
 - **Spec:** `Content-Pipeline/specs/SUBMODULE_DEVELOPMENT.md`
 
@@ -7145,7 +7145,7 @@ Per the pipeline QA convention, a `qa_pass: false` verdict does not fail the run
 - **Required input columns:** `seo_plan_json`
 - **Depends on:** `content-writer`, `seo-planner`
 - **Input format:** pool items selected by data-shape routing (field presence: `meta_title`/`meta_description`/`content_markdown` for content, `seo_plan_json` for plans) -- never by `source_submodule`
-- **Output format:** one item per entity matching the output fields table above; each item is also pushed to `tools._partialItems` for timeout resilience
+- **Output format:** one item per entity matching the output fields table above; successfully-checked items are pushed to `tools._partialItems` for timeout resilience (the error path returns without pushing)
 - **Error handling:** entities with no resolvable meta get a loud-fail result row plus an `error` on the entity result; there are no retries or external calls to fail
 - **External dependencies:** none -- no AI calls, no HTTP; purely deterministic local string operations
 - **Tests:** `test-meta-chain.js` in the module folder; `execute.js` exports `__testing` helpers (`extractHeadTerms`, `addTargetKeywords`, `extractMetaFromFrontmatter`)
@@ -7787,7 +7787,7 @@ The detail view provides image grids for each media type (team photos, screensho
 - **Depends on:** none (can run independently)
 - **Input:** `input.entities[]` with `website` field and/or `items[]` containing `analysis_json`
 - **Output:** `{ results[], summary }` where each result has `entity_name`, `items[]` with media URLs, counts, and status
-- **Error handling:** page fetches fail soft (an unreachable page yields no images, run continues); a thrown error for an entity records `error` on that entity's result with empty items while other entities proceed; each completed entity's items are pushed to `tools._partialItems` so a timeout/abort preserves already-processed entities
+- **Error handling:** page fetches fail soft (an unreachable page yields no images, run continues); a thrown error for an entity records `error` on that entity's result with empty items while other entities proceed; each successfully-completed entity's items are pushed to `tools._partialItems` so a timeout/abort preserves already-processed entities (the error path does not push)
 - **Selectable:** true -- operators can deselect individual entity outputs
 - **Flagged when:** `status` is `no_media` (highlighted in the table)
 - **Detail view:** header fields (entity_name, status badge, logo_url image, counts) and image/image_grid sections for each media type plus prose summary

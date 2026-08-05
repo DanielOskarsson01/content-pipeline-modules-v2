@@ -179,7 +179,7 @@ The detail view provides image grids for each media type (team photos, screensho
 - **Depends on:** none (can run independently)
 - **Input:** `input.entities[]` with `website` field and/or `items[]` containing `analysis_json`
 - **Output:** `{ results[], summary }` where each result has `entity_name`, `items[]` with media URLs, counts, and status
-- **Error handling:** page fetches fail soft (an unreachable page yields no images, run continues); a thrown error for an entity records `error` on that entity's result with empty items while other entities proceed; each completed entity's items are pushed to `tools._partialItems` so a timeout/abort preserves already-processed entities
+- **Error handling:** page fetches fail soft (an unreachable page yields no images, run continues); a thrown error for an entity records `error` on that entity's result with empty items while other entities proceed; each successfully-completed entity's items are pushed to `tools._partialItems` so a timeout/abort preserves already-processed entities (the error path does not push)
 - **Selectable:** true -- operators can deselect individual entity outputs
 - **Flagged when:** `status` is `no_media` (highlighted in the table)
 - **Detail view:** header fields (entity_name, status badge, logo_url image, counts) and image/image_grid sections for each media type plus prose summary

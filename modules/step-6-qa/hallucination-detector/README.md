@@ -225,6 +225,6 @@ Results feed into Step 7 (loop-router) for routing decisions. Typical configurat
 - **Depends on:** `content-writer`, `page-scraper` (per manifest; via data-shape routing, any module producing `text_content` -- e.g. browser-scraper -- also qualifies as a source)
 - **Input format:** pool items with `content_markdown` (content to check) and `text_content` (sources), found by field presence, never by `source_submodule`
 - **Output format:** one item per entity matching the output fields table above; `meta` additionally carries `supported` / `partial` / `unsupported` / `batches_sent` (and `skipped` + `skip_reason` on skip paths)
-- **Error handling:** LLM failures and unparseable responses fail safe (affected claims marked unsupported, run continues); missing content fails closed unless `allow_empty_content`; results are pushed to `tools._partialItems` so a timeout preserves per-entity progress
+- **Error handling:** LLM failures and unparseable responses fail safe (affected claims marked unsupported, run continues); missing content fails closed unless `allow_empty_content`; successfully-verified per-entity results are pushed to `tools._partialItems` so a timeout preserves completed entities (the skip and fail-closed paths return immediately and do not push)
 - **External dependencies:** none beyond `tools.ai.complete()` -- no direct HTTP calls
 - **Spec:** `Content-Pipeline/specs/SUBMODULE_DEVELOPMENT.md`

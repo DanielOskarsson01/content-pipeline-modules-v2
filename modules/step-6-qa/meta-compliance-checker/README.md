@@ -239,7 +239,7 @@ Per the pipeline QA convention, a `qa_pass: false` verdict does not fail the run
 - **Required input columns:** `seo_plan_json`
 - **Depends on:** `content-writer`, `seo-planner`
 - **Input format:** pool items selected by data-shape routing (field presence: `meta_title`/`meta_description`/`content_markdown` for content, `seo_plan_json` for plans) -- never by `source_submodule`
-- **Output format:** one item per entity matching the output fields table above; each item is also pushed to `tools._partialItems` for timeout resilience
+- **Output format:** one item per entity matching the output fields table above; successfully-checked items are pushed to `tools._partialItems` for timeout resilience (the error path returns without pushing)
 - **Error handling:** entities with no resolvable meta get a loud-fail result row plus an `error` on the entity result; there are no retries or external calls to fail
 - **External dependencies:** none -- no AI calls, no HTTP; purely deterministic local string operations
 - **Tests:** `test-meta-chain.js` in the module folder; `execute.js` exports `__testing` helpers (`extractHeadTerms`, `addTargetKeywords`, `extractMetaFromFrontmatter`)
