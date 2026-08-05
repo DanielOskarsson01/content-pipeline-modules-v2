@@ -3,7 +3,7 @@
 > Scrape LinkedIn profiles (bio/company_people modes) or enrich pool items with full LinkedIn job descriptions (job_description mode) via the LinkedIn Profile API.
 
 **Module ID:** `linkedin-profile-scraper` | **Step:** 3 (Scraping) | **Category:** linkedin | **Cost:** expensive
-**Version:** 1.2.0 | **Data Operation:** add (+) for profiles, transform for job_description
+**Version:** 1.2.0 | **Data Operation:** add (+) for profiles, transform (=) behavior in job_description mode
 
 ---
 
@@ -45,7 +45,9 @@ content-analyzer (Step 4) → content-writer (Step 5) → biographical articles
 
 **Health check:** Before scraping, calls `/api/health` to verify the Profile API is running and has an active LinkedIn session. If unhealthy, skips Voyager entirely and routes all profiles to the ScrapeLinkedIn fallback.
 
-**Circuit breaker:** If 3 consecutive profiles fail, the module stops API calls and queues all remaining profiles for the ScrapeLinkedIn fallback. Prevents burning time on a dead session.
+**Circuit breaker:** If 3 consecutive profiles fail, the module stops API calls and queues all remaining profiles for the ScrapeLinkedIn fallback. Prevents burning time on a dead session. In `job_description` mode the circuit breaker also fires after 3 consecutive failures, but there is no fallback -- remaining jobs are marked `status: "error"` with "Aborted (circuit breaker)".
+
+**No fallback in job_description mode:** ScrapeLinkedIn only covers profiles. If the Profile API health check fails in `job_description` mode, the module returns immediately with every item marked `status: "error"` ("LinkedIn Profile API unavailable") -- a loud fail, not a silent pass-through.
 
 **Completeness scoring:** Every scraped profile gets a 0-100 score based on which sections were captured. Profiles scoring below 50 are flagged as "incomplete" in the results.
 
@@ -209,14 +211,15 @@ For company profiles, executive data from this module populates the "Key People"
 - **Step:** 3 (Scraping)
 - **Category:** linkedin
 - **Cost:** expensive -- 30 min timeout, 1 retry, low BullMQ priority
-- **Data operation:** add (+) -- produces new profile items from entity URLs
-- **Required input columns:** `linkedin`
+- **Data operation:** add (+) -- produces new profile items from entity URLs. `job_description` mode behaves as a transform (returns the entity's existing pool items with LinkedIn job items enriched in place)
+- **Pool precondition:** `requires_items` -- the skeleton checks the pool per entity before enqueueing; an entity with an empty pool gets `skipped_no_input` (not `failed`) and other entities proceed normally
+- **Required input columns:** none declared (`requires_columns: []`). Per mode, the code reads: `bio` -- `entity.linkedin` or `entity.linkedin_url` (entities without one are skipped with a warning); `company_people` -- `entity.employees` or `entity.employee_profiles` (array of URLs or objects); `job_description` -- pool item `url` fields containing `linkedin.com/jobs/view/`
 - **Depends on:** none (runs independently in Step 3, alongside other scrapers)
-- **Input:** `input.entities[]` with `linkedin` field (aliased from `linkedin_url`, `linkedin_page`, etc.)
+- **Input:** `input.entities[]` -- entity fields for profile modes, `entity.items[]` for job_description mode (see required input columns above)
 - **Output:** `{ results[], summary }` grouped by entity_name
 - **Selectable:** false -- all profiles are generally wanted
 - **Detail view:** header (linkedin_url as link, full_name, headline, location, status badge, completeness_score, scrape_method) + sections (About, Experience, Education, Skills as prose)
-- **Error handling:** health check → per-profile API call with circuit breaker (3 failures) → ScrapeLinkedIn fallback → error. Partial success supported
+- **Error handling:** health check → per-profile API call with circuit breaker (3 consecutive failures) → ScrapeLinkedIn fallback → error. Partial success supported. `job_description` mode: health-check failure or circuit breaker marks items `error` directly -- no fallback exists for jobs
 - **External dependencies:** `tools.http` (Profile API + ScrapeLinkedIn API calls), `tools.logger`, `tools.progress`, `tools._partialItems`
 - **Environment variables:** `LINKEDIN_API_URL` (optional, defaults to `http://localhost:3847`), `LINKEDIN_API_KEY` (optional, defaults to `oig-pipeline-2026`), `SCRAPELINKEDIN_API_KEY` (optional, for fallback)
 - **Server infrastructure:** Profile API on port 3847 (PM2), TigerVNC on `:1`, noVNC on port 6080, Chrome with `--remote-debugging-port=9222`

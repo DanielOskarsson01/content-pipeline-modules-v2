@@ -3,7 +3,7 @@
 > Return fake data after a configurable delay -- for testing the execution pipeline without real HTTP requests.
 
 **Module ID:** `test-dummy` | **Step:** 1 (Discovery) | **Category:** testing | **Cost:** cheap
-**Version:** 1.0.0 | **Data Operation:** transform (=)
+**Version:** 1.0.0 | **Data Operation:** add (+)
 
 ---
 
@@ -126,7 +126,8 @@ Fake items enter the working pool just like real Step 1 output. They can flow th
 - **Step:** 1 (Discovery)
 - **Category:** testing
 - **Cost:** cheap
-- **Data operation:** transform (=) -- generates fake data for each entity
+- **Data operation:** add (+) -- fake items are added to the working pool as net-new entries, keyed by `url`
+- **Pool precondition:** `empty_ok` -- runs against an empty or populated pool; no prior items required (standard for Step 1 discovery/seed modules)
 - **Requires columns:** none (accepts any entity)
 - **Input:** `input.entities[]` with any fields (uses `entity.name` for output)
 - **Output:** `{ results[], summary }` where each result has `entity_name`, `items[]` with `url`, `title`, `score`, and `meta` with `simulated: true`

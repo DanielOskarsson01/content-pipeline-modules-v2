@@ -3,7 +3,7 @@
 > Imports items from CSV or XLSX files -- uploaded directly or read from a local directory. Maps columns to standard pipeline format and feeds items into the pipeline without re-running discovery.
 
 **Module ID:** `csv-discovery` | **Step:** 1 (Discovery) | **Category:** search | **Cost:** cheap
-**Version:** 1.0.0 | **Data Operation:** transform (=)
+**Version:** 1.0.0 | **Data Operation:** add (+)
 
 ---
 
@@ -30,7 +30,7 @@ The `entity_name_template` option controls naming using `{field}` placeholders. 
 
 ### Column Mapping
 
-The `column_map` option maps your CSV column headers to standard pipeline fields. The module lowercases all column headers before matching, so `"Company Name"` and `"company name"` both work. The skeleton also applies column aliases (see Technical Reference), so common variations like `"website"`, `"domain"`, `"company url"` are automatically resolved.
+The `column_map` option maps your CSV column headers to standard pipeline fields. The module lowercases all column headers before matching, so `"Company Name"` and `"company name"` both work. Matching is otherwise EXACT -- the module reads files directly from disk and looks headers up against `column_map` only. The skeleton's column-alias system (which resolves `"domain"`, `"company url"` etc.) applies to Step-0 entity imports, NOT to files this module reads -- if your CSV uses a variant header, add it to `column_map` explicitly, or rows will silently produce empty fields.
 
 ### Delimiter Detection
 
@@ -58,7 +58,7 @@ The CSV parser auto-detects whether a file uses commas or semicolons as delimite
 |--------|---------|----------------|--------------|
 | `upload_dir` | (set by UI) | Used automatically when files are uploaded via the UI | Directory where uploaded files are stored. XLSX files are auto-converted to CSV |
 | `source_dir` | (empty) | Set to a server path when external tools drop CSV files on a schedule | Absolute path to folder containing CSV files. Leave empty if using upload only |
-| `file_pattern` | `*.csv` | Change to `jobs-*.csv` to match specific filenames, or `*.xlsx` for Excel files | Glob pattern for filenames to process |
+| `file_pattern` | `*.csv` | Change to `jobs-*.csv` to match specific filenames. Do NOT point it at raw `.xlsx` files -- the module parses matched files as CSV text; Excel files are only supported via UI upload, which converts them to CSV first (matched by the default `*.csv`) | Glob pattern for filenames to process |
 | `column_map` | see below | Change when your CSV columns don't match the defaults (e.g. `"job_url"` instead of `"url"`) | Maps pipeline field names to CSV column headers |
 | `source_label` | `linkedin` | Set to describe the data source -- `"adzuna"`, `"manual"`, `"company-list"` | Value for the `source` field on output items. Used in externalId prefix |
 | `skip_processed` | `true` | Set to `false` to re-import all files every run (useful during development) | Tracks which files have been read via a `.processed` file in the source directory |
@@ -173,8 +173,9 @@ The `source` field tracks data origin throughout the pipeline, so downstream mod
 
 - **Step:** 1 (Discovery)
 - **Category:** search
-- **Cost:** cheap -- no network I/O, pure file reading
-- **Data operation:** transform (=) -- CSV rows converted to pipeline items
+- **Cost:** cheap -- 2-minute timeout; no network I/O, pure file reading
+- **Data operation:** add (+) -- imported rows are added to the pool as new items, keyed by `url`. Re-running replaces this module's own prior output but preserves items from other discovery modules
+- **Pool precondition:** `empty_ok` -- runs against an empty pool (it's a seed/discovery module; the pool check never skips it)
 - **Required input columns:** `name` (entity name, enforced by skeleton)
 - **Depends on:** nothing (first in pipeline)
 - **Input:** `input.entities[]` with entity names. CSV data comes from files, not entities
@@ -182,5 +183,5 @@ The `source` field tracks data origin throughout the pipeline, so downstream mod
 - **Selectable:** items are selectable in the UI for review before approval
 - **Error handling:** Per-file errors are caught and logged; other files continue. Missing directories produce an error result. Partial results saved after each file for timeout resilience
 - **External dependencies:** Node.js `fs` and `path` (built-in). No npm packages
-- **Column aliases:** The skeleton applies aliases before this module runs -- `"company name"`, `"brand"`, `"operator"` all resolve to `name`; `"website"`, `"domain"`, `"homepage"` resolve to `website`
+- **Column matching:** exact lowercased lookup against `column_map` only -- the skeleton's column-alias system does NOT apply to files this module reads (it covers Step-0 entity imports). Unmapped headers yield empty fields; rows without a `url` value are silently skipped
 - **Files:** `manifest.json`, `execute.js`

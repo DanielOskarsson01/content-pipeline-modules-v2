@@ -1,4 +1,4 @@
-## LinkedIn Post Scraper
+# LinkedIn Post Scraper
 
 > Fetch recent LinkedIn posts via the Profile API. Three modes: `posts` (Voyager, personal profiles), `post_engagers` (Voyager + commenter data), `feed_posts` (DOM scraping for company pages, groups, and personal feeds).
 
@@ -19,7 +19,7 @@ Seed CSV with linkedin column / linkedin-profile-scraper output
 linkedin-post-scraper (this module)
     |  calls Profile API GET /api/posts/:slug?count=N
     |  structured post data with engagement metrics
-content-analyzer (Step 4) / content-writer (Step 5)
+content-filter (Step 4) / content-analyzer, content-writer (Step 5)
 ```
 
 ### Architecture
@@ -67,13 +67,13 @@ Same as linkedin-profile-scraper:
 - Posts are mostly image-heavy (short captions) -- lower `min_word_count` to 0-5
 - You need deep topic analysis -- raise `posts_per_profile` to 20-25
 
-**Note:** `posts` and `post_engagers` modes work with **personal profiles only** (`/in/` URLs). Company pages return 403 from Voyager. Use `feed_posts` mode for company pages and groups — it uses DOM scraping instead.
+**Note:** `posts` and `post_engagers` modes work with **personal profiles only** (`/in/` URLs). Company pages return 403 from Voyager. Use `feed_posts` mode for company pages and groups -- it uses DOM scraping instead.
 
 ### post_engagers Mode (v1.1.0)
 
 Extends `posts` mode by fanning out to fetch commenter data for each post. For every post fetched, makes 1 additional API call to get commenters via `GET /api/post-comments/:activityId`.
 
-- Posts are sorted by `engagement_total` descending before fan-out — the most-engaged posts get processed first
+- Posts are sorted by `engagement_total` descending before fan-out -- the most-engaged posts get processed first
 - Each post gets an `engagers` object with `commenters[]`, `reactors[]` (empty), `resharers[]` (empty), and `completeness` metadata
 - **Reactors unavailable:** LinkedIn removed the reactions list modal (SDUI migration, May 2026). Reaction counts are still available from the feed response, but individual reactor identities are permanently unavailable.
 - **Resharers unavailable:** LinkedIn Voyager has no list-resharers endpoint
@@ -84,7 +84,8 @@ Extends `posts` mode by fanning out to fetch commenter data for each post. For e
 Scrapes posts from company pages, group feeds, or personal activity feeds using DOM scraping via CDP. Does **not** use Voyager, so it works where Voyager returns 403.
 
 - Entity `linkedin`/`linkedin_url` accepts `/company/`, `/groups/`, and `/in/` URLs
-- Auto-detects feed type from the URL
+- Auto-detects feed type from the URL. Bare slugs (no URL) need an explicit `feed_type` field on the entity (`company`, `group`, or `profile`) -- invalid values skip the entity with a warning
+- Always reads from entity fields -- the `source` option is ignored in this mode (`profile_scraper` is posts/post_engagers only)
 - Each feed costs 1 API call but takes 30-120s (Chrome scrolls to load posts)
 - Supports up to 200 posts per feed
 - Output includes: post text, engagement counts, reaction type icons, post format, shared article info, hashtags, author info
@@ -184,7 +185,7 @@ source: profile_scraper
 - `post_id` -- LinkedIn's internal post ID (unique key)
 - `linkedin_slug` -- the profile slug this post belongs to
 - `author_name` -- display name from the profile
-- `posted_at` -- ISO timestamp extracted from LinkedIn's Snowflake ID
+- `posted_at` -- ISO timestamp as returned by the Profile API (extracted from LinkedIn's Snowflake ID)
 - `post_type` -- `text`, `article`, `image`, `carousel`, `video`, `poll`, `reshare`, `unknown`
 - `text` -- full post text content
 - `text_preview` -- first 200 characters (for table display)
@@ -197,14 +198,16 @@ source: profile_scraper
 - `mentions` -- array of mentioned profile slugs
 - `is_reshare` -- whether this is a repost of someone else's content
 - `original_author_slug` -- if reshare, the original author's slug
-- `source_type` -- how this post was scraped: `voyager` (posts/post_engagers modes) or `dom` (feed_posts mode)
-- `found_via` -- slug/identifier of the profile or feed that produced this post
+- `source_type` -- `linkedin_post` (posts/post_engagers modes) or the feed type `company`/`group`/`profile` (feed_posts mode)
+- `found_via` -- which scraper path produced this item: `linkedin_post_scraper` (posts), `linkedin_post_engager_scraper` (post_engagers), `linkedin_feed_scraper` (feed_posts)
 - `engagers` -- (post_engagers mode only) object with `commenters[]`, `reactors[]`, `resharers[]`, and `completeness` metadata. Each commenter has `slug`, `name`, `headline`, `comment_text`, `commented_at`, `likes`
 - `status` -- `success` or `error`
 - `error` -- error message if status is error, null otherwise
 
+**feed_posts-only fields:** `post_url`, `author_slug`, `source_slug`, `posted_at_activity`, `has_image`/`has_video`/`has_document`/`has_poll`, `reaction_types_visible` (which reaction icons appear, not per-type counts), `mentioned_companies` (people mentions stay in `mentions`), `shared_article_url`, `shared_article_title`
+
 **Warning signs:**
-- `voyager_status: "session_expired"` in summary -- re-login via VNC
+- `voyager_status: "session_expired"` in summary (posts mode; other modes say "API unavailable" in the description) -- re-login via VNC
 - All profiles returning errors -- Profile API down or Chrome not running
 - Many posts filtered (0 posts with >= N words) -- lower `min_word_count` or profiles post mostly images
 - Circuit breaker triggered -- 3+ consecutive failures, likely session issue
@@ -248,6 +251,7 @@ source: profile_scraper
 - **Post count varies** -- LinkedIn may return fewer posts than requested for some profiles
 - **Voyager queryId rotation** -- LinkedIn periodically rotates the GraphQL queryId. When posts return 404/400, use the discovery script on Hetzner to find the new queryId (see Profile API README)
 - **Reshare text** -- for reshared posts, the `text` field contains the resharer's commentary, not the original post content
+- **feed_posts: no reshare detection** -- `is_reshare` is always `false` and `original_author_slug` always null in feed_posts mode; reshare detection is Voyager-only
 
 ---
 
@@ -268,9 +272,11 @@ The `text` field is stored via `downloadable_fields` in `submodule_run_item_data
 
 - **Step:** 3 (Scraping)
 - **Category:** linkedin
-- **Cost:** medium
+- **Cost tier:** medium -- 5-minute execution timeout; budget feed_posts runs accordingly (30-120s per feed)
 - **Data operation:** add (+) -- produces new post items
+- **Pool precondition:** `requires_items` -- entities whose pool is empty are marked `skipped_no_input` (not failed) and this module does not run for them; entities with pool items proceed normally
 - **Item key:** `post_id`
+- **Required input columns:** none (`requires_columns: []`)
 - **Depends on:** none (reads from entity fields by default)
 - **Input:** `input.entities[]` with `linkedin` or `linkedin_url` field
 - **Output:** `{ results[], summary }` grouped by entity_name
