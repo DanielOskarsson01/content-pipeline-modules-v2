@@ -18,6 +18,7 @@
 
 // Shared canonical marker grammar (W1.5) — same parser the Step 8 bundlers use.
 const { extractHeadingMarkers } = require('../../_shared/marker-parser.js');
+const { analyzePromptInputs, warnPromptInputs } = require('../../_shared/prompt-input-guard.js');
 
 /**
  * Tone style instruction sets.
@@ -452,6 +453,13 @@ async function execute(input, options, tools) {
       // branches ignore cache_prefix and would silently DROP the stable head
       // (adversarial-review finding); other providers get the plain single
       // prompt, byte-identical to pre-1.3.0 behavior.
+
+      // Prompt-input guard (BACKLOG #63, warn-only for the editor): this module's
+      // primary placeholder is {content_markdown}; the {doc:} conditions match.
+      const pig = analyzePromptInputs(promptTemplate, reference_docs, 'content_markdown');
+      warnPromptInputs(logger, entity.name, pig);
+      if (pig.missingPrimary) logger.warn(`[prompt-input-guard] ${entity.name}: prompt has no {content_markdown} placeholder — the content to edit would be discarded (the model edits nothing).`);
+
       const { prompt, cachePrefix, splitReason } = ai_provider === 'anthropic'
         ? buildCachedPrompt(promptTemplate, truncatedMarkdown, keywordTargets, toneInstructions, reference_docs)
         : { prompt: buildPrompt(promptTemplate, truncatedMarkdown, keywordTargets, toneInstructions, reference_docs), cachePrefix: '', splitReason: 'non_anthropic_provider' };

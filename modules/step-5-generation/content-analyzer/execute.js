@@ -10,6 +10,8 @@
  * Data operation: ADD (+) — appends analysis alongside existing pool items.
  */
 
+const { analyzePromptInputs, warnPromptInputs } = require('../../_shared/prompt-input-guard.js');
+
 /**
  * Assemble all scraped page content for an entity into a single text block.
  * Each page is separated with a header showing URL and title.
@@ -523,6 +525,13 @@ async function execute(input, options, tools) {
 
       // Assemble all page content
       const entityContent = assembleEntityContent(items, max_content_chars);
+
+      // Prompt-input guard (BACKLOG #63, warn-only for the analyzer): surface
+      // inputs the {entity_content}+{doc:} assembly would drop SILENTLY — same
+      // shape as content-writer. The analyzer warns (does not fail).
+      const pig = analyzePromptInputs(promptTemplate, reference_docs, 'entity_content');
+      warnPromptInputs(logger, entity.name, pig);
+      if (pig.missingPrimary) logger.warn(`[prompt-input-guard] ${entity.name}: prompt has no {entity_content} placeholder — the assembled scraped content would be discarded (the model analyzes from instructions alone).`);
 
       // Build prompt; split the stable reference-doc prefix for Anthropic prompt
       // caching (BACKLOG #21). cachePrefix + prompt is byte-identical to the old

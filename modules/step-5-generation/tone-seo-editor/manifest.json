@@ -2,7 +2,7 @@
   "id": "tone-seo-editor",
   "name": "Tone & SEO Editor",
   "description": "Post-writing editing pass that refines content for tone and SEO keyword integration. Takes content-writer markdown and seo-planner keyword targets, applies conservative edits: keyword placement in headings and body, sentence clarity, tone, subheadings and bullets. Module-level default is content-type-agnostic; vertical/brand framing layers on via operator-authored presets or template-level prompt overrides. Runs AFTER content-writer as a separate refinement step.",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "step": 5,
   "category": "generation",
   "cost": "medium",

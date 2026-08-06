@@ -119,6 +119,7 @@ The difference between content-writer with and without reference docs is the dif
 | `requires_prompt_override` | false | Set true on templates whose downstream steps depend on pipeline-specific output shape (company-profile bracket headings, news lede/quotes structure, podcast episode layout) | Per-template fail-loud flag. When true AND the runtime prompt still equals the manifest default (no override configured), the writer REFUSES the whole run early: every entity gets an error item with a clear message, and the summary reads "refused: template requires prompt override". Default false keeps the generic manifest prompt a valid run path |
 | `allowed_slug_paths` | (empty) | Populate on templates whose prompt uses bracket headings like `[Category: <slug>]` -- anchors the model against inventing slug values | Optional closed vocabulary. One entry per line, `<BracketLabel>=<dot.notation.path>`; `field.sub[].leaf` walks arrays; repeated labels concatenate; `#` lines and blanks ignored (max 4,000 chars). When set, the writer extracts per-entity slug lists from `analysis_json` and prepends an `=== ALLOWED SLUGS FOR THIS ARTICLE ===` block to the entity content. Leave empty for content types without slug brackets (cover letters, news articles, podcast pages) -- behavior is then unchanged |
 | `require_slug_paths` | false | Set true on templates whose output DEPENDS on the closed vocabulary, so a missing/empty analysis fails loud | Only relevant when `allowed_slug_paths` is configured. When false, zero resolved slugs for an entity logs a WARNING and proceeds without the closed-vocabulary block (the model may then emit invalid slugs). When true, that same condition HARD-FAILS the entity (status `error`). No effect when `allowed_slug_paths` is empty |
+| `allow_missing_entity_content` | false | Set true ONLY for a deliberately source-free prompt (rare) | Prompt-input guard (BACKLOG #63). When false (default) and the prompt has no `{entity_content}` placeholder, the writer REFUSES the entity: the assembled analysis + SEO plan + scraped sources would be silently discarded and the model would write from instructions alone (the "green but empty" class). Set true to override. Independent of this flag, the three doc-related silent-drop conditions always WARN (see Prompt-input guard below) |
 | `prompt` | (generic writing template) | Customize for different content types (bios vs profiles vs reviews), different section requirements, or different citation formats. Presets enabled | The full LLM writing instruction. Uses `{entity_content}` for the assembled analysis+plan+sources block and `{doc:filename}` for reference docs (unmatched `{doc:}` tokens are stripped). The default is deliberately pipeline-agnostic: it forbids topic/structure decisions (upstream owns those), demands `[#n]` citations, markdown-only output, no invented facts, and closed-vocabulary slug compliance when an ALLOWED SLUGS block is present |
 
 The two highest-leverage options are `ai_model` (prose floor) and `reference_docs` (voice + structure). The most common mistake is lowering `max_tokens` to "save cost" -- on Claude-5 models the thinking tokens eat the budget invisibly and the fail-closed truncation guard turns the saving into a failed run.
@@ -238,6 +239,26 @@ Note: on the openai run there is no prompt caching and no thinking control -- bo
 ## What Happens Next
 
 After the user reviews and approves the written content, articles enter the working pool with `source_submodule: "content-writer"`. Step 6 QA checkers verify the article (citations, keywords, hallucination, structure); Step 8 bundlers (markdown-output, html-output, json-output) format `content_markdown` for delivery, and meta-output ships the resolved planned meta. The approved content_markdown is the deliverable -- copy it, import it, or let the Step 8/9 delivery chain package it.
+
+## Prompt-input guard (v1.9.0, BACKLOG #63)
+
+The `{entity_content}` + `{doc:filename}` assembly drops inputs *silently* in four
+ways. Before the model call the writer runs a guard (shared with content-analyzer,
+seo-planner and tone-seo-editor via `modules/_shared/prompt-input-guard.js`) that
+surfaces each. Every log line is prefixed `[prompt-input-guard]` and names the
+entity, so a later forensic can grep exactly which entity dropped which input:
+
+| Condition | What is dropped | Behaviour |
+|-----------|-----------------|-----------|
+| **Missing `{entity_content}`** | The whole assembled analysis + SEO plan + scraped sources — the model writes from instructions alone (the "green but empty" class) | **Fails closed** (entity `error`, no LLM call) unless `allow_missing_entity_content: true` |
+| **Unmatched `{doc:x}`** | A `{doc:x}` placeholder with no matching reference doc — stripped to empty; the model never sees `x` | **Warn**, names the placeholder |
+| **Attached-but-uninjected doc** | A reference doc is attached but no `{doc:x}` placeholder injects it | **Warn**, names the doc |
+| **Named-but-not-injected doc** | A doc filename appears in the prompt *prose* with no `{doc:x}` placeholder (heuristic — a prompt may legitimately mention a filename) | **Warn**, names the file |
+
+This is the exact failure the 2026-07-27 `df68a5f0` variant hit: its prose named
+`format_spec.md` and `tone_guide.md` as "binding and authoritative" but carried no
+`{doc:}` placeholder, so the model wrote against a spec it never saw. A prompt that
+injects every referenced doc and includes `{entity_content}` logs nothing new.
 
 ## Prompt caching (v1.7.0, BACKLOG #21)
 

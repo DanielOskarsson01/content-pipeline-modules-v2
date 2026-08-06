@@ -26,6 +26,7 @@
 
 const MANIFEST = require('./manifest.json');
 const MANIFEST_DEFAULT_PROMPT = MANIFEST.options_defaults.prompt;
+const { analyzePromptInputs, warnPromptInputs } = require('../../_shared/prompt-input-guard.js');
 
 /**
  * Replace prompt placeholders with actual content.
@@ -380,7 +381,7 @@ function resolveMetaFromPlanner(plannerItem, entityName) {
 
 async function execute(input, options, tools) {
   const { entities } = input;
-  const { ai_model, ai_provider, prompt: promptTemplate, reference_docs, max_source_chars, temperature, max_tokens, disable_thinking, allowed_slug_paths, requires_prompt_override, require_slug_paths } = options;
+  const { ai_model, ai_provider, prompt: promptTemplate, reference_docs, max_source_chars, temperature, max_tokens, disable_thinking, allowed_slug_paths, requires_prompt_override, require_slug_paths, allow_missing_entity_content } = options;
   const { logger, progress, ai } = tools;
 
   const maxChars = max_source_chars || 100000;
@@ -509,6 +510,42 @@ async function execute(input, options, tools) {
         continue;
       }
       logger.warn(`${entity.name}: ${msg}`);
+    }
+
+    // Prompt-input guard (BACKLOG #63): surface inputs the {entity_content} +
+    // {doc:} assembly would drop SILENTLY. The three doc conditions warn (a
+    // prompt may legitimately name or omit a doc). Missing {entity_content} is
+    // the severe "green but empty" case — the assembled analysis + plan +
+    // sources would be discarded and the model would write from instructions
+    // alone — so it FAILS CLOSED unless allow_missing_entity_content opts out.
+    const promptInputFindings = analyzePromptInputs(promptTemplate, reference_docs, 'entity_content');
+    warnPromptInputs(logger, entity.name, promptInputFindings);
+    if (promptInputFindings.missingPrimary) {
+      const msg = `prompt has no {entity_content} placeholder — the assembled analysis + plan + ${scrapedItems.length} source page(s) would be discarded and the model would write from instructions alone (the "green but empty" class).`;
+      if (allow_missing_entity_content === true) {
+        logger.warn(`[prompt-input-guard] ${entity.name}: ${msg} Proceeding because allow_missing_entity_content is set.`);
+      } else {
+        const errMsg = `${msg} Refusing — add {entity_content} to the prompt, or set allow_missing_entity_content=true for a deliberately source-free prompt.`;
+        logger.error(`[prompt-input-guard] ${entity.name}: ${errMsg}`);
+        errors.push(`${entity.name}: ${errMsg}`);
+        results.push({
+          entity_name: entity.name,
+          items: [{
+            entity_name: entity.name,
+            status: 'error',
+            word_count: 0,
+            section_count: 0,
+            has_citations: false,
+            meta_title: '',
+            content_preview: '',
+            content_markdown: '',
+            error: errMsg,
+          }],
+          meta: { status: 'error' },
+        });
+        if (tools._partialItems) { tools._partialItems.length = 0; tools._partialItems.push(...results.flatMap(r => r.items)); }
+        continue;
+      }
     }
 
     try {

@@ -21,6 +21,7 @@
 const MANIFEST = require('./manifest.json');
 const MANIFEST_DEFAULT_PROMPT = MANIFEST.options_defaults.prompt;
 const { fetchKeywordData, deriveSeedKeywords, renderKeywordMetricsTable } = require('./keyword-data-providers.js');
+const { analyzePromptInputs, warnPromptInputs } = require('../../_shared/prompt-input-guard.js');
 
 /**
  * Replace prompt placeholders with actual content.
@@ -801,6 +802,12 @@ async function execute(input, options, tools) {
       const analysisContent = analyzerItem.analysis_json
         ? JSON.stringify(analyzerItem.analysis_json, null, 2)
         : JSON.stringify(analyzerItem, null, 2);
+
+      // Prompt-input guard (BACKLOG #63, warn-only for the planner): surface
+      // inputs the {entity_content}+{doc:} assembly would drop SILENTLY.
+      const pig = analyzePromptInputs(promptTemplate, reference_docs, 'entity_content');
+      warnPromptInputs(logger, entity.name, pig);
+      if (pig.missingPrimary) logger.warn(`[prompt-input-guard] ${entity.name}: prompt has no {entity_content} placeholder — the analysis JSON would be discarded (the model plans from instructions alone).`);
 
       // Split the stable template head for Anthropic prompt caching (BACKLOG
       // #21). cachePrefix + prompt is byte-identical to the old single prompt.

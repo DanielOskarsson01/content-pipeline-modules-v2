@@ -596,3 +596,7 @@ template** -- the current company-profile template has them after
 - **Error handling:** Per-entity. `requires_prompt_override` refusal fires before any research; missing analysis input, LLM failures, JSON parse errors (one corrective retry, then loud fail preserving `rawText`), and hollow plans (content gate) all emit `meta.status:'error'` for that entity. Entities without content-analyzer items get clear error: "No content-analyzer output found. Run content-analyzer first."
 - **Dependencies:** `tools.ai` (LLM calls + Perplexity Sonar for keyword research), `tools.http` (keyword-data providers), `tools.logger`, `tools.progress`
 - **Files:** `manifest.json`, `execute.js`, `keyword-data-providers.js`
+
+## Prompt-input guard (v2.4.1, BACKLOG #63)
+
+Warn-only. Before the model call this module runs the shared guard (`modules/_shared/prompt-input-guard.js`, same as content-writer) over its prompt template. It emits a `[prompt-input-guard]` warning naming the entity when: the prompt has no `{entity_content}` placeholder (the analysis JSON would be discarded and the model would run on instructions alone); a `{doc:x}` placeholder has no matching reference doc (stripped to empty); an attached reference doc has no placeholder to inject it; or a doc filename is named in prose with no placeholder. Unlike content-writer, this module never fails closed on a missing primary placeholder — it warns and proceeds. A prompt that injects every referenced doc and includes `{entity_content}` logs nothing new.
