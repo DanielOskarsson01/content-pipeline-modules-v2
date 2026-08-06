@@ -3,7 +3,7 @@
 > Find company logos, OG images, team photos, product screenshots, and award badges by fetching key pages from company websites.
 
 **Module ID:** `company-media` | **Step:** 8 (Bundling) | **Category:** media | **Cost:** medium
-**Version:** 2.0.0 | **Data Operation:** transform (=)
+**Version:** 2.0.0 | **Data Operation:** add (+)
 
 ---
 
@@ -17,22 +17,22 @@ This module automates visual asset discovery: it fetches the homepage and key in
 
 ### How It Fits the Pipeline Architecture
 
-This is a Step 8 Bundling module -- but unlike the other four output modules, it does not primarily consume `content_markdown`. Instead, it uses **data-shape routing** to find `analysis_json` (for deriving the homepage URL from source citations) and the `website` field on the entity itself. It independently fetches pages from the company's website using `tools.http`.
+This is a Step 8 Bundling module -- but unlike the other five Step 8 modules, it does not primarily consume `content_markdown`. Instead, it uses **data-shape routing** to find `analysis_json` (for deriving the homepage URL from source citations; the most recent analysis item in the pool is used) and the `website` field on the entity itself. It independently fetches pages from the company's website using `tools.http`.
 
 The module is classified as **medium** cost -- the only Step 8 module that is not cheap. This reflects the HTTP requests required to fetch homepage + up to 7 subpages and validate all discovered image URLs.
 
-Important limitation: this module only searches the company's own website. It does not search Google Images, LinkedIn, or external sources. A future multi-source image pipeline (documented in MEMORY.md backlog) would extend this to external sources.
+Important limitation: this module only searches the company's own website. It does not search Google Images, LinkedIn, or external sources. A future multi-source image pipeline would extend this to external sources.
 
 ## Strategy & Role
 
 **Why this module exists:** Automate visual asset discovery from company websites. Find logos, team photos, product screenshots, and award badges without manual browsing. Score and rank logo candidates to prefer usable variants (dark, horizontal, SVG).
 
-**Role in the pipeline:** One of five Step 8 output modules. The only module that makes fresh HTTP requests to discover content not already in the pipeline. All other Step 8 modules transform existing pool data.
+**Role in the pipeline:** One of six Step 8 modules. The only one that makes fresh HTTP requests to discover content not already in the pipeline. All other Step 8 modules work from existing pool data.
 
 **Relationship to other steps:**
 - **No hard dependencies** -- can run with or without prior pipeline steps
 - **Optionally uses:** analysis_json source_citations to derive homepage URL when `website` field is missing
-- **Sibling modules:** markdown-output, html-output, json-output, meta-output
+- **Sibling modules:** markdown-output, html-output, json-output, meta-output, schema-org-injector
 
 ## When to Use
 
@@ -54,7 +54,9 @@ Important limitation: this module only searches the company's own website. It do
 | `find_product_screenshots` | true | Disable if product images are not needed | Fetches /products, /solutions, /platform pages and extracts large images classified as product/software screenshots |
 | `find_awards` | true | Disable if award badges are not needed | Looks for award/certification/compliance images on both award pages and the homepage |
 | `validate_urls` | true | Disable for faster processing (skip HEAD request verification) | Sends HEAD requests to every discovered image URL. Removes broken links from output. Processes in batches of 5 |
-| `max_pages_per_entity` | 8 | Lower to 3-4 for quick scans; raise to 15-20 for large corporate sites | Total pages fetched per entity (homepage + subpages). More pages = more images found but slower processing |
+| `max_pages_per_entity` | 8 | Lower to 1 for a homepage-only logo scan; lower to 3-4 for quick scans; 9 is the effective ceiling | Total pages fetched per entity (homepage + subpages). Manifest allows up to 20, but subpage discovery is capped per category (3 team + 3 products + 2 awards), so values above 9 fetch nothing extra |
+
+The most impactful option is `max_pages_per_entity`: at the default 8, one candidate subpage is dropped when all three categories are enabled and fully populated; set 9 for full coverage. Disabling a `find_*` toggle removes that category's subpages from the fetch list entirely, so the remaining categories get their pages sooner. Disabling `validate_urls` is the main speed lever but risks broken image links in the output.
 
 ## Recipes
 
@@ -81,14 +83,14 @@ max_pages_per_entity: 1
 ```
 
 ### Deep Scan (Large Sites)
-Maximum coverage for comprehensive media libraries:
+Maximum coverage for comprehensive media libraries (9 is the effective maximum -- homepage + 3 team + 3 products + 2 awards pages):
 ```
 find_logo: true
 find_team_photos: true
 find_product_screenshots: true
 find_awards: true
 validate_urls: true
-max_pages_per_entity: 15
+max_pages_per_entity: 9
 ```
 
 ### Fast Scan (No Validation)
@@ -132,6 +134,8 @@ max_pages_per_entity: 5
 - -5: white/light/reversed/inverted in URL; favicon.ico
 - -3: icon without logo; width < 32px
 
+If the top-scored logo fails HEAD validation, the next validated variant is promoted (or `logo_url` is left empty if none validate). The favicon/apple-touch-icon fallback applies only when no logo-signal images were found at all.
+
 **Subpage categories searched:**
 - Team: /about, /team, /leadership, /people, /management, /our-team, /staff, /executives, /founders, /who-we-are
 - Products: /products, /solutions, /platform, /services, /software, /features, /demo, /tools, /technology
@@ -151,7 +155,7 @@ max_pages_per_entity: 5
 - **Logo scoring favors dark variants** -- by design, for use on light backgrounds. If your platform uses a dark background, the scoring is inverted from what you need
 - **Favicon as fallback** -- if no logo images are found, the apple-touch-icon or favicon is used as a last resort. These are typically small (16-180px) and low quality
 - **Team photo detection relies on patterns** -- looks for names in alt text (two+ capitalized words) and team-related CSS classes. Photos without descriptive alt text will be missed
-- **Homepage URL derivation** -- if the entity has no `website` field, the module attempts to derive the homepage from source_citations in analysis_json by counting the most common origin domain
+- **Homepage URL derivation** -- if the entity has no `website` field, the module attempts to derive the homepage from source_citations in the most recent `analysis_json` pool item by counting the most common origin domain
 
 ## What Happens Next
 
@@ -169,11 +173,13 @@ The detail view provides image grids for each media type (team photos, screensho
 - **Step:** 8 (Bundling)
 - **Category:** media
 - **Cost:** medium
-- **Data operation:** transform (=) -- media URLs discovered from entity websites
+- **Data operation:** add (+) -- adds one media-profile item per entity, keyed by `entity_name`; re-runs replace this module's own prior output without touching other modules' items
+- **Pool precondition:** `requires_items` -- entities with an empty pool are marked `skipped_no_input` (not failed) before execution; other entities proceed normally
 - **Requires columns:** none (reads from pool items and entity fields)
 - **Depends on:** none (can run independently)
 - **Input:** `input.entities[]` with `website` field and/or `items[]` containing `analysis_json`
 - **Output:** `{ results[], summary }` where each result has `entity_name`, `items[]` with media URLs, counts, and status
+- **Error handling:** page fetches fail soft (an unreachable page yields no images, run continues); a thrown error for an entity records `error` on that entity's result with empty items while other entities proceed; each successfully-completed entity's items are pushed to `tools._partialItems` so a timeout/abort preserves already-processed entities (the error path does not push)
 - **Selectable:** true -- operators can deselect individual entity outputs
 - **Flagged when:** `status` is `no_media` (highlighted in the table)
 - **Detail view:** header fields (entity_name, status badge, logo_url image, counts) and image/image_grid sections for each media type plus prose summary

@@ -67,6 +67,11 @@ Tasks not yet scheduled for implementation.
 | 57 | **api-search and api-fetcher provider schemas have diverged** (modules repo, design tension) — api-search: `query_param` \| `bearer` \| `{env:VAR}` headers map. api-fetcher: `none` \| `query_param` \| `header` (raw) \| `bearer` (added v1.1.0) \| `basic` — still no header-map interpolation. Two ways to express one concept (provider auth + request shape), drifting apart. Rule 4 (self-contained modules, no cross-module imports) means the honest fix is a **decision** (converge on one provider-config schema, or accept the split deliberately), NOT a shared-code refactor. Record the tension; do not resolve it here. Related: [[Item 48]] (api-search custom-header auth). | Low-medium (design debt; nothing broken) | 2026-07-17 |
 | 58 | **Per-provider spend guardrail** (modules + skeleton) — paid dataset/API providers bill per call and neither api-search nor api-fetcher has a cost cap. A real run on 2026-07-16 hit **$0.72** before being aborted and was heading past **$6 on a $5 credit** — one greedy target starves everything else. NOT an expressibility blocker (the engines work); an **operational** gap that bites the moment paid providers go live. Needs a per-provider (and/or per-run) spend ceiling that fail-stops before the credit is exhausted. Cross-ref [[Item 56]] (dataset providers are the first paid-per-call case). | Medium (operational; blocks safe paid-provider rollout) | 2026-07-17 |
 | 59 | **Local `.env` and Hetzner prod `.env` are SEPARATE files — deploy never syncs them** (process hazard; both repos) — `deploy.sh`'s `rsync --delete` **excludes `.env`**, so a key present/absent locally says NOTHING about prod. A session that greps the local `.env` and reports on prod produces a confident **false negative**. This already happened: the 2026-07-16 Bright Data "BLOCKED" verdict was a local check reported as a prod fact. Rule: to know a prod env var, read it **on the box** (SSH `/opt/.../.env`), never infer from local. Sibling of the "verify-before-assume" discipline and the stale-`build-info` md5 lesson. | High (recurring false-negative source) | 2026-07-17 |
+| 60 | **page-links: `trkCampaign` tracking param never stripped** (modules repo, bug) — `TRACKING_PARAMS` stores the entry camelCase (`execute.js:206`) but the membership check lowercases the key first (`:222`), so `trkcampaign` never matches and `?trkCampaign=` params survive into the pool. One-char fix (lowercase the set entry). Surfaced by the 2026-08 README sync. | Low (cosmetic URL noise) | 2026-08-06 |
+| 61 | **url-filter: `_partialItems` pushed only at the very end** (modules repo, bug) — the single `tools._partialItems.push` sits immediately before the final return (`execute.js:281`), so a timeout/abort during the HEAD sweep or browser-retry loop (the only time partial-save matters) saves NOTHING. Violates Rule 10 (push after each successful batch). | Medium (timeout data-loss on the exact runs where it matters) | 2026-08-06 |
+| 62 | **url-canonicalizer: redirect-alias pool rows stranded under `transform`** (modules repo, bug) — the module dedups its own OUTPUT (`execute.js:117-129`) but `transform` semantics only replace pool rows whose key/`original_url` is in that output; a dropped alias's row is left untouched, so its stale pre-redirect URL survives alongside the canonical one. README claim "one row per canonical destination" corrected; the code gap remains. | Medium (stale duplicate URLs survive Step 2) | 2026-08-06 |
+| 63 | **content-writer: template missing `{entity_content}` silently drops entity content + logs nothing** (modules repo, bug) — the `no_placeholder` split path (`execute.js:85`) sets `cachePrefix=''` and `logCacheSplit` only logs `diverged`/`multiple_placeholders` (`:95-97`), so a template whose prompt omits `{entity_content}` yields generic output with NO warning line and no scraped content in the model input. | Medium (silent generic output; hard to diagnose) | 2026-08-06 |
+| 64 | **Stale `execute.js` data-operation header comments** (modules repo, doc-in-code) — hallucination-detector (`:9`) and meta-compliance-checker (`:7`) header comments say `TRANSFORM (=)` while the manifest + README correctly say `add (+)`. Comment-only; no behavior impact. Trivial fix. | Low (misleading comment) | 2026-08-06 |
 
 ---
 
@@ -2079,3 +2084,65 @@ A session that greps the **local** `.env` and reports a conclusion about **prod*
 
 ### Rule
 To know a production env var, read it **on the box** (`ssh … cat /opt/.../.env` or the running process env), never infer it from the local `.env`. Sibling discipline to "verify-before-assume" and the stale-`build-info.json` → md5sum lesson (a deployed file's real state is read at the deployed location, not assumed from local). Cross-ref [[Item 56]] (the Bright Data Datasets key-scope check must be done against prod, not local).
+
+## Item 60 — page-links: `trkCampaign` tracking param never stripped (case-mismatch bug)
+
+**Added:** 2026-08-06 (surfaced by the README sync)
+**Priority:** Low (cosmetic URL noise; no data corruption)
+**Touches:** `modules/step-1-discovery/page-links/execute.js` only.
+
+### Issue
+`TRACKING_PARAMS` (execute.js:201) is meant to list query params stripped from every extracted URL. The entry `'trkCampaign'` (line 206) is stored in camelCase, but the membership test lowercases the key first: `if (TRACKING_PARAMS.has(key.toLowerCase()))` (line 222). `'trkCampaign'.toLowerCase()` = `'trkcampaign'`, which is not in the set, so `?trkCampaign=...` params are never removed and survive into the pool. Every other entry in the set is already lowercase and works.
+
+### Fix
+Lowercase the set entry: `'trkCampaign'` → `'trkcampaign'`. One character. Add a one-line assert/demo that a URL with `?trkCampaign=x` comes out clean.
+
+## Item 61 — url-filter: `_partialItems` pushed only at the end → timeout saves nothing (Rule 10 gap)
+
+**Added:** 2026-08-06 (surfaced by the README sync)
+**Priority:** Medium (loses progress on exactly the runs where partial-save is supposed to help)
+**Touches:** `modules/step-2-validation/url-filter/execute.js`.
+
+### Issue
+The module's only `tools._partialItems.push(...results)` sits at line 281, immediately before the final `return`. It therefore runs only after all filtering and (optional) HTTP status-check phases have completed. On a real timeout or abort mid-run — during the HEAD sweep or the browser-retry loop, which is the only time partial-save matters — the push has never executed and nothing is saved. This violates repo Rule 10 ("push after each successful page fetch, API call, or batch").
+
+### Fix
+Push incrementally: after each status-check batch (or each entity's kept set) push those items to `tools._partialItems`, not once at the end. Cross-ref the same class fixed in url-relevance / scrapers.
+
+## Item 62 — url-canonicalizer: redirect-alias pool rows stranded under `transform` semantics
+
+**Added:** 2026-08-06 (surfaced by the README sync)
+**Priority:** Medium (stale duplicate URLs slip past Step 2 dedup)
+**Touches:** `modules/step-2-validation/url-canonicalizer/execute.js` (+ understanding of skeleton `applyDataOperation` transform semantics).
+
+### Issue
+The module's built-in dedup (execute.js:117-129) removes duplicates from its OWN OUTPUT: when discovery URLs A and B both resolve to canonical C, the output keeps `{url:C, original_url:A}` and drops B's item (`dedupCount++`). But the manifest declares `data_operation_default: "transform"`, and the skeleton's transform (`applyDataOperation.js`) only replaces pool rows whose key or `original_url` appears in the module's output. Because B's item was dropped from the output, B's pool row is never matched → it survives untouched as a stale pre-redirect URL, alongside C. Result: the pool ends with two rows (C and stale B), contradicting the intended "one row per canonical destination."
+
+Ironically, emitting the deduped duplicate (`{url:C, original_url:B}`) instead of dropping it would let transform remove B and let the skeleton's key-based collapse merge the two C rows correctly. The module's output-side dedup is what strands the alias.
+
+### Fix
+Two candidate directions (decision needed): (a) stop dropping redirect duplicates in the module — emit one canonicalized row per input `original_url` and let the skeleton's key-based dedup collapse them; or (b) keep url-dedup positioned to run after canonicalization on redirect-heavy runs. README already corrected to describe the real (best-effort) behavior. Note: overlaps the composite-key `add`/`transform` audit territory (B054).
+
+## Item 63 — content-writer: template missing `{entity_content}` silently drops entity content + logs nothing
+
+**Added:** 2026-08-06 (surfaced by the README sync)
+**Priority:** Medium (silent generic output — hard to diagnose from the pipeline)
+**Touches:** `modules/step-5-generation/content-writer/execute.js`.
+
+### Issue
+The prompt-cache split (execute.js:~80-97) classifies the assembled prompt: when `{entity_content}` occurs exactly once it splits; on reassembly divergence it falls back with `splitReason='diverged'` (logged, :96); on 2+ occurrences `'multiple_placeholders'` (logged, :97). But the ZERO-occurrence case sets `splitReason='no_placeholder'` with `cachePrefix=''` (line 85), and `logCacheSplit` has no branch for `'no_placeholder'` — so it is completely silent. Worse: a template whose prompt lacks `{entity_content}` never injects the scraped entity content into the model input at all, yet the run proceeds and produces generic-looking prose with no warning. An operator debugging a "why is this profile generic?" template gets no signal from logs.
+
+### Fix
+Add a loud branch to `logCacheSplit` (or a pre-flight check) for `no_placeholder`: warn that the template prompt has no `{entity_content}` and that the entity's scraped content is therefore absent from the model input. Consider making it a fail-closed error under a template flag, consistent with the other loud-fail QA gates.
+
+## Item 64 — Stale `execute.js` data-operation header comments (hallucination-detector, meta-compliance-checker)
+
+**Added:** 2026-08-06 (surfaced by the README-sync verification pass)
+**Priority:** Low (misleading comment; zero behavior impact)
+**Touches:** `modules/step-6-qa/hallucination-detector/execute.js:9`, `modules/step-6-qa/meta-compliance-checker/execute.js:7`.
+
+### Issue
+Both files' header block comments declare `Data operation: TRANSFORM (=)`, but the manifest `data_operation_default` is `add` (required for Step 5-10 modules whose `item_key` is `entity_name`, per Rule 12), and both READMEs correctly document `add (+)`. The comment is the only thing wrong — the actual `data_operation_default` field and runtime behavior are `add`. (tone-seo-editor's header comment was checked and is already correct — `ADD (+)`.)
+
+### Fix
+One-line comment correction in each file: `TRANSFORM (=)` → `ADD (+) — appends QA verdicts alongside existing pool items`. No code change.

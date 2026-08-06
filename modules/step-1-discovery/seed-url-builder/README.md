@@ -36,8 +36,9 @@ Each validated URL is tagged with a `path_type` (about, press, careers, complian
 |--------|---------|----------------|--------------|
 | `max_concurrent` | 5 | Raise to 10-20 for fast sites with no rate limiting. Lower to 1-2 for fragile or rate-limited servers | How many paths are checked in parallel per entity. Higher = faster but more aggressive |
 | `request_timeout` | 5000 ms | Raise to 10000-15000 for slow servers or sites behind CDNs. Lower to 2000-3000 for known-fast sites | Maximum time to wait for each HEAD/GET response before giving up on that path |
-| `custom_paths` | (empty) | Add paths for non-English sites (/uber-uns, /entreprise), industry-specific pages (/responsible-gaming/policy), or company-specific sections you know exist | Additional paths to check, one per line. Added to the 28 default paths. Lines starting with # are ignored |
-| `include_redirects` | true | Disable if you only want pages that exist at the exact probed path with no redirect | Whether to keep URLs that returned 2xx after following redirects. Most sites redirect /about to /about-us or similar -- keeping redirects catches these |
+| `custom_paths` | (empty) | Add paths for non-English sites (/uber-uns, /entreprise), industry-specific pages (/responsible-gaming/policy), or company-specific sections you know exist | Additional paths to check, one per line. Added to the 28 default paths. A leading slash is added if missing. Lines starting with # are ignored |
+
+The most impactful option is `custom_paths` -- the default list is English-only, so non-English sites will return near-zero results without it. Note that redirects are followed automatically by the HTTP layer: a path that redirects to an existing page still counts as found (with the probed URL recorded, not the redirect target). There is no option to disable this.
 
 ## Recommended Configurations
 
@@ -47,7 +48,6 @@ Best for most company profile research. Checks all 28 default paths with moderat
 max_concurrent: 5
 request_timeout: 5000
 custom_paths: (empty)
-include_redirects: true
 ```
 
 ### Conservative
@@ -56,7 +56,6 @@ For fragile servers, rate-limited APIs, or sites that block aggressive requests.
 max_concurrent: 2
 request_timeout: 10000
 custom_paths: (empty)
-include_redirects: true
 ```
 
 ### Aggressive
@@ -65,7 +64,6 @@ For large batches of well-known, fast-responding sites. Faster but risks rate li
 max_concurrent: 15
 request_timeout: 3000
 custom_paths: (empty)
-include_redirects: true
 ```
 
 ### iGaming-Specific
@@ -88,14 +86,12 @@ custom_paths:
   /api
   /integration
   /demo
-include_redirects: true
 ```
 
 ## What Good Output Looks Like
 
 **Output fields per URL:**
-- `url` -- the original candidate URL that was probed (e.g. `https://kindredgroup.com/about`)
-- `final_url` -- the URL after redirect following (same as `url` if no redirect occurred)
+- `url` -- the candidate URL that was probed and returned 2xx (e.g. `https://kindredgroup.com/about`). If the server redirected, this is still the probed URL, not the redirect target
 - `path_type` -- category of the path: `about`, `products`, `press`, `news`, `partners`, `careers`, `contact`, `investors`, `resources`, `compliance`, or `custom`
 - `status_code` -- HTTP status code (always 200-299)
 - `found_via` -- whether the URL was validated via `head` or `get_fallback`
@@ -123,7 +119,7 @@ include_redirects: true
 
 Validated URLs enter the Step 1 working pool alongside results from Sitemap Parser, Page Link Extractor, and other discovery modules. The `path_type` field carries through the pipeline -- Step 2's URL Relevance Filter can use it as a strong classification signal. A URL tagged `compliance` from the /responsible-gaming path is almost certainly relevant to a company profile's regulatory section.
 
-Step 2 deduplication will merge any URLs found by both this module and sitemap-parser or page-links. The `found_via` field records how each URL was discovered, which helps operators understand which discovery methods are contributing the most.
+Step 2 deduplication will merge any URLs found by both this module and sitemap-parser or page-links. The `found_via` field records how each URL was validated (`head` for a clean HEAD response, `get_fallback` when the server required a GET) -- useful for spotting servers with restrictive HEAD handling, not for attributing which discovery module found a URL.
 
 ## Technical Reference
 
@@ -131,10 +127,11 @@ Step 2 deduplication will merge any URLs found by both this module and sitemap-p
 - **Category:** website
 - **Cost:** cheap
 - **Data operation:** add (+) -- URLs are added to the working pool on approval
+- **Pool precondition:** `empty_ok` -- works against an empty pool; this is a seed module that produces from external sources, so it always executes
 - **Requires:** `website` column in entity data
 - **Input:** `input.entities[]` -- each entity must have a `website` field
-- **Output:** `results[]` grouped by `entity_name`, each with `items[]` containing `url`, `final_url`, `path_type`, `status_code`, `found_via`
-- **Error handling:** Entities without a `website` field are skipped with a warning. Failed requests per path are silently skipped (partial success pattern). Entity-level errors are caught and reported without stopping other entities
+- **Output:** `results[]` grouped by `entity_name`, each with `items[]` containing `url`, `path_type`, `status_code`, `found_via`
+- **Error handling:** Entities without a `website` field are skipped with a warning. Failed requests per path are silently skipped (partial success pattern). Entity-level errors are caught and reported without stopping other entities. After all entities are processed, the final item list is mirrored to `tools._partialItems` (the skeleton's partial-save channel) for consistency -- note this happens once at the end, not incrementally per entity
 - **Dependencies:** None (uses only `tools.http`, `tools.logger`, `tools.progress`)
 - **Files:** `manifest.json`, `execute.js`, `README.md`, `CLAUDE.md`
 

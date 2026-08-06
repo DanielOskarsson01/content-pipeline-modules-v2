@@ -1,5 +1,7 @@
 # Content Delivery (Step 9 — Distribution)
 
+**Version:** 1.0.0
+
 Delivers each entity's bundled artifact to a configured endpoint.
 
 The code is **pipeline-agnostic (Rule 13)**: it knows HTTP verbs, payload

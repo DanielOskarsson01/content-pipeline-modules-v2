@@ -3,7 +3,7 @@
 > Follows pages found by earlier discovery modules and extracts the links on them -- discovering sub-pages one level deeper than sitemaps and homepage navigation reveal.
 
 **Module ID:** `deep-links` | **Step:** 1 (Discovery) | **Category:** crawling | **Cost:** expensive
-**Version:** 1.0.0 | **Data Operation:** transform (=)
+**Version:** 1.0.0 | **Data Operation:** add (+)
 
 ---
 
@@ -19,7 +19,7 @@ Page Links     → finds key navigation URLs from the homepage
 Deep Links     → visits those URLs and discovers the sub-pages linked from them
 ```
 
-The module filters out junk URLs automatically -- images, CSS, JavaScript files, CDN paths, WordPress admin pages, and other non-content URLs are excluded before output.
+The module filters out junk URLs automatically -- images, CSS, JavaScript files, CDN paths, WordPress admin pages, and other non-content URLs are excluded before output. Discovered URLs are also normalized: fragments (`#section`) and tracking parameters (utm_*, fbclid, gclid, and similar) are stripped, while content-bearing query parameters like pagination (`?page=2`, `?p=3`) are preserved -- so paginated listing pages survive as distinct URLs instead of collapsing into one.
 
 ## When to Use
 
@@ -129,11 +129,14 @@ URLs flow into Step 2 where URL Deduplicator removes duplicates across all disco
 - **Step:** 1 (Discovery)
 - **Category:** crawling
 - **Cost tier:** expensive -- up to 30 min timeout, suitable for large-scale crawling across many entities
-- **Data operation:** transform (=) -- independent results, merged into pool on approval
+- **Data operation:** add (+) -- discovered URLs are added to the pool as new items on approval; sibling modules' items are preserved
+- **Pool precondition:** `requires_items` -- the skeleton skips entities whose pool is empty (`skipped_no_input`, not a failure); the module also self-skips with `skipped_reason: "no pool items"`
 - **Required input columns:** `website`
 - **Depends on:** `sitemap-parser`, `page-links`, `browser-crawler` (needs pool items from at least one)
 - **Input format:** `input.entities[]` with `website` field and `items[]` from working pool
-- **Output format:** `results[]` grouped by `entity_name`, each with `items[]` containing `url`, `found_on`, `link_text`
+- **Output format:** `results[]` grouped by `entity_name`, each with `items[]` containing `url`, `found_on`, `link_text` (anchor text, capped at 200 chars); per-entity output is deduplicated by URL (first occurrence wins)
+- **URL normalization:** Relative URLs resolved against the crawled page; fragments always stripped; tracking parameters (utm_*, fbclid, gclid, msclkid, mc_cid/mc_eid, ref/referrer, _ga/_gl/_hsenc/_hsmi, trk, sc_campaign, etc.) removed; other query parameters (pagination, content ids) preserved. Non-web schemes (mailto:, javascript:, tel:, ftp:, data:) skipped
+- **Fetch behavior:** `tools.http.get` with a 15s per-page timeout; non-2xx responses are logged and skipped
 - **Progressive save:** Pushes to `tools._partialItems` after each page crawl -- timeout preserves partial results
 - **Junk filtering:** Excludes images (.png/.jpg/.gif/.svg/.webp/.ico), media (.mp4/.mp3), documents (.pdf/.zip), fonts (.woff/.ttf/.eot), code (.css/.js), and WordPress/CDN infrastructure paths
 - **Error handling:** Missing pool items = skip (not error). Failed page fetches = warn and continue. Missing `website` = skip with error

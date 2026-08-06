@@ -3,7 +3,7 @@
 > Keyword distribution planner with web-researched keyword data. Selects target keywords and produces meta tags, optional FAQs, and section-level keyword distribution. The manifest default is fully project-agnostic; pipeline-specific shapes (e.g. company-profile section breakdowns) come from template-level prompt overrides.
 
 **Module ID:** `seo-planner` | **Step:** 5 (Generation) | **Category:** planning | **Cost:** expensive
-**Version:** 2.3.1 | **Data Operation:** add (➕)
+**Version:** 2.4.0 | **Data Operation:** add (+)
 
 > **⚠ MODEL FLOOR (inferred by analogy — UNVERIFIED) — recommended minimum model: sonnet.** Daniel's 2026-06 doc-non-compliance test covered content-analyzer, NOT seo-planner. seo-planner shares the same doc-following pattern (it reads `format_spec.md` / `tone_guide.md` and must honor a strict JSON output contract), so the risk that haiku reads its reference docs without complying is plausible here — but it has **not** been reproduced. Treat sonnet as the recommended floor pending a seo-planner-specific test; do not present it as proven. Moving to sonnet also means overriding `max_tokens` to 32,768 — the 16,384 default is haiku-sized (see the manifest `usage_notes`).
 
@@ -26,10 +26,10 @@ The original Content Creation Master described this as Node 6b - Tone & SEO Plan
 SEO Planner is the second submodule in Step 5's chain, sitting between analysis and writing:
 
 ```
-content-analyzer (＝) -> seo-planner (➕) -> content-writer (➕)
+content-analyzer (=) -> seo-planner (+) -> content-writer (+)
 ```
 
-It uses the **add (➕)** data operation - it chains from the working pool, finding content-analyzer output by the `source_submodule` field, and adds its own output alongside. After approval, the pool contains both analysis items and SEO plan items, distinguished by `source_submodule`.
+It uses the **add (+)** data operation - it chains from the working pool, finding content-analyzer output by the `source_submodule` field, and adds its own output alongside. After approval, the pool contains both analysis items and SEO plan items, distinguished by `source_submodule`.
 
 This is the cheapest step in the chain. The input is just the analysis JSON (a few KB), not the full scraped text (50KB+). This makes it safe to re-run multiple times while iterating on keyword strategy without significant cost.
 
@@ -298,7 +298,7 @@ Override the `prompt` option at template level. Patterns:
 
 **Change vertical / audience framing.** The default prompt says nothing about iGaming, B2B, OnlyiGaming, or any other vertical (per the May 22 architectural commitment). To target consumer reviews, B2B operators, job seekers, podcast listeners, etc., specify that context in the template's prompt override. The OnlyiGaming-specific framing for the `30 april` template (company profile generation) lives in that template's `preset_map.seo-planner.fallback_values.prompt`, NOT here.
 
-**Change number of research queries.** The `research_queries` option supports 1-5 queries (per execute.js warning at line 264-266). Template authors edit the `research_queries` value to add/remove query slots; the main prompt's `keyword_sources` schema uses `Q<n>` notation so it adapts to any query count.
+**Change number of research queries.** The `research_queries` option supports 1-5 queries (a cost warning is logged above 5). Template authors edit the `research_queries` value to add/remove query slots -- multi-line queries via `Query N --` markers (with any text before the first marker as shared preamble), or plain one-query-per-line; the main prompt's `keyword_sources` schema uses `Q<n>` notation so it adapts to any query count.
 
 ### Why this pattern?
 
@@ -326,19 +326,27 @@ When changing seo-planner's OUTPUT FORMAT schema in a template prompt override, 
 
 | Option | Default | When to Change | Impact |
 |--------|---------|----------------|--------|
+| `ai_model` | haiku *(recommended floor: sonnet -- inferred/UNVERIFIED)* | Recommended minimum sonnet by analogy to content-analyzer's tested doc-non-compliance finding (not yet tested on seo-planner). haiku for quick iterations only | Which model plans. Registry-driven (`values_from: registry.models`) -- see the registry note below the table. The doc-following risk that broke content-analyzer on haiku plausibly applies here -- see MODEL FLOOR |
+| `ai_provider` | anthropic | Switch for model comparison | Which LLM provider to call. Registry-driven (`values_from: registry.providers`). Prompt caching only engages on `anthropic` -- other providers get the plain uncached prompt (see [Prompt caching](#prompt-caching-v240-backlog-21)) |
 | `keyword_research` | true | Set false to skip web research and reduce cost/latency | When true, runs Perplexity Sonar queries before the planning LLM call |
-| `search_provider` | perplexity | Only `perplexity` supported in v2.0.0 | Controls which search API is used for keyword research |
-| `research_queries` | (3 default queries) | Customize for specific industries, pipelines, or entity types | One query per line. Supports `{entity_name}` and `{entity_context}` placeholders. ≤5 queries recommended |
-| `prompt` | (SEO planning template) | Customize when you need different keyword strategies or industry-specific SEO patterns | The full LLM instruction. Uses `{entity_content}` for analysis JSON, `{keyword_research}` for research results, `{keyword_metrics}` for the quantitative keyword-data table (v2.3.0, opt-in), and `{doc:filename}` for reference docs |
-| `reference_docs` | (none) | Upload format spec, tone guide, or supplemental keyword data | Selected docs injected into prompt at `{doc:filename}` placeholders |
-| `ai_model` | haiku *(recommended floor: sonnet — inferred/UNVERIFIED)* | Recommended minimum sonnet by analogy to content-analyzer's tested doc-non-compliance finding (not yet tested on seo-planner). haiku for quick iterations only | Planning is structured, but the doc-following risk that broke content-analyzer on haiku plausibly applies here — see MODEL FLOOR |
-| `ai_provider` | anthropic | Switch for model comparison | Which API to call |
-| `max_tokens` | 16,384 *(haiku-era; override to 32,768 when running sonnet)* | Set 32,768 whenever the module runs sonnet. The 16,384 default was sized for haiku (no thinking overhead); sonnet's adaptive thinking consumes the budget invisibly and 16,384 can truncate, which the skeleton fail-closed guard turns into a run failure | Max LLM response length. Covers visible JSON + (on a Claude-5 model) invisible thinking tokens (v2.3.1, was 8,192) |
+| `search_provider` | perplexity | Only `perplexity` supported today (more providers -- Gemini, Ahrefs, Semrush -- can be added later) | Controls which search API is used for keyword research |
+| `perplexity_model` | sonar | Raise to `sonar-pro` / `sonar-reasoning` / `sonar-reasoning-pro` for better research quality on complex spaces; ~$0.005/query (sonar) to ~$0.05/query (sonar-reasoning-pro) | Which Perplexity Sonar tier runs the research queries |
+| `research_queries` | (3 default queries) | Customize for specific industries, pipelines, or entity types | Multi-line queries supported when delimited by `Query N --` markers; any text before the first marker is a shared preamble prepended to every query. Templates without markers fall back to one-query-per-line. Supports `{entity_name}` and `{entity_context}` placeholders. <=5 queries recommended (a warning is logged above 5) |
+| `reference_docs` | (none) | Upload format spec, tone guide, or supplemental keyword data | Selected docs injected into prompt at `{doc:filename}` placeholders. `keyword-summary.md` is read ONLY as a fallback when `keyword_research` is off or returns nothing |
+| `temperature` | 0.3 | Lower toward 0 for maximum keyword-mapping consistency; raise for more varied phrasing | LLM temperature for planning. The corrective JSON retry always runs at temperature 0 regardless. Skeleton-level note: Claude-5 models (sonnet/opus) reject `temperature`, so the skeleton omits it for them -- this option is inert there |
+| `max_tokens` | 16,384 *(haiku-era; override to 32,768 when running sonnet)* | Set 32,768 whenever the module runs sonnet. The 16,384 default was sized for haiku (no thinking overhead); sonnet's adaptive thinking consumes the budget invisibly and 16,384 can truncate, which the skeleton fail-closed guard turns into a run failure | Max LLM response length. Covers visible JSON + (on a Claude-5 model) invisible thinking tokens |
+| `faq_count` | 0 | Raise on the agnostic (no-override) path when the content should carry FAQs | Number of FAQs the manifest default prompt asks for. Agnostic path only -- override prompts drive their own FAQ count and ignore this unless they explicitly use the `{faq_count}` placeholder |
+| `requires_prompt_override` | false | Set true on templates that depend on section-structured output (categories/tags/credentials/faq sections etc.) | If true and the runtime prompt equals the manifest default (no override configured), the run is refused early -- before any research fires -- with a clear actionable error instead of silently producing a generic plan |
 | `keyword_data_providers` | `[]` | Add real search-volume/difficulty/rank data (v2.3.0). Empty = layer off, no cost | Array of provider configs. See [Keyword Data Providers](#keyword-data-providers-v230) |
 | `max_seed_keywords` | 25 | Lower to trim cost; raise for broad entities | Cap on seed keywords per entity (cost guard; only when the layer is active) |
-| `max_metric_lookups_per_entity` | 100 | Lower to trim cost | Hard cap on keyword→metrics lookups per entity (cost guard) |
+| `max_metric_lookups_per_entity` | 100 | Lower to trim cost | Hard cap on keyword->metrics lookups per entity (cost guard) |
 | `per_run_budget_usd` | 1.0 | Raise to allow more paid lookups; 0 = free providers only | Refuses paid lookups past the cap, warns, continues with free providers |
 | `metrics_required` | false | Set true when a template depends on real numbers | If nothing is produced, adds a **loud** warning (never silent) |
+| `prompt` | (SEO planning template) | Customize when you need different keyword strategies or industry-specific SEO patterns | The full LLM instruction. Uses `{entity_content}` for analysis JSON, `{keyword_research}` for research results, `{faq_count}` for the configurable FAQ count (agnostic path), `{keyword_metrics}` for the quantitative keyword-data table (v2.3.0, opt-in), and `{doc:filename}` for reference docs |
+
+**Registry-driven model/provider values.** `ai_model` and `ai_provider` no longer carry hardcoded value lists in the manifest -- they declare `values_from` (`registry.models` / `registry.providers`), and the skeleton populates the dropdowns from the shared LLM registry (providers: anthropic, openai, perplexity, gemini, openrouter; models scoped to the default provider). Adding a model or provider is a registry change, not a manifest edit. Defaults are unchanged (haiku / anthropic).
+
+The most impactful pairing is `ai_model` + `max_tokens`: switching to sonnet without raising `max_tokens` to 32,768 is the most common mistake -- adaptive thinking eats the 16,384 budget invisibly and truncation fails the run.
 
 ## Keyword Data Providers (v2.3.0)
 
@@ -429,9 +437,9 @@ research_queries:
 **Healthy result:**
 - One SEO plan per entity
 - Primary keyword + 2-4 secondary + 3-5 long-tail keywords per entity
-- Keyword distribution mapping keywords to predefined sections (overview, categories, tags, credentials, FAQ)
+- Keyword distribution mapping keywords to the sections your template's format spec defines (the company-profile override uses overview, categories, tags, credentials, FAQ). Without a format spec, the agnostic default returns `keyword_distribution: {}` and the writer works from `target_keywords` directly
 - Meta title <=60 characters, meta description 150-160 characters
-- 5 FAQ questions that reflect buyer intent
+- FAQs per template: the agnostic default asks for `faq_count` FAQs (default 0 -- `faqs: []`); override prompts fix their own count (the company-profile override hardcodes 5)
 
 **Output fields per entity:**
 - `entity_name` - company name
@@ -552,27 +560,39 @@ placeholder (`{entity_content}`, `{keyword_research}`, or
 `{keyword_metrics}`): the stable head (instructions, `{faq_count}`, `{doc:}`
 refs placed before it) is sent as an Anthropic prompt-cache block
 (`cache_prefix`). `cachePrefix + prompt` is byte-identical to the old single
-prompt — billing only; a runtime self-check falls back to the uncached single
+prompt -- billing only; a runtime self-check falls back to the uncached single
 prompt on any divergence. The JSON-correction retry deliberately strips
-`cache_prefix` (the correction prompt is standalone). A prefix below the
-model's cacheable minimum silently won't cache; the module logs when that
-happens. **To benefit, move reference docs/stable rules BEFORE the first
-per-entity placeholder in the template** — the current company-profile
-template has them after `{entity_content}`, so nothing caches until it is
-restructured.
+`cache_prefix` (the correction prompt is standalone).
+
+**The split is anthropic-gated.** It runs ONLY when `ai_provider` is
+`anthropic`. The skeleton's openai/perplexity branches ignore `cache_prefix`
+and would silently DROP the stable head, so every other provider gets the
+plain single prompt -- byte-identical to pre-2.4.0 behavior, no caching.
+
+**Every no-cache outcome is logged, never silent:** a reassembly divergence
+logs a warning (caching disabled for that call, model input unchanged); a
+prefix under ~16,384 chars (~4,096 tokens, the largest documented per-model
+cache minimum -- sonnet-5's own minimum is undocumented and likely lower) logs
+an info note. Either way, the `ai_usage` cache_write/cache_read token counts
+are the ground truth for whether caching actually engaged. **To benefit, move
+reference docs/stable rules BEFORE the first per-entity placeholder in the
+template** -- the current company-profile template has them after
+`{entity_content}`, so nothing caches until it is restructured.
 
 ## Technical Reference
 
 - **Step:** 5 (Generation)
 - **Category:** planning
-- **Cost:** expensive (30 min timeout — includes Perplexity research calls + planning LLM call per entity)
-- **Data operation:** add (➕) - chains from working pool, finds content-analyzer items by source_submodule
-- **Requires:** `entity_name` in input items; `analysis_json` from content-analyzer
-- **Input:** Content-analyzer output from working pool (found via `source_submodule === 'content-analyzer'`)
+- **Cost:** expensive (30 min timeout -- includes Perplexity research calls + planning LLM call per entity)
+- **Data operation:** add (+) - chains from working pool, finds content-analyzer items by source_submodule
+- **Pool precondition:** `requires_items` - needs items in the pool for each entity; an entity with an empty pool is marked `skipped_no_input` (not failed) before enqueue
+- **Required input columns:** `entity_name`, `analysis_json`
+- **Depends on:** `content-analyzer`
+- **Input:** Content-analyzer output from working pool (found via `source_submodule === 'content-analyzer'`; the most recent analyzer item wins)
 - **Output:** `results[]` grouped by `entity_name`, one item per entity containing flattened display fields + `seo_plan_json` object
 - **Display type:** cards (not table) - one card per entity with expandable detail modal
 - **Selectable:** true - operators approve/reject entire entity SEO plan
 - **Detail view:** `detail_schema` with header (entity_name, status as badge, primary_keyword, faq_count) and sections (keywords_text, keyword_distribution_text as prose, meta_text, faqs_text as prose, tone_notes, warnings, error)
-- **Error handling:** Missing analysis input, LLM failures, JSON parse errors handled per-entity. Entities without content-analyzer items get clear error: "No content-analyzer output found. Run content-analyzer first."
-- **Dependencies:** `tools.ai` (LLM calls + Perplexity Sonar for keyword research), `tools.logger`, `tools.progress`
-- **Files:** `manifest.json`, `execute.js`
+- **Error handling:** Per-entity. `requires_prompt_override` refusal fires before any research; missing analysis input, LLM failures, JSON parse errors (one corrective retry, then loud fail preserving `rawText`), and hollow plans (content gate) all emit `meta.status:'error'` for that entity. Entities without content-analyzer items get clear error: "No content-analyzer output found. Run content-analyzer first."
+- **Dependencies:** `tools.ai` (LLM calls + Perplexity Sonar for keyword research), `tools.http` (keyword-data providers), `tools.logger`, `tools.progress`
+- **Files:** `manifest.json`, `execute.js`, `keyword-data-providers.js`

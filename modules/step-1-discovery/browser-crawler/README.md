@@ -3,7 +3,7 @@
 > Extract URLs from websites using a headless browser (Playwright) with Wayback Machine fallback for blocked or unreachable sites.
 
 **Module ID:** `browser-crawler` | **Step:** 1 (Discovery) | **Category:** crawling | **Cost:** expensive
-**Version:** 1.0.0 | **Data Operation:** transform (=)
+**Version:** 1.0.0 | **Data Operation:** add (+)
 
 ---
 
@@ -60,14 +60,14 @@ The module also includes a **Wayback Machine fallback** — if even the headless
 | `request_timeout` | 20,000ms | Raise to 30-60s for very slow sites; lower to 10s for known-fast sites | Per-page browser timeout. Too low = missed pages on slow-loading SPAs |
 | `same_domain_only` | true | Set to false if you need cross-domain links (partner sites, subdomains) | Filters out links to external domains. Usually keep true to focus on the entity's own content |
 | `concurrency` | 2 | Lower to 1 on memory-constrained servers; raise to 3-4 on powerful machines | How many internal pages to fetch in parallel. Browser tabs are memory-heavy |
-| `auto_click_load_more` | false | Enable when target sites hide content behind "Load More" / "Show More" buttons | Auto-detects and clicks pagination buttons before extracting links. Uses 35+ selectors covering text, CSS class, aria, and data-attribute patterns |
-| `load_more_selector` | "" | Only when auto-detection misses a specific site's button | Advanced override: manual Playwright selector (supports `:has-text()` syntax). Takes priority over auto-detection |
+| `auto_click_load_more` | false | Enable when target sites hide content behind "Load More" / "Show More" buttons | Auto-detects and clicks pagination buttons before extracting links. Uses 35 selectors covering text, CSS class, aria, and data-attribute patterns |
+| `load_more_selector` | "" | Only when auto-detection misses a specific site's button | Advanced override: manual Playwright selector (supports `:has-text()` syntax). Takes priority over auto-detection -- and enables clicking even when `auto_click_load_more` is false |
 | `max_load_more_clicks` | 10 | Raise to 20-50 for sites with large paginated lists (50+ items) | How many times to click the button. Stops early if button disappears or content stops growing |
 | `max_load_more_seconds` | 120 | Raise to 300+ for very slow-loading paginated content | Wall-time budget for clicking. Prevents runaway click loops |
 
 ## Load More Auto-Detection
 
-When `auto_click_load_more` is enabled, the crawler tries 35+ Playwright selectors in priority order to find the pagination button:
+When `auto_click_load_more` is enabled, the crawler passes 35 candidate Playwright selectors in priority order to find the pagination button:
 
 1. **Buttons by text** (highest confidence) -- `button:has-text("Load More")`, `Show More`, `See More`, `View More`, `More Articles`, `More Posts`, `More Stories`, `More Results`
 2. **Role-based buttons** -- `[role="button"]:has-text(...)` for div/span styled as buttons
@@ -77,9 +77,9 @@ When `auto_click_load_more` is enabled, the crawler tries 35+ Playwright selecto
 6. **Data attributes** -- `[data-action*="load-more"]`, `[data-testid*="loadMore"]`
 7. **Aria labels** -- `[aria-label*="load more" i]`, `[aria-label*="show more" i]`
 
-The first visible match wins. Playwright's `:has-text()` does case-insensitive substring matching, so `button:has-text("Load More")` catches "Load More", "LOAD MORE", "Load more posts", etc.
+Playwright's `:has-text()` does case-insensitive substring matching, so `button:has-text("Load More")` catches "Load More", "LOAD MORE", "Load more posts", etc. Clicking applies to the homepage and to every depth-2 internal page.
 
-**Safety features:** The click loop stops after 2 consecutive clicks that produce no new content, when the button disappears or becomes disabled, or when the time budget is exceeded.
+**Safety features:** The click loop stops early if the button disappears, becomes disabled, or produces no new content -- and always stops when `max_load_more_clicks` or the `max_load_more_seconds` time budget is reached.
 
 ## Recipes
 
@@ -160,6 +160,7 @@ concurrency: 2
 - `pages_crawled` -- total pages fetched (1 + depth pages)
 - `depth_pages` -- number of internal pages crawled beyond the homepage
 - `wayback_fallback` -- boolean indicating whether Wayback Machine was used
+- `errors` -- 1 when the entity failed entirely (no website field, or both browser and Wayback failed), 0 otherwise
 
 **Red flags to watch for:**
 - `wayback_fallback: true` -- site was unreachable even by browser; links may be outdated
@@ -168,10 +169,10 @@ concurrency: 2
 
 ## Limitations & Edge Cases
 
-- **Requires Playwright on the server** -- the module will throw an error if `tools.browser.fetch` is not available. Playwright must be installed on the server
+- **Requires Playwright on the server** -- the module throws immediately if `tools.browser.fetch` is not available (Playwright must be installed) or if `tools.http.get` is missing (required for the Wayback Machine fallback)
 - **Memory-heavy** -- each browser tab consumes significant memory. Running multiple entities concurrently with high `concurrency` can exhaust server RAM
-- **Wayback Machine links may be stale** -- archived snapshots can be months or years old. Links discovered via Wayback may point to pages that no longer exist
-- **Query strings and fragments stripped** -- all URLs have `?query` and `#fragment` removed for cleaner deduplication. This means parameterized pages (e.g., `/products?id=123`) will be collapsed
+- **Wayback Machine links may be stale** -- archived snapshots can be months or years old. Links discovered via Wayback may point to pages that no longer exist. When the homepage needed Wayback, depth-2 pages are fetched via Wayback too, and archive.org URL wrappers are stripped from all extracted links (archive.org internal links are dropped)
+- **Fragments and tracking params stripped** -- `#fragment` and analytics/ad params (utm_*, fbclid, gclid, mc_cid, ref, etc.) are removed for cleaner deduplication. Pagination and content params are preserved (`?page=2`, `/products?id=123` survive intact)
 - **waitForSelector on depth pages** -- depth-2 page fetches use `waitForSelector: 'a'` to ensure the page hydrates before link extraction. This improves reliability on SPAs and React Server Component sites that render links client-side
 - **No cookie consent handling** -- the browser does not click cookie consent banners. Some sites may show an overlay that hides content/links
 - **Sectioned link detection uses regex** -- nav/header/footer detection relies on HTML tag matching, which may misclassify links on non-standard layouts
@@ -187,12 +188,14 @@ Since this module is a fallback for blocked sites, its output often represents t
 
 - **Step:** 1 (Discovery)
 - **Category:** crawling
-- **Cost:** expensive
-- **Data operation:** transform (=) -- entities enriched with discovered URLs
-- **Requires:** `website` field on input entity
+- **Cost:** expensive -- 30-minute timeout tier; headless browser per page
+- **Data operation:** add (+) -- discovered URLs are added to the pool as new items, upserted by `(url, source_submodule)` so a re-run replaces this module's own prior output without touching other modules' items
+- **Pool precondition:** `empty_ok` -- runs against an empty or populated pool; discovery module producing items from an external source
+- **Item key:** `url`
+- **Requires:** `website` field on input entity (`requires_columns: ["website"]`)
 - **Input:** `input.entity` (single entity -- native per-entity module) with `website` field
-- **Output:** `{ entity_name, items[], meta }` where items contain `url`, `link_text`, `source_location`, `found_on`
-- **Selectable:** false (standard table output)
-- **Error handling:** browser failure triggers Wayback Machine fallback; both failing returns empty items with error message
+- **Output:** `{ entity_name, items[], meta }` where items contain `url`, `link_text`, `source_location`, `found_on` (display type: table)
+- **Error handling:** browser failure triggers Wayback Machine fallback; both failing returns empty items with an error message combining both failure reasons (meta `errors: 1`); depth-2 page failures are logged and skipped, never fatal
+- **Timeout resilience:** homepage links are pushed to `tools._partialItems` right after homepage extraction, then refreshed with the combined homepage + depth-2 links after internal-page crawling -- if the skeleton kills the run on timeout, the partial results are saved instead of losing all progress
 - **Dependencies:** `tools.browser` (Playwright), `tools.http` (Wayback Machine fallback), `tools.logger`, `tools.progress`
 - **Files:** `manifest.json`, `execute.js`

@@ -31,15 +31,17 @@ api-scraper (ScrapFly API) -- recovers remaining hard cases (paid)
 Step 4 (content filtering)
 ```
 
-The module uses the **transform (=)** data operation -- the same items go in and come out. Pages already scraped successfully are passed through unchanged. Only failed/low-content pages consume API credits.
+The module uses the **transform (=)** data operation -- the same items go in and come out. Pages already scraped successfully are passed through unchanged. A page is re-scraped only if its status is `error`, `dead_link`, or `low_content`, its status is missing, its word_count is below `min_word_threshold`, or its existing text looks like a block page. Everything else passes through without consuming credits.
 
 ### Wayback Machine Fallback
 
-If ScrapFly itself fails (API error, empty response, or returns a block page despite ASP), the module falls back to the Wayback Machine -- fetching the most recent archived snapshot from web.archive.org via plain HTTP. This provides a third tier of recovery at zero additional cost.
+Some ScrapFly failures fall back to the Wayback Machine -- fetching the most recent archived snapshot from web.archive.org via plain HTTP, a third tier of recovery at zero additional cost. The cascade fires on: empty/tiny responses, detected block pages, extractions below the word threshold, and thrown network/timeout errors. It does NOT fire on ScrapFly HTTP status errors (429 after retries, 402 out-of-credits, any >= 400), ScrapFly-reported target errors, or JSON parse failures -- those record an error for the URL immediately with no Wayback attempt.
 
 ### Safety Features
 
-**Circuit breaker:** If 3 consecutive URLs hit HTTP 429 (rate limited), the module immediately stops scraping remaining URLs instead of burning through the entity timeout. Remaining URLs are marked as "Skipped -- ScrapFly rate limit circuit breaker."
+**Per-request 429 retry:** Each URL retries up to 3 times on HTTP 429, waiting 10s, 20s, then 30s between attempts, before being marked rate-limited.
+
+**Circuit breaker:** If 3 consecutive URLs still end rate-limited after their retries, the module immediately stops scraping remaining URLs instead of burning through the entity timeout. Remaining URLs are marked as "Skipped -- ScrapFly rate limit circuit breaker."
 
 **Global rate limiter:** A token-bucket limiter (default 10 requests/minute) ensures all concurrent workers stay within ScrapFly's account-level rate limits. This prevents 429 errors when processing multiple entities.
 
@@ -162,7 +164,7 @@ Each request uses ~30 ScrapFly credits (ASP + JS rendering). Plan costs:
 | Discovery ($11) | 100,000 | ~3,300 | Higher |
 | Startup ($59) | 1,000,000 | ~33,000 | Higher |
 
-You are only charged for successful API calls -- failed requests don't consume credits. The `scrapfly_credits` field in output tracks actual consumption.
+The `scrapfly_credits` field in output tracks actual consumption per URL. Note that a request returning a block page or a ScrapFly-reported target error can still consume credits -- the module logs and records these too, so trust the tracked totals over assumptions.
 
 ## Expected Output
 
@@ -183,8 +185,8 @@ You are only charged for successful API calls -- failed requests don't consume c
 - `meta_description` -- from `<meta name="description">` tag
 - `text_content` -- full extracted text (visible in detail view)
 - `entity_name` -- which entity this URL belongs to
-- `scrape_method` -- `scrapfly` (API-scraped), `wayback` (Wayback Machine fallback), or `passed_through` (kept from previous scraper)
-- `extraction_method` -- `readability`, `cms-dom`, `regex`, or `none`
+- `scrape_method` -- `scrapfly` (API-scraped), `wayback_after_api` (Wayback Machine fallback), or `passed_through` (kept from previous scraper). Failed items carry `scrapfly` regardless of which tier failed last
+- `extraction_method` -- `readability`, `cms_dom`, `body_text`, `regex_fallback`, or `none`; pass-through items keep their previous value or show `original`
 - `scrapfly_credits` -- credits consumed for this URL
 - `possibly_truncated` -- boolean flag set when extracted text is shorter than og:description (potential incomplete rendering)
 
@@ -192,7 +194,7 @@ You are only charged for successful API calls -- failed requests don't consume c
 - All URLs returning 429 errors -- ScrapFly account is rate-limited or out of credits. Check dashboard
 - Many "Skipped -- circuit breaker" errors -- rate limit was hit early. Wait and retry, or increase `requests_per_minute` if plan allows
 - Recovery rate below 30% -- sites may have protection that even ScrapFly cannot bypass
-- `scrape_method: "wayback"` on many results -- ScrapFly failed but Wayback recovered. Content may be outdated
+- `scrape_method: "wayback_after_api"` on many results -- ScrapFly failed but Wayback recovered. Content may be outdated
 - High credit consumption -- check `scrapfly_credits` totals. Each ASP request costs ~30 credits
 
 ## Limitations & Edge Cases
@@ -202,12 +204,12 @@ You are only charged for successful API calls -- failed requests don't consume c
 - **Rate limits are account-wide** -- running multiple pipeline batches simultaneously will share the same rate limit. The `requests_per_minute` option helps but cannot coordinate across separate server processes
 - **Circuit breaker is per-entity** -- the consecutive-429 counter resets between entities. A rate-limited batch should wait before retrying
 - **Wayback Machine content may be stale** -- archived snapshots can be months or years old
-- **Truncation detection** -- after extraction, content length is compared against the `og:description` meta tag. If the extracted text is shorter than the og:description, the item is flagged with `possibly_truncated: true` and `error` set, then falls through to the Wayback Machine tier
+- **Truncation detection is flag-only** -- after extraction, content length is compared against the `og:description` meta tag (only when that tag is 100+ chars). If the extracted text is shorter, the item is still returned as `success` -- best available content -- with `possibly_truncated: true` and an explanatory `error` note. It does NOT cascade to the Wayback Machine tier
 - **Partial results on timeout** -- uses `_partialItems` to save each scraped result incrementally. If the module times out mid-batch, already-scraped pages are preserved in the pool rather than lost
 - **Same extraction algorithm as other scrapers** -- uses Readability with CMS DOM and regex fallbacks. If content is genuinely minimal (redirect page, 404), no scraper will help
 - **Block page detection** -- Cloudflare block pages and generic block text are detected and treated as failures. However, novel block page formats may not be caught
 - **Duplicate text detection requires 3+ matches** -- if only 2 pages return the same block text, they won't be automatically demoted
-- **Entity timeout** -- expensive cost tier gets 600s (10 min) per entity. The rate limiter and circuit breaker are designed to stay within this, but very large URL sets may approach the limit
+- **Entity timeout** -- the expensive cost tier gets the longest per-entity timeout (30 min per the module contract). The rate limiter and circuit breaker are designed to stay within this, but very large URL sets may approach the limit
 
 ## What Happens Next
 
@@ -221,12 +223,13 @@ The `scrape_method` field provides full transparency into which approach worked 
 - **Category:** scraping
 - **Cost:** expensive
 - **Data operation:** transform (=) -- same items enriched with scraped content
+- **Pool precondition:** `requires_items` -- needs items in the pool for each entity; an entity with an empty pool is marked `skipped_no_input` rather than failed
 - **Requires:** `url` field in input items, `SCRAPFLY_KEY` environment variable
 - **Depends on:** browser-scraper (must run first)
 - **Input:** `input.entities[]` with `items[]` from working pool
 - **Output:** `{ results[], summary }` where results are grouped by entity_name
 - **Selectable:** true -- operators can deselect failed/empty pages
 - **Detail view:** `detail_schema` with header fields (url as link, title, status badge, word_count, scrape_method, extraction_method, scrapfly_credits) and expandable section (text_content as prose)
-- **Error handling:** per-URL 3-tier fallback (ScrapFly API -> Wayback Machine -> error). Circuit breaker stops after 3 consecutive 429s. Rate limiter prevents 429s proactively
+- **Error handling:** per-URL conditional fallback (ScrapFly API -> Wayback Machine for empty/tiny/block-page/below-threshold/thrown-network cases; HTTP status errors, ScrapFly target errors, and parse failures error immediately without Wayback). 429s retry 3x with 10/20/30s backoff; circuit breaker stops all workers after 3 consecutive rate-limited URLs. Rate limiter prevents 429s proactively. Missing `SCRAPFLY_KEY` or `tools.http` throws loudly at start
 - **Dependencies:** `@mozilla/readability` (content extraction), `linkedom` (DOM parsing), `tools.http` (API calls + Wayback), `tools.logger`, `tools.progress`
 - **Files:** `manifest.json`, `execute.js`

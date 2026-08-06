@@ -1,5 +1,7 @@
 # Loop Router
 
+**Version:** 1.0.1
+
 Read QA verdicts from Step 6 submodules and route failed entities back to the appropriate earlier step for rework. Pure decision logic -- no API calls, no LLM calls.
 
 | Field | Value |
