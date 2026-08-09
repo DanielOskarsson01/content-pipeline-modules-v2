@@ -476,19 +476,30 @@ async function runEndpointsForIdentifier(provider, identifier, authParts, extraP
       rawRecords = rawRecords.slice(0, options.max_items);
     }
 
-    // Empty first endpoint -> identifier resolved to nothing (dead id).
+    // Empty first endpoint -> identifier resolved to nothing. By default that's a legitimate
+    // not_found (a dead id). But some endpoints MUST return a record for a valid identifier
+    // (e.g. the harvestapi employees actor, which returns 201 [] for every company); those opt
+    // in via provider.empty_is_error, turning a silently-empty 2xx into a counted, reason-coded
+    // error instead of a not_found that looks fine downstream.
     if (rawRecords.length === 0 && epIdx === 0) {
-      items.push({
+      const base = {
         source_api: provider.id,
         url: `apifetch://${provider.id}/${encodeURIComponent(identifier)}`,
-        externalId: `${provider.id}:${identifier}:not_found`,
         title: '',
         data_json: '{}',
         raw_text: '',
         fetch_date: new Date().toISOString().slice(0, 10),
-        status: 'not_found',
-      });
-      logger.info(`${provider.id}.${endpoint.id}: identifier "${identifier}" returned no records (not_found)`);
+      };
+      if (provider.empty_is_error) {
+        errorCount++;
+        items.push({ ...base, externalId: `${provider.id}:${identifier}:empty`, status: 'error', reason: 'empty_result' });
+        const reason = `${provider.id}.${endpoint.id}: 2xx but zero records for "${identifier}" — empty_is_error (provider returned empty)`;
+        logger.warn(reason);
+        notes.push(reason);
+      } else {
+        items.push({ ...base, externalId: `${provider.id}:${identifier}:not_found`, status: 'not_found' });
+        logger.info(`${provider.id}.${endpoint.id}: identifier "${identifier}" returned no records (not_found)`);
+      }
       break;
     }
 
@@ -560,7 +571,7 @@ async function execute(input, options, tools) {
       results: entities.map((e) => ({
         entity_name: e.name || 'unknown',
         items: [],
-        meta: { total_found: 0, providers_used: 0, errors: 0 },
+        meta: { total_found: 0, providers_used: 0, errors: 0, status: 'ok' },
       })),
       summary: {
         total_entities: entities.length,
@@ -628,6 +639,7 @@ async function execute(input, options, tools) {
         providers_used: activeProviders.length,
         errors: errorCount,
         notes: notes.length,
+        status: errorCount > 0 ? 'error' : 'ok',
       },
     });
 

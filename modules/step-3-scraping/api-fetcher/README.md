@@ -116,6 +116,25 @@ POST + `bearer` auth (a synchronous dataset/actor run that returns a top-level a
 
 Placeholders (`{identifier}`, `{max_items}`, `{endpoint_id.field}`) interpolate into the `body`'s string values just as they do in `url`/`params`. `results_path` is omitted, so the response — a bare top-level JSON array — is mapped directly. `Authorization: Bearer <DATASET_API_TOKEN>` is set from the env var; missing token → provider skipped like any other auth type. **Async trigger→poll→download** dataset APIs (Bright Data Datasets: POST a trigger, poll a `snapshot_id`, then download) are **not** covered — a single POST per endpoint has no poll-until-ready step; see Limitations.
 
+POST + `bearer`, `empty_is_error` set (the harvestapi LinkedIn **employees** actor — it returns `201 []` for every company, so a silent empty must be surfaced as an error, not a legitimate `not_found`):
+
+```json
+{
+  "id": "linkedin-company-employees",
+  "name": "LinkedIn Company Employees (harvestapi via Apify)",
+  "response_format": "json",
+  "empty_is_error": true,
+  "identifier_source": { "entity_field": "linkedin" },
+  "auth": { "type": "bearer", "env_var": "APIFY_TOKEN" },
+  "endpoints": [
+    { "id": "employees", "method": "POST",
+      "url": "https://api.apify.com/v2/acts/harvestapi~linkedin-company-employees/run-sync-get-dataset-items",
+      "body": { "companies": ["{identifier}"], "maxItems": "{max_items}" },
+      "field_map": { "url": "linkedinUrl", "title": "position", "text": "name" } }
+  ]
+}
+```
+
 ### Config schema
 
 - **`response_format`** — `"json"` (default) or `"xml"`. XML (RSS/Atom) is converted to a JSON object generically: elements → keys, repeated siblings → arrays, attributes → `@name` keys (e.g. `enclosure.@url`), CDATA/text → strings. `results_path` / `field_map` then apply identically. RSS tag names live in config, not code.
@@ -128,6 +147,7 @@ Placeholders (`{identifier}`, `{max_items}`, `{endpoint_id.field}`) interpolate 
 - **`url`** — every emitted item needs one (the pool `item_key`). It comes from the `field_map` `url`, or — for bare ids — from `url_template` (`{field}` placeholders over the mapped record + `{identifier}`). An endpoint that maps no `url` and declares no `url_template` is **chain-only**: it runs and feeds later endpoints but emits no pool items (e.g. a YouTube `channel` hop that only supplies `uploads_playlist`).
 - **`raw_text_template`** — optional per-endpoint `{field}` template for `raw_text`. Default is `Key: value` lines over the mapped fields.
 - **`auth.type`** — `none` | `query_param` (`key` → query param) | `header` (`key` → header name, value verbatim) | `bearer` (`Authorization: Bearer <env value>`) | `basic` (`env` value as username, empty password — Companies House). Missing env var → provider skipped (see `skip_providers_without_auth`).
+- **`empty_is_error`** — provider-level, default `false`. When `true`, a **2xx response with zero records** on the first endpoint becomes an **error** (`meta.errors` incremented, `meta.status: "error"`, and an item with `status: "error"` + `reason: "empty_result"`) instead of a `not_found`. Set it for endpoints that MUST return a record for a valid identifier — e.g. the harvestapi `linkedin-company-employees` actor, which returns `201 []` for every company (a silent empty that otherwise looks like a legitimate not_found). Leave it off (default) for lookup/registry/search configs where empty is a valid answer (iTunes, Companies House, YouTube).
 
 ## Options
 
@@ -142,7 +162,7 @@ Placeholders (`{identifier}`, `{max_items}`, `{endpoint_id.field}`) interpolate 
 
 ## What good output looks like
 
-Each emitted item: `source_api` (provider id), `url` (key), `title`, `raw_text` (flattened text for Step-5), `data_json` (the mapped fields, JSON-stringified), `fetch_date` (ISO date), `status` (`success` \| `not_found` \| `error`), and `entity_name`. `data_json` and `raw_text` are downloadable from the results pane.
+Each emitted item: `source_api` (provider id), `url` (key), `title`, `raw_text` (flattened text for Step-5), `data_json` (the mapped fields, JSON-stringified), `fetch_date` (ISO date), `status` (`success` \| `not_found` \| `error`), `reason` (on `error` items — e.g. `empty_result`), and `entity_name`. `data_json` and `raw_text` are downloadable from the results pane.
 
 **Warning signs:** all-`not_found` for a provider → the identifiers are wrong/dead (check the seed column). Provider missing from active list → its auth env var is unset (see the startup warning). Zero items with providers configured → no entity carried a matching identifier (each has a per-provider note in meta).
 
@@ -161,7 +181,7 @@ Items land in the Step-3 pool alongside scraped pages. Step-4 cleanup and Step-5
 
 ## Testing
 
-- `node modules/step-3-scraping/api-fetcher/test-api-fetcher.js` — 77 assertions, all HTTP mocked, no credentials, no network.
+- `node modules/step-3-scraping/api-fetcher/test-api-fetcher.js` — 84 assertions, all HTTP mocked, no credentials, no network.
 - `node modules/step-3-scraping/api-fetcher/test-live-api-fetcher.js` — **credential-free** live test (iTunes Lookup JSON + Podcast RSS XML against real free APIs, chained). Passed 2026-07-06.
 
 ## Technical Reference
@@ -170,11 +190,12 @@ Items land in the Step-3 pool alongside scraped pages. Step-4 cleanup and Step-5
 - **Data operation:** `add` (+) — net-new structured items, upsert by `(url, source_submodule)`
 - **Pool precondition:** `empty_ok` — runs on identifiers from entity seed columns, no Step-1 URLs required
 - **Required input columns:** `["name"]` (identifier fields are per-provider config, not hardcoded)
-- **Error handling:** per-provider and per-identifier isolation — one provider's 500/parse-failure/quota-403 doesn't kill the others; missing identifier → note, not error; empty result → a `not_found` item; `_partialItems` pushed after every provider fetch per entity (Rule 10). Any **2xx** status counts as success (some sync APIs return `201` — e.g. Apify `run-sync-get-dataset-items`), not only `200`.
+- **Error handling:** per-provider and per-identifier isolation — one provider's 500/parse-failure/quota-403 doesn't kill the others; missing identifier → note, not error; empty result → a `not_found` item **by default, or a counted `error` (`reason: empty_result`) when the provider sets `empty_is_error`**; `_partialItems` pushed after every provider fetch per entity (Rule 10). Any **2xx** status counts as success (some sync APIs return `201` — e.g. Apify `run-sync-get-dataset-items`), not only `200`. `meta.status` is `"error"` when the entity accrued any errors, else `"ok"`.
 - **External dependencies:** none beyond `tools.http`; provider auth via per-provider `env_var` (all optional, provider-scoped).
 
 ## Changelog
 
+- **1.1.2** (2026-08-09) — `empty_is_error` provider flag (default off): a 2xx with zero records on the first endpoint becomes a counted error (`meta.errors`, `meta.status: "error"`, item `status: "error"` + `reason: "empty_result"`) instead of a silent `not_found`. Closes the observability gap the 1.1.1 2xx fix opened — Apify's `201 []` moved from the error branch to the success branch, so an empty employees-actor result looked like a legitimate not_found. Set on the harvestapi `linkedin-company-employees` config (returns `201 []` for every company). +7 test assertions (84 total).
 - **1.1.1** (2026-08-07) — accept any 2xx status as success, not only 200. Apify's synchronous `run-sync-get-dataset-items` returns `201 Created` with the dataset rows in the body; the previous `!== 200` check logged that as an error and dropped the data. Enables the cookie-free LinkedIn company/profile/posts actors (harvestapi via Apify) as provider configs. +2 test assertions (77 total).
 - **1.1.0** (2026-07-17) — POST support: optional `method` (`GET` default | `POST`) and `body` (JSON object or string, placeholders interpolated) per endpoint, plus a `bearer` auth type (`Authorization: Bearer <token>`). Response side unchanged — a POST returning a bare top-level array maps through `field_map` with `results_path` omitted. Backward-compatible: no `method` = GET, so all v1.0.0 configs behave identically. Unlocks synchronous run-and-return dataset/actor providers; async trigger→poll→download still needs a separate primitive (see Limitations + BACKLOG).
 - **1.0.0** (2026-07-06) — initial version per the canonical revised brief. iTunes Lookup (JSON) + Podcast RSS (XML) provider blocks live-verified, zero credentials. YouTube (2-hop chaining) and Companies House (basic auth) blocks documented but not yet live-verified (need new free keys). Pre-commit code review: `url_template` now always synthesizes/normalizes the item URL when present (so `field_map` mapping a bare id — `videoId`, registry number — becomes a canonical URL), per the brief's "synthesized via url_template if the API returns bare ids".

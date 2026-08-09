@@ -599,6 +599,50 @@ async function main() {
     assert((res.results[0].meta.errors || 0) === 0, 'HTTP 201 is not counted as an error');
   }
 
+  // ── 25. empty_is_error: a 2xx returning zero records is an error, not a silent not_found ──
+  // Regression: the v1.1.1 2xx fix moved Apify's `201 []` from the error branch into the
+  // success branch, where an empty result becomes a not_found item and errorCount stays 0.
+  // A provider whose endpoint MUST return a record (e.g. the harvestapi employees actor,
+  // which returns 201 [] for every company) opts in via `empty_is_error` to surface that.
+  console.log('\n[25] silent-empty guard: empty 2xx is an error when the provider declares empty unexpected');
+  {
+    const p = {
+      id: 'emp-actor', response_format: 'json', empty_is_error: true,
+      identifier_source: { entity_field: 'cid' },
+      endpoints: [{
+        id: 'run', method: 'POST', url: 'https://api.test/run-sync',
+        body: { q: '{identifier}' }, field_map: { url: 'link', title: 'name' },
+      }],
+    };
+    const tools = makeTools({ post: async () => ({ status: 201, headers: {}, body: '[]' }) });
+    const res = await execute(makeInput([{ name: 'X', cid: 'C1' }]), { ...defaults, providers: [p] }, tools);
+    const meta = res.results[0].meta;
+    const item = res.results[0].items[0];
+    assert(meta.errors === 1, 'empty 2xx increments error count when empty_is_error is set');
+    assert(meta.status === 'error', 'entity meta.status is "error" on an unexpected empty');
+    assert(item && item.status === 'error', 'empty item carries status "error" (not "not_found")');
+    assert(item && item.reason === 'empty_result', 'empty item carries a distinguishable reason code (vs a failed request)');
+  }
+
+  // ── 26. default (flag off): empty 2xx stays a not_found and is NOT an error ──
+  console.log('\n[26] default: empty 2xx remains a not_found and is not counted as an error');
+  {
+    const p = {
+      id: 'lookup', response_format: 'json',
+      identifier_source: { entity_field: 'cid' },
+      endpoints: [{
+        id: 'run', method: 'POST', url: 'https://api.test/run-sync',
+        body: { q: '{identifier}' }, field_map: { url: 'link' },
+      }],
+    };
+    const tools = makeTools({ post: async () => ({ status: 201, headers: {}, body: '[]' }) });
+    const res = await execute(makeInput([{ name: 'X', cid: 'C1' }]), { ...defaults, providers: [p] }, tools);
+    const meta = res.results[0].meta;
+    assert(meta.errors === 0, 'no flag: empty 2xx is not an error (existing behaviour preserved)');
+    assert(res.results[0].items[0].status === 'not_found', 'no flag: empty 2xx stays a not_found item');
+    assert(meta.status === 'ok', 'no flag: entity meta.status is "ok"');
+  }
+
   console.log(`\n${'='.repeat(50)}\nTOTAL: ${pass} passed, ${fail} failed\n`);
   process.exit(fail > 0 ? 1 : 0);
 }
