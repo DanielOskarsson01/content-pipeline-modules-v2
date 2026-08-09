@@ -579,6 +579,26 @@ async function main() {
     assert(sent.limit === 5 && sent.active === true && sent.note === null, 'non-string leaves (number/boolean/null) pass through untouched');
   }
 
+  // ── 24. HTTP 201 (Apify run-sync success code) is accepted, not treated as an error ──
+  console.log('\n[24] 2xx success: HTTP 201 response is accepted');
+  {
+    const p = {
+      id: 'sync201', response_format: 'json', identifier_source: { entity_field: 'cid' },
+      endpoints: [{
+        id: 'run', method: 'POST', url: 'https://api.test/run-sync',
+        body: { q: '{identifier}' },
+        field_map: { url: 'link', title: 'name' },
+      }],
+    };
+    const tools = makeTools({
+      post: async () => ({ status: 201, headers: {}, body: JSON.stringify([{ link: 'https://r.test/a', name: 'A' }]) }),
+    });
+    const res = await execute(makeInput([{ name: 'X', cid: 'C1' }]), { ...defaults, providers: [p] }, tools);
+    const items = res.results[0].items;
+    assert(items.length === 1 && items[0].url === 'https://r.test/a', 'HTTP 201 response mapped through field_map (2xx accepted)');
+    assert((res.results[0].meta.errors || 0) === 0, 'HTTP 201 is not counted as an error');
+  }
+
   console.log(`\n${'='.repeat(50)}\nTOTAL: ${pass} passed, ${fail} failed\n`);
   process.exit(fail > 0 ? 1 : 0);
 }

@@ -161,7 +161,7 @@ Items land in the Step-3 pool alongside scraped pages. Step-4 cleanup and Step-5
 
 ## Testing
 
-- `node modules/step-3-scraping/api-fetcher/test-api-fetcher.js` — 75 assertions, all HTTP mocked, no credentials, no network.
+- `node modules/step-3-scraping/api-fetcher/test-api-fetcher.js` — 77 assertions, all HTTP mocked, no credentials, no network.
 - `node modules/step-3-scraping/api-fetcher/test-live-api-fetcher.js` — **credential-free** live test (iTunes Lookup JSON + Podcast RSS XML against real free APIs, chained). Passed 2026-07-06.
 
 ## Technical Reference
@@ -170,10 +170,11 @@ Items land in the Step-3 pool alongside scraped pages. Step-4 cleanup and Step-5
 - **Data operation:** `add` (+) — net-new structured items, upsert by `(url, source_submodule)`
 - **Pool precondition:** `empty_ok` — runs on identifiers from entity seed columns, no Step-1 URLs required
 - **Required input columns:** `["name"]` (identifier fields are per-provider config, not hardcoded)
-- **Error handling:** per-provider and per-identifier isolation — one provider's 500/parse-failure/quota-403 doesn't kill the others; missing identifier → note, not error; empty result → a `not_found` item; `_partialItems` pushed after every provider fetch per entity (Rule 10).
+- **Error handling:** per-provider and per-identifier isolation — one provider's 500/parse-failure/quota-403 doesn't kill the others; missing identifier → note, not error; empty result → a `not_found` item; `_partialItems` pushed after every provider fetch per entity (Rule 10). Any **2xx** status counts as success (some sync APIs return `201` — e.g. Apify `run-sync-get-dataset-items`), not only `200`.
 - **External dependencies:** none beyond `tools.http`; provider auth via per-provider `env_var` (all optional, provider-scoped).
 
 ## Changelog
 
+- **1.1.1** (2026-08-07) — accept any 2xx status as success, not only 200. Apify's synchronous `run-sync-get-dataset-items` returns `201 Created` with the dataset rows in the body; the previous `!== 200` check logged that as an error and dropped the data. Enables the cookie-free LinkedIn company/profile/posts actors (harvestapi via Apify) as provider configs. +2 test assertions (77 total).
 - **1.1.0** (2026-07-17) — POST support: optional `method` (`GET` default | `POST`) and `body` (JSON object or string, placeholders interpolated) per endpoint, plus a `bearer` auth type (`Authorization: Bearer <token>`). Response side unchanged — a POST returning a bare top-level array maps through `field_map` with `results_path` omitted. Backward-compatible: no `method` = GET, so all v1.0.0 configs behave identically. Unlocks synchronous run-and-return dataset/actor providers; async trigger→poll→download still needs a separate primitive (see Limitations + BACKLOG).
 - **1.0.0** (2026-07-06) — initial version per the canonical revised brief. iTunes Lookup (JSON) + Podcast RSS (XML) provider blocks live-verified, zero credentials. YouTube (2-hop chaining) and Companies House (basic auth) blocks documented but not yet live-verified (need new free keys). Pre-commit code review: `url_template` now always synthesizes/normalizes the item URL when present (so `field_map` mapping a bare id — `videoId`, registry number — becomes a canonical URL), per the brief's "synthesized via url_template if the API returns bare ids".

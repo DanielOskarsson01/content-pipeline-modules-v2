@@ -446,7 +446,9 @@ async function runEndpointsForIdentifier(provider, identifier, authParts, extraP
       break; // network failure on a chained request — don't run dependents
     }
 
-    if (!res || res.status !== 200) {
+    // Accept any 2xx. Some sync APIs signal success with 201 (Apify run-sync-get-dataset-items
+    // returns 201 Created with the dataset rows in the body), not just 200.
+    if (!res || res.status < 200 || res.status >= 300) {
       const status = res ? res.status : 'no response';
       // Quota exhaustion (e.g. YouTube 403 quotaExceeded) — surface loudly, stop this provider.
       const quota = res && (res.status === 403 || res.status === 429);
