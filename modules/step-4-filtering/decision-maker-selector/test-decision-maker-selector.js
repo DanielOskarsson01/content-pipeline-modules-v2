@@ -77,6 +77,73 @@ const founderOnly = buildRolePatterns([{ role: 'Founder', patterns: ['Founder'] 
 assert(matchTitle('Head of Content', founderOnly).matched === false, 'custom {Founder-only} config does NOT match Head of Content');
 assert(matchTitle('Co-Founder', founderOnly).matched === true, 'custom {Founder-only} config still matches Founder');
 
+console.log('\n-- COMPANY ANCHOR: reject titles naming a non-target org --');
+const { buildCompanyAliases, passesCompanyAnchor, isCreativeTitle } = mod;
+// Alias set derived from a Pragmatic Play roster (name variants + id) — never hardcoded.
+const PP_ALIASES = buildCompanyAliases(
+  [
+    { current_company_name: 'Pragmatic Play', current_company_company_id: 'pragmatic-play' },
+    { current_company_name: 'ARRISE powering Pragmatic Play', current_company_company_id: 'arrise' },
+  ],
+  'current_company_name', 'current_company_company_id',
+);
+// The six false positives from the live Pragmatic Play roster — all name a NON-target org.
+assert(passesCompanyAnchor('Founder of SR Collection', PP_ALIASES) === false, 'anchor rejects "Founder of SR Collection"');
+assert(passesCompanyAnchor('Founder of pingwit.pl', PP_ALIASES) === false, 'anchor rejects "Founder of pingwit.pl"');
+assert(passesCompanyAnchor('Founder & R&D Consultant at BitElectric Systems', PP_ALIASES) === false, 'anchor rejects "...at BitElectric Systems"');
+assert(passesCompanyAnchor('Founder & Lead Artist of Vanciu Artworks', PP_ALIASES) === false, 'anchor rejects "...of Vanciu Artworks"');
+assert(passesCompanyAnchor('Vice President, Head of Tax & Customs, The LEGO Group', PP_ALIASES) === false, 'anchor rejects trailing "The LEGO Group"');
+assert(passesCompanyAnchor('Head of Sportsbook and Platform QA at RokkerX', PP_ALIASES) === false, 'anchor rejects "...at RokkerX"');
+// Genuine employees survive: no org named, the target named, or an ALIAS named.
+assert(passesCompanyAnchor('Chief Executive Officer', PP_ALIASES) === true, 'anchor keeps "Chief Executive Officer" (no org named)');
+assert(passesCompanyAnchor('Head of Content', PP_ALIASES) === true, 'anchor keeps "Head of Content" ("of X" is a department, not an org)');
+assert(passesCompanyAnchor('Director of Engineering', PP_ALIASES) === true, 'anchor keeps "Director of Engineering" (department)');
+assert(passesCompanyAnchor('Founder', PP_ALIASES) === true, 'anchor keeps a bare "Founder" (does NOT down-weight Founder)');
+assert(passesCompanyAnchor('Co-Founder & CEO of Pragmatic Play', PP_ALIASES) === true, 'anchor keeps "...of Pragmatic Play" (target)');
+assert(passesCompanyAnchor('Head of Legal at ARRISE powering Pragmatic Play', PP_ALIASES) === true, 'anchor keeps the "ARRISE powering Pragmatic Play" alias');
+// Vegangster's own decision-makers name the target in-title — must survive.
+const VG_ALIASES = buildCompanyAliases(
+  [{ current_company_name: 'Vegangster', current_company_company_id: 'vegangster-team' },
+   { current_company_name: 'Vegangsters', current_company_company_id: null }],
+  'current_company_name', 'current_company_company_id',
+);
+assert(passesCompanyAnchor('Head of Marketing and PR at Vegangster', VG_ALIASES) === true, 'anchor keeps "...at Vegangster" (target)');
+assert(passesCompanyAnchor('CEO and Co-Founder @Vegangster', VG_ALIASES) === true, 'anchor keeps "@Vegangster" (target)');
+
+console.log('\n-- CREATIVE-TITLE FILTER (separate failure mode) --');
+assert(isCreativeTitle('Director of Photography&Cinematographer') === true, 'creative filter catches "Director of Photography&Cinematographer"');
+assert(isCreativeTitle('Cinematographer') === true, 'creative filter catches "Cinematographer"');
+assert(isCreativeTitle('Head of Content') === false, 'creative filter does NOT catch "Head of Content"');
+assert(isCreativeTitle('Chief Product Officer') === false, 'creative filter does NOT catch "Chief Product Officer"');
+
+console.log('\n-- ANCHOR + CREATIVE end-to-end on a synthetic Pragmatic Play roster --');
+const PP_ROSTER = [
+  { name: 'Genuine CEO',      position: 'Chief Executive Officer',                    current_company_name: 'Pragmatic Play', current_company_company_id: 'pragmatic-play' },
+  { name: 'Alias Head',       position: 'Head of Legal at ARRISE powering Pragmatic Play', current_company_name: 'ARRISE powering Pragmatic Play', current_company_company_id: 'arrise' },
+  { name: 'Bare Founder',     position: 'Founder',                                    current_company_name: 'Pragmatic Play', current_company_company_id: 'pragmatic-play' },
+  { name: 'Target Founder',   position: 'Co-Founder & CEO of Pragmatic Play',         current_company_name: 'Pragmatic Play', current_company_company_id: 'pragmatic-play' },
+  { name: 'FP SR',            position: 'Founder of SR Collection',                   current_company_name: 'Pragmatic Play', current_company_company_id: 'pragmatic-play' },
+  { name: 'FP pingwit',       position: 'Founder of pingwit.pl',                      current_company_name: 'Pragmatic Play', current_company_company_id: 'pragmatic-play' },
+  { name: 'FP BitElectric',   position: 'Founder & R&D Consultant at BitElectric Systems', current_company_name: 'Pragmatic Play', current_company_company_id: 'pragmatic-play' },
+  { name: 'FP Vanciu',        position: 'Founder & Lead Artist of Vanciu Artworks',   current_company_name: 'Pragmatic Play', current_company_company_id: 'pragmatic-play' },
+  { name: 'FP LEGO',          position: 'Vice President, Head of Tax & Customs, The LEGO Group', current_company_name: 'Pragmatic Play', current_company_company_id: 'pragmatic-play' },
+  { name: 'FP RokkerX',       position: 'Head of Sportsbook and Platform QA at RokkerX', current_company_name: 'Pragmatic Play', current_company_company_id: 'pragmatic-play' },
+  { name: 'FP Photography',   position: 'Director of Photography&Cinematographer',     current_company_name: 'Pragmatic Play', current_company_company_id: 'pragmatic-play' },
+];
+const rejections = [];
+const ppSel = selectDecisionMakers(PP_ROSTER, { roles: DEFAULT_ROLES, titleField: 'position', _rejections: rejections });
+const ppNames = new Set(ppSel.map((r) => r.name));
+assert(ppSel.length === 4, `anchor+creative keep the 4 genuine (got ${ppSel.length}: ${[...ppNames].join(', ')})`);
+assert(ppNames.has('Bare Founder') && ppNames.has('Target Founder'), 'genuine Founders survive (no Founder down-weighting)');
+assert(!ppNames.has('FP SR') && !ppNames.has('FP RokkerX') && !ppNames.has('FP LEGO'), 'org-naming false positives dropped');
+assert(!ppNames.has('FP Photography'), 'creative "Director of Photography" dropped');
+assert(rejections.filter((r) => r.rejected_by === 'company_anchor').length === 6, 'exactly 6 rejected by the company anchor');
+assert(rejections.filter((r) => r.rejected_by === 'creative_title').length === 1, 'exactly 1 rejected by the creative filter (diagnosable separately)');
+// Toggle the anchor off -> the 6 org matches leak back, proving the anchor is
+// what fixed them. Creative is independent (stays on), so Photography stays dropped: 4+6=10.
+const ppNoAnchor = selectDecisionMakers(PP_ROSTER, { roles: DEFAULT_ROLES, titleField: 'position', companyAnchor: false });
+assert(ppNoAnchor.length === 10, `companyAnchor:false leaks the 6 org matches back; creative still drops Photography (got ${ppNoAnchor.length})`);
+
 console.log('\n-- ROSTER PROOF: 76-record Vegangster roster --');
 const GROUND_TRUTH = new Set([
   'Daria Trubachova',   // Head of Recruitment

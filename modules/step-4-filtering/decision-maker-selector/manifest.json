@@ -9,7 +9,7 @@
   "data_operation_default": "select",
   "pool_precondition": "requires_items",
   "depends_on": ["api-fetcher"],
-  "usage_notes": "Runs on people records (e.g. LinkedIn profiles fetched by Step-3 api-fetcher). Matches each item's title field against a configurable role list using WORD-BOUNDARY regexes, so 'CTO' never matches 'director'/'factory'. Records with null / empty / emoji / slogan titles match nothing and are dropped. Each kept item is annotated with matched_role + matched_pattern for diagnosability. The role list is fully configurable; nothing is baked into code.",
+  "usage_notes": "Runs on people records (e.g. LinkedIn profiles fetched by Step-3 api-fetcher). Matches each item's title field against a configurable role list using WORD-BOUNDARY regexes, so 'CTO' never matches 'director'/'factory'. Records with null / empty / emoji / slogan titles match nothing and are dropped. Two further, independently-diagnosable drops refine precision: (1) the company anchor rejects a matched title that names an organisation other than the target company or a derived alias ('Founder of SR Collection', 'Head of QA at RokkerX'); (2) the creative-title filter rejects creative roles that match 'Director of X' but are not executives ('Director of Photography'). Each kept item is annotated with matched_role + matched_pattern for diagnosability. The role list is fully configurable; nothing is baked into code.",
   "requires_columns": ["title"],
   "options": [
     {
@@ -26,6 +26,27 @@
       "label": "Item field holding the job title",
       "description": "Which pool-item field carries the person's title. api-fetcher maps LinkedIn `position` to `title` by default.",
       "default": "title"
+    },
+    {
+      "name": "company_anchor",
+      "type": "boolean",
+      "label": "Company anchor (reject titles naming a non-target org)",
+      "description": "When a matched title names an organisation (\"Founder of SR Collection\", \"Head of QA at RokkerX\", \"VP, …, The LEGO Group\") that is NOT the target company or a known alias, reject it. Aliases are derived from the roster's own company_field / company_id_field values, so \"ARRISE powering Pragmatic Play\" survives alongside \"Pragmatic Play\". Never down-weights Founder: a bare \"Founder\" or \"Founder of <target>\" always survives.",
+      "default": true
+    },
+    {
+      "name": "company_field",
+      "type": "string",
+      "label": "Item field holding the current company name",
+      "description": "Used by the company anchor to derive the target-alias set. Defaults to the raw Bright Data field `current_company_name`. If the api-fetcher provider field_map renames it (e.g. to `company`), set this to match, or the anchor is inert.",
+      "default": "current_company_name"
+    },
+    {
+      "name": "company_id_field",
+      "type": "string",
+      "label": "Item field holding the current company id/slug",
+      "description": "Second alias source for the company anchor (e.g. `current_company_company_id` = `pragmatic-play`). Defaults to the raw Bright Data field.",
+      "default": "current_company_company_id"
     }
   ]
 }

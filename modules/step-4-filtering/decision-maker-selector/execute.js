@@ -58,16 +58,117 @@ function matchTitle(title, patterns) {
   return { matched: false };
 }
 
+// ── Company anchor ──────────────────────────────────────────────────
+// A matched title sometimes names an ORGANISATION that is NOT the target
+// company — a side venture ("Founder of SR Collection"), another current
+// employer ("Head of QA at RokkerX"), or a former one ("VP, Head of Tax,
+// The LEGO Group"). Those are real title matches but wrong-company
+// attributions, so we reject them. Aliases are DERIVED from the roster's own
+// current_company_name / current_company_company_id values — never hardcoded —
+// so "ARRISE powering Pragmatic Play" survives alongside "Pragmatic Play", and
+// "Vegangster" survives "Vegangsters" / "vegangster-team".
+//
+// This is deliberately SEPARATE from the creative-title filter below so the two
+// failure modes stay independently diagnosable, and it never touches Founder
+// weighting: a bare "Founder" or "Founder of <target>" always survives.
+
+function normalizeOrg(s) {
+  return String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+// Derive the target-company alias set from the roster itself.
+function buildCompanyAliases(records, companyField, companyIdField) {
+  const set = new Set();
+  for (const rec of records || []) {
+    if (!rec) continue;
+    for (const f of [companyField, companyIdField]) {
+      const n = normalizeOrg(rec[f]);
+      if (n.length >= 3) set.add(n);
+    }
+  }
+  return set;
+}
+
+// Does an org named in a title refer to the target? Conservative substring match
+// (either direction, overlap ≥4 chars) so "pragmatic play" matches the alias
+// "arrise powering pragmatic play" and "vegangster" matches "vegangsters".
+// Bias is toward KEEP (returns true when too short to judge) — recall is protected.
+function orgIsTarget(org, aliases) {
+  const n = normalizeOrg(org);
+  if (n.length < 3) return true;
+  for (const a of aliases) {
+    if (n === a) return true;
+    if (n.length >= 4 && a.includes(n)) return true;
+    if (a.length >= 4 && n.includes(a)) return true;
+  }
+  return false;
+}
+
+// Extract the organisation(s) a title names via employer connectors.
+// High-confidence for ANY role: " at X" and "@X". For a Founder title, " of X"
+// also names a company (you found companies, not departments) — but for
+// Head/Director/VP "of X" is the DEPARTMENT and is ignored. A trailing
+// ", <Org with a company signal>" (The LEGO Group, Foo Ltd) is also an org.
+// Returns [] when the title names no organisation.
+// ponytail: English connectors only (at / @ / founder-of / trailing-comma);
+// multilingual (" på ", " bei ", " chez ") is a known miss — add tokens if a
+// non-EN roster needs anchoring.
+const ANCHOR_AT_RE = /(?:\s+at\s+|\s*@\s*)([^,/|]+)/i;
+const ANCHOR_FOUNDER_OF_RE = /\b(?:co[-\s]?)?founder\b[^,/|]*?\s+of\s+([^,/|]+)/i;
+const ANCHOR_TRAILING_ORG_RE =
+  /,\s*((?:the\s+)?[^,]*?\b(?:group|ltd|limited|inc|llc|gmbh|holdings?|corporation|company|studios?|systems?|technologies|labs?)\b[^,]*)$/i;
+
+function extractOrgs(title) {
+  const t = String(title == null ? '' : title);
+  const orgs = [];
+  let m;
+  if ((m = ANCHOR_AT_RE.exec(t))) orgs.push(m[1]);
+  if ((m = ANCHOR_FOUNDER_OF_RE.exec(t))) orgs.push(m[1]);
+  if ((m = ANCHOR_TRAILING_ORG_RE.exec(t))) orgs.push(m[1]);
+  return orgs.map((o) => o.trim()).filter(Boolean);
+}
+
+// True = keep. Reject only when the title names an org AND none of the named
+// orgs is the target/alias. No org named, or no target known -> keep (inert).
+function passesCompanyAnchor(title, aliases) {
+  const orgs = extractOrgs(title);
+  if (orgs.length === 0) return true;
+  if (!aliases || aliases.size === 0) return true;
+  return orgs.some((o) => orgIsTarget(o, aliases));
+}
+
+// ── Creative-title filter (separate failure mode) ───────────────────
+// A creative role ("Director of Photography", "Cinematographer") matches the
+// "Director of X" pattern but is not an executive. Kept narrow and independent
+// of the company anchor so the two are diagnosable in isolation.
+// ponytail: narrow token list — widen only if a creative role slips through.
+const CREATIVE_RE = /\b(?:photograph|cinematograph|videograph)/i;
+function isCreativeTitle(title) {
+  return CREATIVE_RE.test(String(title == null ? '' : title));
+}
+
 // Select decision-makers from an array of records. Each kept record is annotated
-// with matched_role + matched_pattern. options: { roles, titleField, _patterns }.
+// with matched_role + matched_pattern. A matched title is still dropped if it is
+// a creative role or if it anchors to a non-target company.
+// options: { roles, titleField, companyField, companyIdField, companyAnchor,
+//            _patterns, _rejections }.
 function selectDecisionMakers(records, options = {}) {
   const patterns = options._patterns || buildRolePatterns(options.roles);
   const titleField = options.titleField || 'position';
+  const companyField = options.companyField || 'current_company_name';
+  const companyIdField = options.companyIdField || 'current_company_company_id';
+  const anchorOn = options.companyAnchor !== false;
+  const aliases = anchorOn ? buildCompanyAliases(records, companyField, companyIdField) : null;
+  const reject = (rec, reason) => { if (options._rejections) options._rejections.push({ ...rec, rejected_by: reason }); };
   const selected = [];
   for (const rec of records || []) {
     if (!rec) continue;
-    const hit = matchTitle(rec[titleField], patterns);
-    if (hit.matched) selected.push({ ...rec, matched_role: hit.role, matched_pattern: hit.pattern });
+    const title = rec[titleField];
+    const hit = matchTitle(title, patterns);
+    if (!hit.matched) continue;
+    if (isCreativeTitle(title)) { reject(rec, 'creative_title'); continue; }
+    if (anchorOn && !passesCompanyAnchor(title, aliases)) { reject(rec, 'company_anchor'); continue; }
+    selected.push({ ...rec, matched_role: hit.role, matched_pattern: hit.pattern });
   }
   return selected;
 }
@@ -98,6 +199,9 @@ async function execute(input, options, tools) {
   const roles = parseRoles(options && options.roles);
   const patterns = buildRolePatterns(roles);
   const titleField = (options && options.title_field) || 'title';
+  const companyField = (options && options.company_field) || 'current_company_name';
+  const companyIdField = (options && options.company_id_field) || 'current_company_company_id';
+  const companyAnchor = !(options && options.company_anchor === false);
 
   const results = [];
   for (let ei = 0; ei < entities.length; ei++) {
@@ -105,7 +209,7 @@ async function execute(input, options, tools) {
     const name = entity.name || 'unknown';
     if (progress && progress.update) progress.update(ei + 1, entities.length, `Selecting decision-makers for ${name}`);
     const items = Array.isArray(entity.items) ? entity.items : [];
-    const kept = selectDecisionMakers(items, { _patterns: patterns, titleField });
+    const kept = selectDecisionMakers(items, { _patterns: patterns, titleField, companyField, companyIdField, companyAnchor });
     if (logger && logger.info) logger.info(`${name}: ${kept.length} decision-maker(s) of ${items.length} people`);
     results.push({
       entity_name: name,
@@ -133,3 +237,8 @@ module.exports.buildRolePatterns = buildRolePatterns;
 module.exports.matchTitle = matchTitle;
 module.exports.selectDecisionMakers = selectDecisionMakers;
 module.exports.parseRoles = parseRoles;
+module.exports.buildCompanyAliases = buildCompanyAliases;
+module.exports.extractOrgs = extractOrgs;
+module.exports.orgIsTarget = orgIsTarget;
+module.exports.passesCompanyAnchor = passesCompanyAnchor;
+module.exports.isCreativeTitle = isCreativeTitle;

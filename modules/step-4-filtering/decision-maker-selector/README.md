@@ -26,6 +26,22 @@ selection client-side, with word-boundary regexes.
 - Annotates each kept item with `matched_role` and `matched_pattern` so a
   misfire is diagnosable.
 
+Two further, **independently diagnosable** drops refine precision on large
+companies (rejections are captured with a `rejected_by` reason):
+
+- **Company anchor.** When a matched title *names an organisation* — `Founder of
+  SR Collection`, `Head of QA **at** RokkerX`, `VP, …, **The LEGO Group**` — that
+  org must be the target company or a known alias, else the record is rejected.
+  Aliases are **derived from the roster's own** `current_company_name` /
+  `current_company_company_id` values (never hardcoded), so `ARRISE powering
+  Pragmatic Play` survives alongside `Pragmatic Play`, and `@Vegangster` /
+  `at Vegangster` survive for Vegangster. It **never down-weights Founder**: a
+  bare `Founder`, or `Founder of <target>`, always survives. (`rejected_by:
+  company_anchor`)
+- **Creative-title filter.** A creative role that matches `Director of X` but is
+  not an executive — `Director of Photography`, `Cinematographer` — is rejected.
+  (`rejected_by: creative_title`)
+
 ## Options
 
 | Option | Default | Notes |
@@ -33,20 +49,22 @@ selection client-side, with word-boundary regexes.
 | `roles` | built-in list | Textarea `Role \| phrase1, phrase2` per line, **or** a structured array. Fully configurable — no vertical is hardcoded. |
 | `title_field` | `title` | Which pool-item field holds the job title (`api-fetcher` maps LinkedIn `position` → `title`). |
 
-## Proof (measured)
+## Proof (measured, live Bright Data Search `gd_l1viktl72bvl7bjuj0`, 2026-08-10)
 
-Run against the live 76-record Vegangster roster (Bright Data Search,
-`gd_l1viktl72bvl7bjuj0`, 2026-08-10):
+| Company | Records | Selected | Precision | Recall | Notes |
+|---------|--------:|---------:|-----------|--------|-------|
+| **Vegangster** (startup) | 76 | 7 | **1.00** | **1.00** | 4 of 7 name `@Vegangster`/`at Vegangster` in-title — anchor keeps them via the derived alias. |
+| **Pragmatic Play** (large) | 39 | 29→**22** | **0.76 → 1.00** | **1.00** | Anchor dropped 6 wrong-company titles (SR Collection, pingwit.pl, BitElectric, Vanciu Artworks, LEGO Group, RokkerX); creative filter dropped 1 (Director of Photography). `ARRISE powering Pragmatic Play` alias employees all survive. |
+| **Relax Gaming** (mid, unseen) | 17 | 10→**9** | **~0.9–1.0** | **1.00** | Anchor generalised to an unseen company: dropped `Head of Mathematics **at Quickspin**` (a different studio). |
 
-- **7 of 76** kept — CEO/Co-Founder + 6 `Head of X`.
-- **precision 1.000, recall 1.000** (0 false positives, 0 misses).
-- Catches the three the earlier narrow-token probe **missed**: Head of Content,
-  Head of Frontend, Head of Technical Support.
-- Rejects the `"Director at Vegangsters"` (`dire`**`cto`**`r`) substring trap.
+- Vegangster still catches the three the earlier narrow-token probe **missed**
+  (Head of Content / Frontend / Technical Support) and rejects the
+  `"Director at Vegangsters"` (`dire`**`cto`**`r`) substring trap.
+- Cost is `records × $2.50 CPM` (the snapshot `cost` field is wrong — do not use).
 
 ```
 node modules/step-4-filtering/decision-maker-selector/test-decision-maker-selector.js
-# => 41 passed, 0 failed
+# => 66 passed, 0 failed
 ```
 
 ## Programmatic use
