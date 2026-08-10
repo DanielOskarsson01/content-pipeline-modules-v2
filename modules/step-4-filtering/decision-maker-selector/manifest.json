@@ -1,0 +1,31 @@
+{
+  "id": "decision-maker-selector",
+  "name": "Decision-Maker Selector",
+  "description": "Keep only decision-makers from fetched people records using word-boundary role matching on job titles. Complements the Bright Data LinkedIn-people Search provider: server-side `includes` is a substring match that cannot select titles cleanly (CTO matches 'director'), so role selection happens here, client-side.",
+  "version": "1.0.0",
+  "step": 4,
+  "category": "filtering",
+  "cost": "free",
+  "data_operation_default": "select",
+  "pool_precondition": "requires_items",
+  "depends_on": ["api-fetcher"],
+  "usage_notes": "Runs on people records (e.g. LinkedIn profiles fetched by Step-3 api-fetcher). Matches each item's title field against a configurable role list using WORD-BOUNDARY regexes, so 'CTO' never matches 'director'/'factory'. Records with null / empty / emoji / slogan titles match nothing and are dropped. Each kept item is annotated with matched_role + matched_pattern for diagnosability. The role list is fully configurable; nothing is baked into code.",
+  "requires_columns": ["title"],
+  "options": [
+    {
+      "name": "roles",
+      "type": "textarea",
+      "label": "Roles to keep (one per line: Role | phrase1, phrase2)",
+      "presets_enabled": true,
+      "description": "Each line is a role label and the title phrases that identify it. Phrases are matched with word boundaries and case-insensitively, so acronyms are safe (CTO will not match 'director'). Use spelled-out AND acronym forms. Leave blank for the built-in default (CEO, CTO, CMO, CPO, Founder/Co-Founder, Head of X, VP X, Director of X).",
+      "default": "CEO | CEO, Chief Executive\nCTO | CTO, Chief Technology, Chief Technical\nCMO | CMO, Chief Marketing\nCPO | CPO, Chief Product\nFounder | Founder, Co-Founder\nHead | Head of\nVP | VP, Vice President\nDirector | Director of"
+    },
+    {
+      "name": "title_field",
+      "type": "string",
+      "label": "Item field holding the job title",
+      "description": "Which pool-item field carries the person's title. api-fetcher maps LinkedIn `position` to `title` by default.",
+      "default": "title"
+    }
+  ]
+}

@@ -135,6 +135,34 @@ POST + `bearer`, `empty_is_error` set (the harvestapi LinkedIn **employees** act
 }
 ```
 
+POST + `bearer`, `empty_is_error` — **Bright Data LinkedIn People via the synchronous Datasets *Search* endpoint** (`gd_l1viktl72bvl7bjuj0`; live-verified 2026-08-10). Unlike the async Filter route noted above, Search returns records **inline** in `hits[]` (HTTP 200, ~3s, no `snapshot_id`, no poll) — so it is a **plain api-fetcher config, no poll primitive needed**. Server-side `includes` only reduces volume; clean role selection is done by the Step-4 `decision-maker-selector` (word-boundary regex — `includes CTO` would match "dire*cto*r"). Full block + B4 filter reasoning: `docs/brightdata-linkedin-people-filter-provider.md`.
+
+```json
+{
+  "id": "brightdata-linkedin-people",
+  "name": "Bright Data — LinkedIn People (Datasets Search API, synchronous)",
+  "response_format": "json",
+  "auth": { "type": "bearer", "env_var": "BRIGHTDATA_API_KEY" },
+  "identifier_source": { "entity_field": "company_name", "item_field": "current_company_name" },
+  "empty_is_error": true,
+  "endpoints": [
+    { "id": "search", "method": "POST",
+      "url": "https://api.brightdata.com/datasets/search/gd_l1viktl72bvl7bjuj0",
+      "body": { "size": 100, "filter": { "operator": "and", "filters": [
+        { "name": "current_company_name", "operator": "includes", "value": "{identifier}" },
+        { "operator": "or", "filters": [
+          { "name": "position", "operator": "includes", "value": "Head" },
+          { "name": "position", "operator": "includes", "value": "Chief" },
+          { "name": "position", "operator": "includes", "value": "Founder" },
+          { "name": "position", "operator": "includes", "value": "Director" }
+        ] } ] } },
+      "results_path": "hits",
+      "field_map": { "name": "name", "title": "position", "company": "current_company_name",
+        "company_id": "current_company_company_id", "url": "url", "location": "location" } }
+  ]
+}
+```
+
 ### Config schema
 
 - **`response_format`** — `"json"` (default) or `"xml"`. XML (RSS/Atom) is converted to a JSON object generically: elements → keys, repeated siblings → arrays, attributes → `@name` keys (e.g. `enclosure.@url`), CDATA/text → strings. `results_path` / `field_map` then apply identically. RSS tag names live in config, not code.

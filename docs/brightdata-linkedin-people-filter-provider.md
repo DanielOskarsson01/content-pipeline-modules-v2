@@ -1,9 +1,99 @@
-# Bright Data — LinkedIn People (Dataset Filter API) — provider config draft
+# Bright Data — LinkedIn People — provider config
 
-**Status:** PROBE RESULT + DRAFT. Measured live 2026-08-09 against dataset `gd_l1viktl72bvl7bjuj0`
-(LinkedIn people profiles) with an account-level Datasets API key (`BRIGHTDATA_API_KEY`).
-**Not wired into `execute.js`.** See the blocking caveat below — this route needs a poll primitive
-api-fetcher does not yet have (BACKLOG #56, `dataset-fetcher`).
+**Status:** BUILD-READY (Search route). Measured live 2026-08-10 against dataset `gd_l1viktl72bvl7bjuj0`
+(LinkedIn people profiles) with a Datasets API key (`BRIGHTDATA_API_KEY`).
+
+> ## ✅ UPDATE 2026-08-10 — use the synchronous **Search** endpoint (no poll needed)
+>
+> The 2026-08-09 probe only tried `POST /datasets/filter` (async) and concluded a poll primitive was
+> required. **That is now moot.** Bright Data documents a **synchronous Search endpoint** that supports
+> exactly three datasets today — this one included — and it works:
+>
+> - **`POST https://api.brightdata.com/datasets/search/gd_l1viktl72bvl7bjuj0`**
+> - Auth: `Authorization: Bearer $BRIGHTDATA_API_KEY`
+> - Body: `{ "filter": {…}, "size": 100 }` (also `sort`, `search_after` for paging)
+> - **Records return INLINE**, synchronously, in `{ "hits": [...], "total_hits": N, "took": ms }`.
+>   **No `snapshot_id`, no polling, no download hop.**
+> - Measured: HTTP **200** in **~3.0s** wall (**1.0s** server `took`), 76 Vegangster records inline.
+> - Cost: **$2.50 CPM** (per 1,000 records returned) — same as Filter.
+>
+> **Consequence:** this is now **a pure api-fetcher config** — the poll primitive / `dataset-fetcher`
+> (BACKLOG #56) is **not needed** for this route. Role selection that `includes` cannot do cleanly is
+> handled by the companion Step-4 module **`decision-maker-selector`** (word-boundary regex).
+>
+> ### Provider config (Search — build-ready)
+>
+> ```json
+> {
+>   "id": "brightdata-linkedin-people",
+>   "name": "Bright Data — LinkedIn People (Datasets Search API, synchronous)",
+>   "response_format": "json",
+>   "auth": { "type": "bearer", "env_var": "BRIGHTDATA_API_KEY" },
+>   "identifier_source": { "entity_field": "company_name", "item_field": "current_company_name" },
+>   "empty_is_error": true,
+>   "endpoints": [
+>     {
+>       "id": "search",
+>       "method": "POST",
+>       "url": "https://api.brightdata.com/datasets/search/gd_l1viktl72bvl7bjuj0",
+>       "body": {
+>         "size": 100,
+>         "filter": {
+>           "operator": "and",
+>           "filters": [
+>             { "name": "current_company_name", "operator": "includes", "value": "{identifier}" },
+>             { "operator": "or", "filters": [
+>               { "name": "position", "operator": "includes", "value": "Head" },
+>               { "name": "position", "operator": "includes", "value": "Chief" },
+>               { "name": "position", "operator": "includes", "value": "Founder" },
+>               { "name": "position", "operator": "includes", "value": "Director" }
+>             ] }
+>           ]
+>         }
+>       },
+>       "results_path": "hits",
+>       "field_map": {
+>         "name": "name", "title": "position", "company": "current_company_name",
+>         "company_id": "current_company_company_id", "url": "url", "location": "location"
+>       }
+>     }
+>   ]
+> }
+> ```
+>
+> `empty_is_error: true` is correct: a valid company that surfaces zero decision-makers is a failure to
+> surface, not a legitimate empty. The api-fetcher engine already honours it (execute.js v1.1.2, line 493).
+> The engine substitutes `{identifier}` into the body's string leaves, POSTs the object as JSON, reads
+> `results_path: "hits"`, and maps each hit — no engine change required.
+>
+> ### B4 — server-side filter (max recall within the rule limits)
+>
+> Constraints (validation-only, free): **≤4 rules per group**, **nesting depth ≤3**, a group with
+> `combine_nested_fields` cannot hold sub-groups. Design: an outer **AND** (2 rules) of a company rule
+> and an inner **OR** (4 rules), depth 2 — inside every limit.
+>
+> | Rule | Why |
+> |------|-----|
+> | `current_company_name includes {company}` | Anchors to the company. `includes` (substring) tolerates name variants ("Vegangster"/"Vegangsters"), higher recall than `=` on `company_id` (which drops null-id rows). |
+> | `position includes "Head"` | Catches **all** `Head of X` (the probe's narrow tokens missed Head of Content/Frontend/Technical Support). Substring is fine server-side — the client selector re-checks with word boundaries. |
+> | `position includes "Chief"` | Spelled-out C-suite: Chief Executive/Technology/Marketing/Product Officer. |
+> | `position includes "Founder"` | Founder / Co-Founder. (Precision caveat below.) |
+> | `position includes "Director"` | Director-level. Broadest 4th spelled-out token; "Director of X" refined client-side. |
+>
+> **Acronyms are deliberately excluded server-side** (the whole reason for the client selector): `includes`
+> is unanchored, so `CTO` would match "dire**cto**r"/"fa**cto**ry". **Known recall gap:** an acronym-only
+> C-suite title (e.g. a bare "CEO" with no "Chief"/"Founder") is missed server-side — acceptable because
+> Search is cheap; a full-roster fetch (no role OR-group) catches them at ~5–10× the records.
+>
+> **Measured precision caveat at scale:** on a large company (Pragmatic Play, 39 role-filtered records →
+> 29 matched) the leaks are `"Founder of <side-company>"` (employees who founded something on the side)
+> and `"Director of Photography"` — both real title matches, not company decision-makers. For large
+> established companies, down-weight `Founder`/`Director` or add a company-anchor. On a startup
+> (Vegangster) `Founder` is high-value — it caught the actual "CEO and Co-Founder".
+
+---
+
+## (Historical) 2026-08-09 Filter-API probe — async route, superseded by Search above
 
 ## What the probe established
 
