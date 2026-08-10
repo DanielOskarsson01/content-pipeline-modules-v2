@@ -12,7 +12,14 @@
  * vertical. Records whose title is null / empty / an emoji / a slogan match no
  * pattern and are dropped, not selected.
  *
- * Data operation: SELECT (<) -- fewer items out than in (non-decision-makers removed).
+ * Data operation: ADD. After role selection this module emits ONE item per entity, keyed on
+ * entity_name, whose text_content is a pre-formatted leadership roster ("Name — Title" per line
+ * under a heading). Step-5 reads only item.text_content, and requires_columns cannot deliver a
+ * person's name (it lives inside the stringified data_json blob, and hydration is 1:1 by item_key
+ * so it cannot aggregate many people onto one entity) — so the roster must be added as prose on a
+ * single entity-keyed item, not filtered. The manifest previously declared data_operation_default
+ * "select", which is NOT a valid pool operation (add | remove | transform) and throws in
+ * applyDataOperation — a live defect this replaces with "add".
  */
 
 // Default role list: acronym AND spelled-out forms. Override via options.roles.
@@ -191,8 +198,43 @@ function parseRoles(raw) {
   return roles.length ? roles : DEFAULT_ROLES;
 }
 
+// ── Roster emit ───────────────────────────────────────────────────────
+// Step-5 modules (content-analyzer, content-writer) read ONLY item.text_content
+// per item (plus title/url for a header) — never a person's name field. So the
+// selected decision-makers are folded into ONE entity-keyed item whose text_content
+// is pre-formatted prose: a heading the writer recognises as leadership information,
+// then one "Name — Title" line per decision-maker. Emitted under `add`, keyed on
+// entity_name, so it joins the pool alongside the scraped pages.
+
+// Heading is prose the writer sees verbatim — kept explicit so it reads as leadership
+// info, not page content.
+function rosterHeading(entityName) {
+  return `Leadership team at ${entityName} (key decision-makers):`;
+}
+
+function formatRoster(entityName, kept, titleField) {
+  const lines = kept.map((r) => `${r.name || 'Unknown'} — ${r[titleField] || r.matched_role || 'Unknown role'}`);
+  return `${rosterHeading(entityName)}\n${lines.join('\n')}`;
+}
+
+// One roster item per entity, or null when there are zero decision-makers: an empty /
+// heading-only roster item still carries text_content and would inject a contentless
+// "leadership" block into the writer's {entity_content}, so emitting none is strictly better.
+function buildRosterItem(entityName, kept, titleField) {
+  if (!kept.length) return null;
+  return {
+    entity_name: entityName,
+    source_submodule: 'decision-maker-selector',
+    title: `Leadership & Decision-Makers — ${entityName}`,
+    url: `roster://${entityName}`,
+    text_content: formatRoster(entityName, kept, titleField),
+    matched_count: kept.length,
+  };
+}
+
 // ── Pipeline entry (Step 4) ───────────────────────────────────────────
-// Reads pool items per entity, keeps only decision-makers by title, annotates them.
+// Reads pool items per entity, selects decision-makers by title, and emits ONE
+// entity-keyed leadership-roster item per entity (add).
 async function execute(input, options, tools) {
   const { entities } = input;
   const { logger, progress } = tools;
@@ -211,21 +253,23 @@ async function execute(input, options, tools) {
     const items = Array.isArray(entity.items) ? entity.items : [];
     const kept = selectDecisionMakers(items, { _patterns: patterns, titleField, companyField, companyIdField, companyAnchor });
     if (logger && logger.info) logger.info(`${name}: ${kept.length} decision-maker(s) of ${items.length} people`);
+    const rosterItem = buildRosterItem(name, kept, titleField);
     results.push({
       entity_name: name,
-      items: kept,
+      items: rosterItem ? [rosterItem] : [],
       meta: { total_in: items.length, selected: kept.length, dropped: items.length - kept.length },
     });
   }
 
-  const totalSelected = results.reduce((s, r) => s + r.items.length, 0);
+  const totalSelected = results.reduce((s, r) => s + r.meta.selected, 0);
+  const rostersEmitted = results.reduce((s, r) => s + r.items.length, 0);
   const totalIn = results.reduce((s, r) => s + r.meta.total_in, 0);
   return {
     results,
     summary: {
       total_entities: entities.length,
-      total_items: totalSelected,
-      description: `${totalSelected} decision-makers selected from ${totalIn} people across ${entities.length} ${entities.length === 1 ? 'entity' : 'entities'}`,
+      total_items: rostersEmitted,
+      description: `${totalSelected} decision-makers selected from ${totalIn} people across ${entities.length} ${entities.length === 1 ? 'entity' : 'entities'}; ${rostersEmitted} roster item(s) emitted`,
       errors: [],
     },
   };
@@ -242,3 +286,5 @@ module.exports.extractOrgs = extractOrgs;
 module.exports.orgIsTarget = orgIsTarget;
 module.exports.passesCompanyAnchor = passesCompanyAnchor;
 module.exports.isCreativeTitle = isCreativeTitle;
+module.exports.formatRoster = formatRoster;
+module.exports.buildRosterItem = buildRosterItem;

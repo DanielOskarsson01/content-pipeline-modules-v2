@@ -1,15 +1,16 @@
 {
   "id": "decision-maker-selector",
   "name": "Decision-Maker Selector",
-  "description": "Keep only decision-makers from fetched people records using word-boundary role matching on job titles. Complements the Bright Data LinkedIn-people Search provider: server-side `includes` is a substring match that cannot select titles cleanly (CTO matches 'director'), so role selection happens here, client-side.",
-  "version": "1.0.0",
+  "description": "Select decision-makers from fetched people records using word-boundary role matching on job titles, then emit ONE entity-keyed leadership-roster item whose text_content is pre-formatted prose (one 'Name — Title' per line). Complements the Bright Data LinkedIn-people Search provider: server-side `includes` is a substring match that cannot select titles cleanly (CTO matches 'director'), so role selection happens here, client-side. Step-5 reads only item.text_content, so the roster is ADDED as prose rather than filtered.",
+  "version": "1.1.0",
   "step": 4,
   "category": "filtering",
   "cost": "free",
-  "data_operation_default": "select",
+  "data_operation_default": "add",
+  "item_key": "entity_name",
   "pool_precondition": "requires_items",
   "depends_on": ["api-fetcher"],
-  "usage_notes": "Runs on people records (e.g. LinkedIn profiles fetched by Step-3 api-fetcher). Matches each item's title field against a configurable role list using WORD-BOUNDARY regexes, so 'CTO' never matches 'director'/'factory'. Records with null / empty / emoji / slogan titles match nothing and are dropped. Two further, independently-diagnosable drops refine precision: (1) the company anchor rejects a matched title that names an organisation other than the target company or a derived alias ('Founder of SR Collection', 'Head of QA at RokkerX'); (2) the creative-title filter rejects creative roles that match 'Director of X' but are not executives ('Director of Photography'). Each kept item is annotated with matched_role + matched_pattern for diagnosability. The role list is fully configurable; nothing is baked into code.",
+  "usage_notes": "Runs on people records (e.g. LinkedIn profiles fetched by Step-3 api-fetcher). Matches each item's title field against a configurable role list using WORD-BOUNDARY regexes, so 'CTO' never matches 'director'/'factory'. Records with null / empty / emoji / slogan titles match nothing and are dropped. Two further, independently-diagnosable drops refine precision: (1) the company anchor rejects a matched title that names an organisation other than the target company or a derived alias ('Founder of SR Collection', 'Head of QA at RokkerX'); (2) the creative-title filter rejects creative roles that match 'Director of X' but are not executives ('Director of Photography'). The surviving decision-makers are folded into ONE item per entity, keyed on entity_name (item_key), whose text_content is a leadership roster the writer reads as prose. When zero decision-makers survive, no roster item is emitted (an empty roster is worse than none). Operation is `add`: the roster joins the pool alongside the scraped pages. The name field must be readable at the top level of the pool item (api-fetcher promotes name + current_company_name from the provider field_map); requires_columns cannot deliver it because name lives inside the stringified data_json blob and hydration is 1:1 by item_key. The role list is fully configurable; nothing is baked into code.",
   "requires_columns": ["title"],
   "options": [
     {

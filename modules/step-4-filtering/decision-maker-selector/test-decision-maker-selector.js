@@ -180,23 +180,52 @@ assert(!narrowNames.has('Yurii Polishchuk'), 'narrow probe tokens MISS Head of T
 assert(selectedNames.has('Olga Ribkina') && selectedNames.has('Mykola Ptushchuk') && selectedNames.has('Yurii Polishchuk'),
   'generic "Head of X" selector CATCHES all three the probe missed');
 
-console.log('\n-- execute() pipeline contract --');
+console.log('\n-- execute() emits a single entity-keyed leadership roster item (ADD) --');
 (async () => {
-  const items = [
-    { url: 'u1', title: 'CEO and Co-Founder', data_json: '{}' },
-    { url: 'u2', title: 'Backend Developer', data_json: '{}' },
-    { url: 'u3', title: null, data_json: '{}' },
-    { url: 'u4', title: 'Head of Content', data_json: '{}' },
-  ];
+  const MANIFEST = require('./manifest.json');
   const logger = { info: () => {}, warn: () => {}, error: () => {} };
+  const items = [
+    { url: 'u1', name: 'Jane Boss', title: 'CEO and Co-Founder', data_json: '{}' },
+    { url: 'u2', name: 'Bob Dev',   title: 'Backend Developer',  data_json: '{}' },
+    { url: 'u3', name: 'Nobody',    title: null,                  data_json: '{}' },
+    { url: 'u4', name: 'Amy Lead',  title: 'Head of Content',     data_json: '{}' },
+  ];
   const out = await execute({ entities: [{ name: 'Acme', items }] }, { roles: DEFAULT_ROLES }, { logger, progress: { update: () => {} } });
-  const kept = out.results[0].items;
-  assert(kept.length === 2, `execute keeps only the 2 decision-makers (got ${kept.length})`);
-  assert(kept.every((i) => i.matched_role && i.matched_pattern), 'execute annotates kept items with matched_role + matched_pattern');
-  assert(kept.some((i) => i.title === 'CEO and Co-Founder') && kept.some((i) => i.title === 'Head of Content'), 'execute kept the right two');
+  const emitted = out.results[0].items;
 
-  const empty = await execute({ entities: [{ name: 'Empty', items: [] }] }, { roles: DEFAULT_ROLES }, { logger, progress: { update: () => {} } });
-  assert(empty.results[0].items.length === 0, 'execute on empty items -> empty selection');
+  // Roster shape: exactly ONE item (the roster), not the per-person rows.
+  assert(emitted.length === 1, `execute emits exactly one roster item, not per-person rows (got ${emitted.length})`);
+  const roster = emitted[0];
+
+  // Entity key: the item is keyed on entity_name, and the manifest declares item_key so the
+  // pool `add` keys on (entity_name, source_submodule) rather than the default 'url' (absent → dropped).
+  assert(roster.entity_name === 'Acme', 'roster item is keyed on entity_name');
+  assert(MANIFEST.item_key === 'entity_name', 'manifest item_key is entity_name');
+
+  // Roster prose: a heading the writer reads as leadership info + one "Name — Title" line per
+  // decision-maker (the CEO and the Head of Content — not the developer or the null-title row).
+  assert(typeof roster.text_content === 'string' && roster.text_content.length > 0, 'roster carries text_content prose');
+  assert(/^Leadership team at Acme \(key decision-makers\):/.test(roster.text_content), 'roster text_content opens with the leadership heading');
+  assert(roster.text_content.includes('Jane Boss — CEO and Co-Founder'), 'roster lists "Name — Title" for the CEO');
+  assert(roster.text_content.includes('Amy Lead — Head of Content'), 'roster lists "Name — Title" for the Head of Content');
+  assert(!roster.text_content.includes('Bob Dev') && !roster.text_content.includes('Nobody'), 'roster excludes non-decision-makers');
+  assert(roster.text_content.split('\n').length === 3, 'roster = heading + 2 decision-maker lines (3 lines)');
+
+  // Step-5 readability: the roster passes content-writer's scraped-source filter, so it reaches {entity_content}.
+  assert(roster.source_submodule !== 'content-analyzer' && roster.source_submodule !== 'seo-planner' && !!roster.text_content,
+    'roster passes content-writer assembleSourceContent filter');
+
+  // ADD operation: the manifest default is now a VALID pool op (was the invalid "select").
+  const VALID_OPERATIONS = ['add', 'remove', 'transform'];
+  assert(MANIFEST.data_operation_default === 'add', 'manifest data_operation_default is "add"');
+  assert(VALID_OPERATIONS.includes(MANIFEST.data_operation_default), 'data_operation_default is a valid pool operation');
+
+  // Zero decision-makers: emit NOTHING (an empty/heading-only roster item is worse than none —
+  // it would still pass the text_content filter and inject a contentless "leadership" block).
+  const none = await execute(
+    { entities: [{ name: 'Empty', items: [{ url: 'x', name: 'A', title: 'Designer', data_json: '{}' }] }] },
+    { roles: DEFAULT_ROLES }, { logger, progress: { update: () => {} } });
+  assert(none.results[0].items.length === 0, 'zero decision-makers -> no roster item emitted');
 
   console.log(`\n=== assertions: ${pass} passed, ${fail} failed ===`);
   process.exit(fail === 0 ? 0 : 1);

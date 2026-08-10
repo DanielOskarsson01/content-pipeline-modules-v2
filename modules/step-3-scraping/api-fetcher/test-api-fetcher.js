@@ -643,6 +643,49 @@ async function main() {
     assert(meta.status === 'ok', 'no flag: entity meta.status is "ok"');
   }
 
+  // ── 27. E1: promote name + current_company_name to top-level when the field_map maps them ──
+  // (LinkedIn-people provider: the decision-maker-selector roster needs the person's name and the
+  //  company both readable at the top level of the pool item, not buried in data_json.)
+  console.log('\n[27] E1: name + current_company_name promoted to top-level when mapped');
+  {
+    const p = {
+      id: 'li-people', response_format: 'json', identifier_source: { entity_field: 'company_name' },
+      endpoints: [{
+        id: 'search', method: 'POST', url: 'https://api.test/search', results_path: 'hits',
+        field_map: { name: 'name', title: 'position', current_company_name: 'current_company_name', url: 'url' },
+      }],
+    };
+    const tools = makeTools({
+      post: async () => json(200, { hits: [
+        { name: 'Maxim C.', position: 'CEO and Co-Founder', current_company_name: 'Vegangster', url: 'https://li.test/maxim' },
+      ] }),
+    });
+    const res = await execute(makeInput([{ name: 'Vegangster', company_name: 'Vegangster' }]), { ...defaults, providers: [p] }, tools);
+    const item = res.results[0].items[0];
+    assert(item.name === 'Maxim C.', 'E1: name promoted to top-level from field_map');
+    assert(item.current_company_name === 'Vegangster', 'E1: current_company_name promoted to top-level from field_map');
+    assert(item.title === 'CEO and Co-Founder', 'E1: existing title mapping unchanged');
+    assert(item.url === 'https://li.test/maxim', 'E1: existing url mapping unchanged');
+  }
+
+  // ── 28. E1 inertness: a provider whose field_map omits name/current_company_name gets no such keys,
+  //        even when the raw record itself carries those fields. Item shape stays byte-identical to v1.1.2. ──
+  console.log('\n[28] E1 inert: no name/current_company_name keys when the field_map omits them');
+  {
+    const p = {
+      id: 'plain', response_format: 'json', identifier_source: { entity_field: 'cid' },
+      endpoints: [{ id: 'e', url: 'https://api.test/items', results_path: 'data', field_map: { url: 'link', title: 'headline' } }],
+    };
+    const tools = makeTools({
+      get: async () => json(200, { data: [{ link: 'https://r.test/a', headline: 'A', name: 'ShouldNotLeak', current_company_name: 'NoLeakCo' }] }),
+    });
+    const res = await execute(makeInput([{ name: 'X', cid: 'C1' }]), { ...defaults, providers: [p] }, tools);
+    const item = res.results[0].items[0];
+    assert(!('name' in item), 'E1 inert: no top-level name key when field_map omits it');
+    assert(!('current_company_name' in item), 'E1 inert: no top-level current_company_name key when field_map omits it');
+    assert(item.url === 'https://r.test/a' && item.title === 'A', 'E1 inert: existing item shape unchanged');
+  }
+
   console.log(`\n${'='.repeat(50)}\nTOTAL: ${pass} passed, ${fail} failed\n`);
   process.exit(fail > 0 ? 1 : 0);
 }

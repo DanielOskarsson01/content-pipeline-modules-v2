@@ -520,7 +520,7 @@ async function runEndpointsForIdentifier(provider, identifier, authParts, extraP
       }
       if (url == null || url === '') continue; // chain-only record (no key) — used for chaining only
 
-      items.push({
+      const item = {
         source_api: provider.id,
         url: String(url),
         externalId: mapped.externalId != null ? `${provider.id}:${mapped.externalId}` : `${provider.id}:${url}`,
@@ -529,7 +529,15 @@ async function runEndpointsForIdentifier(provider, identifier, authParts, extraP
         raw_text: flattenRawText(mapped, endpoint, options.raw_text_max_chars),
         fetch_date: new Date().toISOString().slice(0, 10),
         status: 'success',
-      });
+      };
+      // Promote name + current_company_name to the top level ONLY when this provider's
+      // field_map maps them (LinkedIn-people → decision-maker-selector roster needs both
+      // readable at the top level, not buried in data_json). Gated on `!= null` so a
+      // provider whose field_map omits these keys gets no extra keys — item shape stays
+      // byte-identical for every existing provider config.
+      if (mapped.name != null) item.name = String(mapped.name);
+      if (mapped.current_company_name != null) item.current_company_name = String(mapped.current_company_name);
+      items.push(item);
     }
   }
 
