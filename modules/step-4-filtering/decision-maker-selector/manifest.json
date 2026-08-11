@@ -2,10 +2,10 @@
   "id": "decision-maker-selector",
   "name": "Decision-Maker Selector",
   "description": "Select decision-makers from fetched people records using word-boundary role matching on job titles, then emit ONE entity-keyed leadership-roster item whose text_content is pre-formatted prose (one 'Name — Title' per line). Complements the Bright Data LinkedIn-people Search provider: server-side `includes` is a substring match that cannot select titles cleanly (CTO matches 'director'), so role selection happens here, client-side. Step-5 reads only item.text_content, so the roster is ADDED as prose rather than filtered.",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "step": 4,
   "category": "filtering",
-  "cost": "free",
+  "cost": "cheap",
   "data_operation_default": "add",
   "item_key": "entity_name",
   "pool_precondition": "requires_items",
@@ -49,5 +49,23 @@
       "description": "Second alias source for the company anchor (e.g. `current_company_company_id` = `pragmatic-play`). Defaults to the raw Bright Data field.",
       "default": "current_company_company_id"
     }
-  ]
+  ],
+  "output_schema": {
+    "display_type": "table",
+    "selectable": false,
+    "entity_name": "string (required) — item_key; the entity this roster belongs to",
+    "source_submodule": "string — always 'decision-maker-selector'",
+    "title": "string — 'Leadership & Decision-Makers — <entity>'",
+    "url": "string — synthetic 'roster://<entity>' locator",
+    "text_content": "string — leadership-roster prose (heading + one 'Name — Title' per decision-maker); Step-5 reads this inline",
+    "matched_count": "number — decision-makers folded into the roster",
+    "downloadable_fields": [],
+    "detail_schema": {
+      "header_fields": [
+        "entity_name",
+        "title",
+        { "field": "matched_count", "display": "badge" }
+      ]
+    }
+  }
 }
