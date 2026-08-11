@@ -1,11 +1,38 @@
 name: Deploy modules to Hetzner
 
+# Runs on every branch so the manifest gate below can validate pushes/PRs, but the
+# deploy job itself is pinned to main/master (see its `if:`), so a branch push
+# validates without ever shipping to prod.
 on:
   push:
-    branches: [main, master]
+    branches: ['**']
 
 jobs:
+  # ── Pre-deploy gate ──────────────────────────────────────────────────────
+  # Every manifest must satisfy the fail-closed moduleLoader contract or the
+  # deploy is blocked. This is the guard whose ABSENCE let an unloadable
+  # decision-maker-selector manifest ship (missing output_schema + invalid cost)
+  # and crash-loop prod for ~22h — loadModules() is imported at boot by
+  # pipeline-api AND stage-worker AND batch-worker, so one bad manifest downs the
+  # whole pipeline. The deploy job `needs:` this, so a non-zero exit here fails
+  # the workflow and rsync never runs.
+  #
+  # Manifests ONLY — deliberately NOT the full module test suites, some of which
+  # are independently red (e.g. card-human-rewriter) and would block every deploy.
+  # This gate covers exactly the class of failure that took prod down.
+  validate-manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Validate every manifest is loadable (moduleLoader contract)
+        run: node modules/test-manifests-loadable.js
+
   deploy:
+    needs: validate-manifests
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
