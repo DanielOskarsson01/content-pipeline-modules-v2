@@ -1,0 +1,16 @@
+
+=== H23: loop-router missing-checker is not a pass ===
+
+1. Full QA set, all pass -> approve (must stay working)
+  PASS: full set approves (got 'approve')
+  PASS: reason is "All QA checks passed"
+
+2. hallucination checker missing (removed), other 4 pass -> must NOT approve
+     -> decision='approve', reason='All QA checks passed. Entity is ready for bundling and distribution.'
+  FAIL: does NOT silently approve on a partial QA set (got 'approve')
+  FAIL: the routing reason names the missing checker (hallucination)
+
+3. expected_checks opt-out: template runs only keyword+meta+structural -> approve
+  PASS: subset with matching expected_checks approves (got 'approve')
+
+=== Result: 3 pass, 2 fail ===

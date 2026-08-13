@@ -143,8 +143,12 @@ async function execute(input, options, tools) {
       continue;
     }
 
-    // Combine all content_markdown
-    const allMarkdown = contentItems.map(item => item.content_markdown).filter(Boolean).join('\n\n');
+    // Select the content_markdown to grade (H18b): content-writer and
+    // tone-seo-editor both emit inline content_markdown under add, so both drafts
+    // survive the pool. Grade only the latest (.at(-1)) -- the exact draft the
+    // step-8 output modules publish (markdown-output:189 / html-output:182 /
+    // json-output:151) -- not both concatenated.
+    const allMarkdown = contentItems.at(-1).content_markdown;
     const structure = parseStructure(allMarkdown);
 
     const violations = [];

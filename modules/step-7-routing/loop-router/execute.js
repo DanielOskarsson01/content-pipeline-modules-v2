@@ -145,7 +145,7 @@ function formatQaSummary(summary) {
  * @returns {{ decision: string, route_reason: string }}
  */
 function route(summary, loopCount, sourcePageCount, opts) {
-  const { max_loops, min_source_pages, default_no_qa } = opts;
+  const { max_loops, min_source_pages, default_no_qa, expected_checks } = opts;
 
   // Collect failures
   const failures = [];
@@ -187,6 +187,25 @@ function route(summary, loopCount, sourcePageCount, opts) {
       decision: 'failed',
       failure_reason: 'max_loops_exceeded',
       route_reason: `Max loop count exceeded (${loopCount}/${max_loops}). Entity has been reworked too many times without passing QA.`,
+    };
+  }
+
+  // Rule 1.5: An EXPECTED checker did not report (H23). The failure set is built
+  // only from 'fail', never 'missing', and the sole absent-checker guard above
+  // fires only when checksRun===0 -- so a PARTIAL set (some ran and passed, one
+  // produced nothing) would fall straight through to "All QA checks passed."
+  // A missing checker is NOT a pass: without its verdict the QA set is
+  // incomplete and any approve/loop decision is unsound. Fail loudly, naming the
+  // absent checker(s). A template that legitimately runs a subset narrows
+  // expected_checks to opt a checker out (mirrors default_no_qa for the
+  // all-missing case). Unknown names never match a summary key, so a stray
+  // opt-in cannot manufacture a phantom-missing failure.
+  const missingExpected = (expected_checks || []).filter(c => summary[c] === 'missing');
+  if (missingExpected.length > 0) {
+    return {
+      decision: 'flag_manual',
+      failure_reason: 'qa_incomplete',
+      route_reason: `QA verdict incomplete -- expected checker(s) did not report: ${missingExpected.join(', ')}. Refusing to approve or route on a partial QA set (a missing checker is not a pass). Narrow expected_checks to opt a checker out.`,
     };
   }
 
@@ -276,10 +295,12 @@ async function execute(input, options, tools) {
     default_no_qa = 'flag_manual',
     max_loops = 3,
     min_source_pages = 8,
+    expected_checks = ['keyword', 'meta', 'citation', 'hallucination', 'structural'],
   } = options;
 
   logger.info(
-    `Config: default_no_qa=${default_no_qa}, max_loops=${max_loops}, min_source_pages=${min_source_pages}`
+    `Config: default_no_qa=${default_no_qa}, max_loops=${max_loops}, min_source_pages=${min_source_pages}, ` +
+    `expected_checks=[${expected_checks.join(', ')}]`
   );
 
   const results = [];
@@ -305,6 +326,7 @@ async function execute(input, options, tools) {
       max_loops,
       min_source_pages,
       default_no_qa,
+      expected_checks,
     });
     const { decision, route_reason } = routeResult;
 

@@ -39,13 +39,22 @@
       "default": 8,
       "min": 1,
       "max": 50
+    },
+    {
+      "name": "expected_checks",
+      "type": "multiselect",
+      "label": "Expected QA checkers",
+      "description": "The step-6 checkers that MUST report for an entity to be routable. If any expected checker produced no verdict, the entity is flagged for manual review instead of being silently approved (a missing checker is not a pass). Narrow this list to opt a checker out on templates that legitimately run a subset.",
+      "values": ["keyword", "meta", "citation", "hallucination", "structural"],
+      "default": ["keyword", "meta", "citation", "hallucination", "structural"]
     }
   ],
 
   "options_defaults": {
     "default_no_qa": "flag_manual",
     "max_loops": 3,
-    "min_source_pages": 8
+    "min_source_pages": 8,
+    "expected_checks": ["keyword", "meta", "citation", "hallucination", "structural"]
   },
 
   "item_key": "entity_name",

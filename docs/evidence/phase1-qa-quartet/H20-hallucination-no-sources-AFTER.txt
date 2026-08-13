@@ -1,0 +1,20 @@
+
+=== H20: hallucination-detector fails closed with no sources ===
+
+1. Claimful content, no sources -> fail closed (was pass-with-score-1)
+     -> qa_pass=false, score=0
+  PASS: does NOT certify unverifiable content (qa_pass=false)
+  PASS: score is 0, not 1 (got 0)
+  PASS: meta.qa_pass is false (a verdict, not a silent skip)
+  PASS: summary counts it failed, not passed
+  PASS: no LLM call -- there was nothing to verify against
+
+2. The no-sources failure reports how many claims are unverifiable
+  PASS: claims were extracted before failing (1)
+  PASS: summary explains why it failed
+
+3. Carve-out: no_sources_behavior=pass -> legacy skip-with-pass
+  PASS: opt-out passes
+  PASS: opt-out marks it skipped (distinct from a verified pass)
+
+=== Result: 9 pass, 0 fail ===

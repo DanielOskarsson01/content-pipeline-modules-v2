@@ -1,0 +1,19 @@
+
+=== H19: keyword checker reads content before passing ===
+
+1. No content_markdown and no seo_plan -> must fail closed (not a silent pass)
+     -> qa_pass=true, keyword_score=1
+  FAIL: does NOT certify absent content (qa_pass=true)
+  FAIL: meta.error is no_content_markdown
+  FAIL: summary counts it as failed, not passed
+
+2. No seo_plan but content present -> soft-gate pass, but flagged needs_review
+  PASS: documented soft-gate contract preserved (qa_pass true)
+  PASS: skip_reason is no_seo_plan (unchanged)
+  FAIL: no longer a clean green -- needs_review:true
+
+3. Real plan + content with keywords -> passes (scoring path ran)
+  PASS: good input reaches scoring (no error/skip)
+  PASS: good input passes
+
+=== Result: 4 pass, 4 fail ===

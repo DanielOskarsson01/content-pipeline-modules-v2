@@ -1,0 +1,16 @@
+
+=== H23: loop-router missing-checker is not a pass ===
+
+1. Full QA set, all pass -> approve (must stay working)
+  PASS: full set approves (got 'approve')
+  PASS: reason is "All QA checks passed"
+
+2. hallucination checker missing (removed), other 4 pass -> must NOT approve
+     -> decision='flag_manual', reason='QA verdict incomplete -- expected checker(s) did not report: hallucination. Refusing to approve or route on a partial QA set (a missing checker is not a pass). Narrow expected_checks to opt a checker out.'
+  PASS: does NOT silently approve on a partial QA set (got 'flag_manual')
+  PASS: the routing reason names the missing checker (hallucination)
+
+3. expected_checks opt-out: template runs only keyword+meta+structural -> approve
+  PASS: subset with matching expected_checks approves (got 'approve')
+
+=== Result: 5 pass, 0 fail ===
