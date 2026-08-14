@@ -1,0 +1,23 @@
+
+=== H18b: checkers grade the latest draft, not the concatenation ===
+
+A. citation-coverage: OLD (3 cited claims, PASS) + NEW (uncited claim, zero citations, FAIL)
+     two-draft: qa_pass=false score=0 | NEW-only: qa_pass=false
+  PASS: two-draft now FAILS (graded the published NEW draft, which has no citations)
+  PASS: two-draft verdict == NEW-only verdict (checker selected .at(-1), same as step-8)
+  PASS: step-8 publishes NEW_TSE (.at(-1)) -- the draft the checker now grades
+
+   single-draft (OLD only, all cited) -> PASS, unaffected
+  PASS: single well-cited draft still passes
+
+B1. hallucination-detector: only the NEW draft's claims reach the verifier
+  PASS: the NEW draft's claim ($50 million) was sent to the verifier
+  PASS: the OLD draft's claim (founded in 2005) was NOT sent (not concatenated)
+
+B2. qa-structural: two-draft verdict == NEW-only verdict
+  PASS: two-draft structural verdict == NEW-only (got 0.33 vs 0.33)
+
+B3. keyword-sufficiency: two-draft verdict == NEW-only verdict
+  PASS: two-draft keyword verdict == NEW-only (got 0 vs 0)
+
+=== Result: 8 pass, 0 fail ===

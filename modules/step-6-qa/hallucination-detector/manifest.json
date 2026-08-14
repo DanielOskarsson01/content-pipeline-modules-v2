@@ -9,7 +9,7 @@
   "data_operation_default": "add",
   "pool_precondition": "requires_items",
   "depends_on": ["content-writer", "page-scraper"],
-  "usage_notes": "Run after content-writer has produced content_markdown and page-scraper/browser-scraper has produced text_content. Uses LLM to verify each factual claim against source material. If no source text_content is available, the entity passes with a warning (cannot verify without sources).",
+  "usage_notes": "Run after content-writer has produced content_markdown and page-scraper/browser-scraper has produced text_content. Grades only the LATEST content_markdown draft (.at(-1), matching the step-8 output modules). Uses LLM to verify each factual claim against source material. If no source text_content is available, the entity FAILS closed by default (unverifiable is not verified) -- set no_sources_behavior to soften. Substantial content that yields zero extractable claims also fails closed (padding-blind signature); the regex extractor cannot see qualitative claims (coverage gap tracked as UNIT_50 #51).",
 
   "requires_columns": ["text_content"],
 
@@ -63,6 +63,23 @@
       "label": "Allow empty content",
       "description": "When true, an entity with no content_markdown skips with a pass (nothing to verify). When false (default), missing content fails closed -- content was expected but is absent, and a QA gate must not certify content it never read.",
       "default": false
+    },
+    {
+      "name": "no_sources_behavior",
+      "type": "select",
+      "label": "Behavior when no sources",
+      "description": "What to do when there is NO source text_content to verify against. 'fail' (default) fails closed -- content asserting claims with nothing to ground them against is unverifiable, and unverifiable is not verified. 'flag' passes but marks needs_review. 'pass' restores the legacy skip-with-pass for pipelines that legitimately have no sources.",
+      "values": ["fail", "flag", "pass"],
+      "default": "fail"
+    },
+    {
+      "name": "flag_zero_claims_over_chars",
+      "type": "number",
+      "label": "Zero-claims fail threshold (chars)",
+      "description": "When claim extraction returns ZERO claims, content longer than this (chars) fails closed -- long content with no extractable claim is the padding-blind signature (all-qualitative content the regex extractor cannot see). Shorter no-claim content is a low-confidence pass (needs_review). Calibration knob: measure the trip rate; do not dial down to silence a genuine halt.",
+      "default": 500,
+      "min": 0,
+      "max": 100000
     }
   ],
 
@@ -72,7 +89,9 @@
     "ai_provider": "anthropic",
     "max_source_chars": 100000,
     "claims_per_batch": 10,
-    "allow_empty_content": false
+    "allow_empty_content": false,
+    "no_sources_behavior": "fail",
+    "flag_zero_claims_over_chars": 500
   },
 
   "item_key": "entity_name",

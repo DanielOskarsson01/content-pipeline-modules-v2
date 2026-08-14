@@ -1,0 +1,16 @@
+
+=== H21: zero extracted claims is not a clean green ===
+
+1. Long qualitative content, zero extractable claims -> not a clean pass
+     -> qa_pass=true, score=1, needs_review=undefined, len=1710
+  PASS: no LLM call -- zero claims were extracted (the coverage gap)
+  FAIL: is NOT a clean perfect green (the old score:1 auto-pass is gone)
+  FAIL: substantial content with zero verifiable claims fails closed
+  FAIL: flagged needs_review
+  PASS: summary explains the coverage gap
+
+2. Tiny content, no claims -> low-confidence pass (needs_review), not a hard fail
+  PASS: tiny no-claim content still passes (nothing to check)
+  FAIL: but marked needs_review (no longer a confident clean pass)
+
+=== Result: 3 pass, 4 fail ===

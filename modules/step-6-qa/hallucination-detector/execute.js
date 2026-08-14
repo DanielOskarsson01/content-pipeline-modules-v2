@@ -278,6 +278,16 @@ async function execute(input, options, tools) {
     max_source_chars = 100000,
     claims_per_batch = 10,
     allow_empty_content = false,
+    // H20: what to do when there is NO source material to verify against.
+    // 'fail' (default) = fail closed -- unverifiable is not verified (UNIT_50
+    // Decision 1, "THE SEVERE ONE"). 'flag' = pass but needs_review. 'pass' =
+    // legacy skip-with-pass for pipelines that legitimately have no sources.
+    no_sources_behavior = 'fail',
+    // H21: content this long (chars) that yields ZERO extractable claims is the
+    // padding-blind signature -- it fails closed instead of auto-passing. Shorter
+    // no-claim content is a low-confidence pass (needs_review). Calibration knob:
+    // measure the trip rate; do not dial down to silence a genuine halt.
+    flag_zero_claims_over_chars = 500,
   } = otherOptions;
 
   // Verification prompt is code-locked (W2.3) -- NOT template-overridable.
@@ -358,54 +368,106 @@ async function execute(input, options, tools) {
       continue;
     }
 
-    // --- Edge case: no source text_content ---
+    // --- Select the content_markdown to grade (H18b) ---
+    // content-writer and tone-seo-editor BOTH emit inline content_markdown under
+    // add with different source_submodule, so both drafts survive the pool. The
+    // step-8 output modules publish only the latest (.at(-1) -- tone-seo-editor
+    // refines content-writer: markdown-output:189 / html-output:182 /
+    // json-output:151). Grade the SAME draft, not both concatenated, or the
+    // verdict is about text that was never published.
+    const allMarkdown = contentItems.at(-1).content_markdown;
+
+    // --- Extract factual claims (BEFORE the source guard, so a no-sources ---
+    // --- failure can report how many claims went unverifiable) ---
+    const claims = extractClaims(allMarkdown);
+
+    // --- H20: no source text_content -- cannot verify anything ---
+    // UNIT_50 Decision 1 ("THE SEVERE ONE"): content asserting claims with no
+    // grounding to check against is the most dangerous silent pass. Fail closed
+    // by default; no_sources_behavior carves out flag/pass.
     if (sourceItems.length === 0) {
-      logger.warn(`${entity.name}: no source text_content available -- cannot verify, passing with warning`);
-      results.push({
+      if (no_sources_behavior === 'pass') {
+        logger.warn(`${entity.name}: no source text_content -- skipping with pass (no_sources_behavior=pass)`);
+        results.push({
+          entity_name: entity.name,
+          items: [{
+            entity_name: entity.name,
+            qa_pass: true,
+            hallucination_score: 1,
+            verified_claims_count: 0, partial_claims_count: 0, total_claims_count: claims.length,
+            flagged_claims_count: 0, flagged_claims: [], flagged_claims_text: '', partial_claims_text: '',
+            summary_text: `No source text_content available -- ${claims.length} claim(s) unverifiable. Skipped with pass (no_sources_behavior=pass).`,
+          }],
+          meta: { qa_pass: true, hallucination_score: 1, skipped: true, skip_reason: 'no_sources', total_claims: claims.length },
+        });
+        continue;
+      }
+      const flagOnly = no_sources_behavior === 'flag';
+      const summary = `No source text_content available -- ${claims.length} extracted claim(s) are unverifiable ` +
+        `(nothing to ground them against). ` +
+        (flagOnly
+          ? 'Flagged for manual review (no_sources_behavior=flag).'
+          : 'Failing closed: unverifiable is not verified. Set no_sources_behavior=flag or =pass to soften.');
+      logger[flagOnly ? 'warn' : 'error'](`${entity.name}: ${summary}`);
+      const noSrcResult = {
         entity_name: entity.name,
         items: [{
           entity_name: entity.name,
-          qa_pass: true,
-          hallucination_score: 1,
-          verified_claims_count: 0,
-          partial_claims_count: 0,
-          total_claims_count: 0,
-          flagged_claims_count: 0,
-          flagged_claims: [],
-          flagged_claims_text: '',
-          partial_claims_text: '',
-          summary_text: 'No source text_content available -- cannot verify claims against sources. Passed with warning.',
+          qa_pass: flagOnly,
+          needs_review: true,
+          hallucination_score: 0,
+          verified_claims_count: 0, partial_claims_count: 0, total_claims_count: claims.length,
+          flagged_claims_count: claims.length, flagged_claims: [], flagged_claims_text: '', partial_claims_text: 'None.',
+          summary_text: summary,
         }],
-        meta: { qa_pass: true, hallucination_score: 1, skipped: true, skip_reason: 'no_sources' },
-      });
+        meta: { qa_pass: flagOnly, needs_review: true, hallucination_score: 0, total_claims: claims.length, skip_reason: 'no_sources' },
+      };
+      results.push(noSrcResult);
+      if (tools._partialItems) tools._partialItems.push(...noSrcResult.items);
       continue;
     }
 
-    // --- Combine content_markdown ---
-    const allMarkdown = contentItems.map(item => item.content_markdown).join('\n\n');
-
-    // --- Extract factual claims ---
-    const claims = extractClaims(allMarkdown);
-
+    // --- H21: zero extractable claims is NOT a clean green ---
+    // The regex extractor only keeps enumerated numeric/date/company claims, so
+    // purely qualitative content yields zero claims. Substantial content with
+    // zero claims is the padding-blind signature -- fail closed (needs_review).
+    // Short no-claim content is a low-confidence pass (needs_review), not a
+    // confident score:1. The full remedy (LLM faithfulness extractor + de-dup of
+    // the regex shared with citation-coverage) is UNIT_50 #51 -- NOT attempted
+    // here; a regex broadening would manufacture false confidence (UNIT_50 OQ7).
     if (claims.length === 0) {
-      logger.info(`${entity.name}: no factual claims detected in content -- automatic pass`);
-      results.push({
+      const substantial = allMarkdown.length > flag_zero_claims_over_chars;
+      const zeroBase = {
         entity_name: entity.name,
-        items: [{
+        needs_review: true,
+        verified_claims_count: 0, partial_claims_count: 0, total_claims_count: 0,
+        flagged_claims_count: 0, flagged_claims: [], flagged_claims_text: '', partial_claims_text: '',
+      };
+      if (substantial) {
+        const summary = `No verifiable factual claims could be extracted from ${allMarkdown.length} chars of content. ` +
+          `The extractor recognizes only enumerated numeric/date/company claims, so purely qualitative content yields ` +
+          `zero claims -- this substantial content cannot be certified as fact-checked (padding-blind signature). ` +
+          `Failing closed pending the LLM-faithfulness extractor (UNIT_50 #51).`;
+        logger.warn(`${entity.name}: ${summary}`);
+        const r = {
           entity_name: entity.name,
-          qa_pass: true,
-          hallucination_score: 1,
-          verified_claims_count: 0,
-          partial_claims_count: 0,
-          total_claims_count: 0,
-          flagged_claims_count: 0,
-          flagged_claims: [],
-          flagged_claims_text: '',
-          partial_claims_text: '',
-          summary_text: 'No factual claims detected in content (no numbers, dates, statistics, or company-specific facts). Automatic pass.',
-        }],
-        meta: { qa_pass: true, hallucination_score: 1, total_claims: 0 },
-      });
+          items: [{ ...zeroBase, qa_pass: false, hallucination_score: 0, summary_text: summary }],
+          meta: { qa_pass: false, needs_review: true, hallucination_score: 0, total_claims: 0, zero_claims: true },
+        };
+        results.push(r);
+        if (tools._partialItems) tools._partialItems.push(...r.items);
+        continue;
+      }
+      const summary = `No factual claims detected in a short (${allMarkdown.length} chars) content body -- nothing to ` +
+        `verify. Low-confidence pass (needs_review); the regex extractor cannot see qualitative claims (UNIT_50 #51).`;
+      logger.info(`${entity.name}: ${summary}`);
+      const r = {
+        entity_name: entity.name,
+        items: [{ ...zeroBase, qa_pass: true, hallucination_score: 1, summary_text: summary }],
+        meta: { qa_pass: true, needs_review: true, hallucination_score: 1, total_claims: 0, zero_claims: true },
+      };
+      results.push(r);
+      if (tools._partialItems) tools._partialItems.push(...r.items);
       continue;
     }
 

@@ -460,6 +460,34 @@ module.exports = async function execute(input, options, tools) {
     const contentItems = (entity.items || []).filter(item => item.content_markdown);
     const seoItems = (entity.items || []).filter(item => item.seo_plan_json);
 
+    // --- H19: read the SUBJECT before emitting any verdict ---
+    // content_markdown is what this checker grades. Every early-return below
+    // (no plan, empty plan) used to fire BEFORE content was ever inspected, so
+    // an entity with no content could be certified green over content that does
+    // not exist. A QA gate must never emit a pass for content it never read.
+    // Fail closed here, regardless of plan state (mirrors qa-structural /
+    // citation-coverage, which already guard content first).
+    if (contentItems.length === 0) {
+      logger.error(`${entity.name}: no content_markdown found -- failing closed (content expected but absent)`);
+      const noContentResult = {
+        entity_name: entity.name,
+        items: [{
+          entity_name: entity.name,
+          qa_pass: false,
+          keyword_score: 0,
+          missing_keywords: JSON.stringify([]),
+          misplaced_keywords: JSON.stringify([]),
+          negative_keywords_found: JSON.stringify([]),
+          placement_report: 'No content_markdown found -- content was expected but is absent, so no keyword analysis could run. Failing closed.',
+          density_report: '',
+        }],
+        meta: { qa_pass: false, keyword_score: 0, error: 'no_content_markdown' },
+      };
+      results.push(noContentResult);
+      if (tools._partialItems) tools._partialItems.push(...noContentResult.items);
+      continue;
+    }
+
     // --- Extract SEO plan keywords ---
     const seoPlanPresent = seoItems.length > 0;
     let keywords = { headTerms: [], midTail: [], entities: [], negatives: [] };
@@ -478,25 +506,31 @@ module.exports = async function execute(input, options, tools) {
       keywords.headTerms.length + keywords.midTail.length +
       keywords.entities.length + keywords.negatives.length;
 
-    // Edge case: no SEO plan present at all -- skip check, return pass with
-    // warning. This is the documented "works without seo-planner data" contract
-    // and is intentionally unaffected by allow_empty_keyword_plan.
+    // Edge case: no SEO plan present at all -- skip the keyword scoring but,
+    // per the documented "works without seo-planner data" soft-gate contract,
+    // do NOT hard-fail (content IS present -- guarded above). Whether an absent
+    // seo_plan should hard-fail is a product-policy call reserved for Daniel
+    // (see handoff H19 / UNIT_50 Decision 4). What changes here: it is no longer
+    // a CLEAN green -- needs_review:true marks that the keyword gate never ran,
+    // so a green verdict cannot be read as "keywords checked and fine."
     if (!seoPlanPresent) {
-      logger.warn(`${entity.name}: no seo_plan_json found -- skipping keyword check (pass with warning)`);
+      logger.warn(`${entity.name}: no seo_plan_json found -- skipping keyword check (pass with warning, needs_review)`);
       results.push({
         entity_name: entity.name,
         items: [{
           entity_name: entity.name,
           qa_pass: true,
+          needs_review: true,
           keyword_score: 1,
           missing_keywords: JSON.stringify([]),
           misplaced_keywords: JSON.stringify([]),
           negative_keywords_found: JSON.stringify([]),
-          placement_report: 'No SEO plan with keywords found. Keyword check skipped -- returning pass with warning.',
+          placement_report: 'No SEO plan with keywords found. Keyword check could not run -- returning pass with warning (needs_review). Content was present and read.',
           density_report: '',
         }],
         meta: {
           qa_pass: true,
+          needs_review: true,
           keyword_score: 1,
           skipped: true,
           skip_reason: 'no_seo_plan',
@@ -559,30 +593,13 @@ module.exports = async function execute(input, options, tools) {
       continue;
     }
 
-    // --- Combine all content_markdown for this entity ---
-    const allMarkdown = contentItems
-      .map(item => item.content_markdown)
-      .filter(Boolean)
-      .join('\n\n');
-
-    if (!allMarkdown) {
-      logger.warn(`${entity.name}: no content_markdown found -- cannot check keywords`);
-      results.push({
-        entity_name: entity.name,
-        items: [{
-          entity_name: entity.name,
-          qa_pass: false,
-          keyword_score: 0,
-          missing_keywords: JSON.stringify(keywords.headTerms.concat(keywords.midTail)),
-          misplaced_keywords: JSON.stringify([]),
-          negative_keywords_found: JSON.stringify([]),
-          placement_report: 'No content_markdown found. Cannot perform keyword analysis.',
-          density_report: '',
-        }],
-        meta: { qa_pass: false, keyword_score: 0, error: 'no_content_markdown' },
-      });
-      continue;
-    }
+    // --- Select the content_markdown to grade (H18b) ---
+    // content-writer and tone-seo-editor BOTH emit inline content_markdown under
+    // add with different source_submodule, so both drafts survive the pool.
+    // The step-8 output modules publish only the latest (.at(-1) --
+    // tone-seo-editor refines content-writer); the checker must grade the SAME
+    // draft, not both concatenated, or its verdict is about text never published.
+    const allMarkdown = contentItems.at(-1).content_markdown;
 
     // --- Parse markdown into structural sections ---
     const sections = parseMarkdownSections(allMarkdown);
