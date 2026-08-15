@@ -2,7 +2,7 @@
   "id": "hallucination-detector",
   "name": "Hallucination Detector",
   "description": "Compare generated content claims against original source material to flag statements that aren't supported by any source.",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "step": 6,
   "category": "qa",
   "cost": "medium",

@@ -2,7 +2,7 @@
   "id": "citation-coverage-checker",
   "name": "Citation Coverage Checker",
   "description": "Verify that every factual claim in the generated content is backed by a citation to a valid source URL.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "step": 6,
   "category": "qa",
   "cost": "cheap",

@@ -2,7 +2,7 @@
   "id": "keyword-sufficiency-checker",
   "name": "Keyword Sufficiency Checker",
   "description": "Validate that generated content includes target SEO keywords at the right density and in the right positions (headlines, first paragraphs, meta tags).",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "step": 6,
   "category": "qa",
   "cost": "cheap",
