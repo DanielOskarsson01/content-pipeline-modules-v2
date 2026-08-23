@@ -68,9 +68,15 @@ jobs:
           #      modules-v2 push from v1.5.0 onwards (2026-06-09).
           #   2. Stale dump.pm2 from the 2026-06-02 silent-truncation issue:
           #      a fresh `pm2 save` after `pm2 start` rewrites the dump.
+          # Delete ONLY the four pipeline processes — NOT `pm2 delete all`, which
+          # also killed the co-tenant meal-api (not in ecosystem.config.cjs,
+          # started manually) on every modules deploy, resetting its uptime.
+          # `pm2 start ecosystem.config.cjs` restarts exactly these four; meal-api
+          # is never named, deleted, or restarted here and survives untouched.
           # Brief gap: ~5-30s while apps stop and restart. profile-api's Chrome
           # respawns via its own 120s health check after profile-api restarts.
           ssh -i ~/.ssh/deploy_key root@188.245.110.34 \
             "cd /opt/content-pipeline-modules-v2 && npm install --omit=dev && \
-             cd /opt/content-pipeline-v2 && pm2 delete all 2>/dev/null || true && \
+             cd /opt/content-pipeline-v2 && \
+             pm2 delete pipeline-api stage-worker batch-worker profile-api 2>/dev/null || true && \
              pm2 start ecosystem.config.cjs && pm2 save"

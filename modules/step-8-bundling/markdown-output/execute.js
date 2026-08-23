@@ -16,36 +16,15 @@ const { headingMarkerRegex } = require('../../_shared/marker-parser.js');
 const { collectQaVerdict } = require('../../_shared/qa-verdict.js');
 
 /**
- * Strip [Type Marker] prefixes from headings.
- * e.g. "## [Overview]" → "## Overview"
- * e.g. "## [Primary Category: online-casinos]" → "## Online Casinos"
+ * Strip the entire bracketed marker prefix from a heading, keeping the
+ * descriptive title. The shared regex matches only "## [marker]" — never the
+ * trailing title or the space after "]" — so returning just the hashes leaves
+ * "## <title>" (the original space after "]" becomes the heading gap).
+ *   "## [Tag: mobile] Mobile-First Slots Design" → "## Mobile-First Slots Design"
+ *   "## [Overview] ELK Studios"                  → "## ELK Studios"
  */
 function stripMarkers(markdown) {
-  return markdown.replace(
-    headingMarkerRegex(),
-    (match, hashes, content) => {
-      // Clean up category/tag markers: "Primary Category: online-casinos" → "Online Casinos"
-      let cleaned = content;
-      if (cleaned.startsWith('Primary Category: ') || cleaned.startsWith('Secondary Category: ')) {
-        cleaned = cleaned.replace(/^(?:Primary|Secondary) Category:\s*/, '');
-        cleaned = slugToTitle(cleaned);
-      } else if (cleaned.startsWith('Tag: ')) {
-        cleaned = cleaned.replace(/^Tag:\s*/, '');
-        cleaned = slugToTitle(cleaned);
-      }
-      return `${hashes} ${cleaned}`;
-    }
-  );
-}
-
-/**
- * Convert a slug to title case. "online-casinos" → "Online Casinos"
- */
-function slugToTitle(slug) {
-  return slug
-    .split('-')
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
+  return markdown.replace(headingMarkerRegex(), (_match, hashes) => hashes);
 }
 
 /**
@@ -87,12 +66,13 @@ function stripCitations(markdown) {
 }
 
 /**
- * Remove the ## [Meta] section from markdown.
+ * Remove ONLY the ## [Meta] section: from its heading to just before the next
+ * "## " heading, or EOF if none follows. A later section (e.g. [Sources]) is
+ * preserved. Non-greedy tail + lookahead — was greedy-to-EOF, which deleted
+ * everything after Meta.
  */
 function removeMetaSection(markdown) {
-  // Match from ## [Meta] or ## Meta to the next ## heading or end of string
-  // Meta is typically the last section, so match greedily to end
-  return markdown.replace(/\n## \[?Meta\]?[\s\S]*$/m, '').trim();
+  return markdown.replace(/\n## \[?Meta\]?[\s\S]*?(?=\n## |$)/, '').trim();
 }
 
 /**

@@ -13,23 +13,12 @@ const { marked } = require('marked');
 const { headingMarkerRegex } = require('../../_shared/marker-parser.js');
 
 /**
- * Strip [Type Marker] prefixes from markdown headings before HTML conversion.
+ * Strip the entire bracketed marker prefix from a heading, keeping the
+ * descriptive title. Same fix as markdown-output: return just the hashes so
+ * "## [Tag: mobile] Mobile-First Slots Design" → "## Mobile-First Slots Design".
  */
 function stripMarkers(markdown) {
-  return markdown.replace(
-    headingMarkerRegex(),
-    (match, hashes, content) => {
-      let cleaned = content;
-      if (cleaned.startsWith('Primary Category: ') || cleaned.startsWith('Secondary Category: ')) {
-        cleaned = cleaned.replace(/^(?:Primary|Secondary) Category:\s*/, '');
-        cleaned = cleaned.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      } else if (cleaned.startsWith('Tag: ')) {
-        cleaned = cleaned.replace(/^Tag:\s*/, '');
-        cleaned = cleaned.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      }
-      return `${hashes} ${cleaned}`;
-    }
-  );
+  return markdown.replace(headingMarkerRegex(), (_match, hashes) => hashes);
 }
 
 /**

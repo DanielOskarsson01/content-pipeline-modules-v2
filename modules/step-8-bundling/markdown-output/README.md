@@ -3,11 +3,13 @@
 > Transform pipeline content into clean, publishable Markdown with optional YAML frontmatter.
 
 **Module ID:** `markdown-output` | **Step:** 8 (Bundling) | **Category:** formatting | **Cost:** cheap
-**Version:** 1.1.0 | **Data Operation:** add (+)
+**Version:** 1.2.0 | **Data Operation:** add (+)
 
 > **v1.0.1 (W1.5):** the heading-marker regex is now sourced from the shared `modules/_shared/marker-parser.js` (single source of truth, also used by tone-seo-editor's marker-preservation gate). Strip behavior is byte-identical to v1.0.0 -- verified by an old-vs-new output diff.
 >
 > **v1.1.0 (M2):** the QA verdict travels with the content -- `qa_verdict` / `qa_flagged` / `qa_failed_checks` in the YAML frontmatter, plus a `qa_flagged` field on every item row that is emitted even when frontmatter is off. See "QA verdict propagation" below.
+>
+> **v1.2.0 (M1):** two publish-layer fixes. (1) `strip_markers` now removes the ENTIRE bracketed prefix and keeps the descriptive title -- `## [Tag: mobile] Mobile-First Slots Design` → `## Mobile-First Slots Design` (previously it prepended the marker word: `## Mobile Mobile-First Slots Design`). (2) With `include_meta_section: false`, only the `## [Meta]` section is removed (up to the next `## ` heading or EOF); a following `## [Sources]` section is now preserved (previously deleted along with everything after Meta).
 
 ---
 
@@ -50,7 +52,7 @@ When an entity carries several `content_markdown` items (re-runs, or the tone-se
 
 | Option | Default | When to Change | Impact |
 |--------|---------|----------------|--------|
-| `heading_style` | `strip_markers` | Set to `keep_markers` if downstream tools need the `[Type Marker]` prefixes for machine parsing | `strip_markers` converts `## [Overview]` to `## Overview` and category slugs to title case |
+| `heading_style` | `strip_markers` | Set to `keep_markers` if downstream tools need the `[Type Marker]` prefixes for machine parsing | `strip_markers` removes the whole bracketed prefix and keeps the descriptive title: `## [Overview] ELK Studios` → `## ELK Studios` |
 | `citation_format` | `footnotes` | Set to `inline` to keep `[#n]` as-is; set to `strip` to remove all citations | `footnotes` converts `[#n]` to `[^n]` with a footnote definitions section at the bottom |
 | `include_frontmatter` | `true` (boolean) | Disable if your CMS does not support YAML frontmatter or you want raw Markdown only | Adds `---` delimited YAML block with title, categories, and tags from analysis data, plus QA verdict fields when the pool carries QA shapes |
 | `include_meta_section` | `false` (boolean) | Enable to keep the `## [Meta]` section for debugging or if meta-output is not being used | The Meta section contains structured metadata that is typically handled by meta-output instead |
@@ -123,8 +125,8 @@ include_meta_section: false
 - **Frontmatter depends on analysis_json** -- if content-analyzer did not run, frontmatter will only contain the title (no categories or tags)
 - **Citation footnotes require source_citations** -- if analysis_json lacks `source_citations`, footnotes will show generic "Source N" labels
 - **Only the latest markdown item is used** -- if an entity has multiple items with `content_markdown` (re-runs, tone-seo-editor refinements), only the most recent one is formatted; earlier drafts are ignored
-- **Category slug conversion** -- slugs like `online-casinos` are converted to title case `Online Casinos` when stripping markers. Non-standard slugs may convert awkwardly
-- **Meta section removal uses regex** -- matches from `## [Meta]` or `## Meta` to the end of the string. If the Meta section is not the last section, content after it will also be removed
+- **Marker stripping keeps the title verbatim** -- `strip_markers` deletes the whole `[...]` prefix (including any slug) and leaves the descriptive heading text unchanged. It no longer title-cases slugs
+- **Meta section removal is bounded** -- matches from `## [Meta]` or `## Meta` to just before the next `## ` heading (or EOF if none). Sections after `[Meta]`, such as `[Sources]`, are preserved
 
 ## What Happens Next
 
