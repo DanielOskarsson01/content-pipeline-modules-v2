@@ -18,6 +18,12 @@
  *   - max_items cap enforced locally; _partialItems pushed after each provider; providers as JSON string
  *   - no providers -> loud no-op (inert by default); manifest contract shape
  *
+ * v1.2.0 adds [29-34]: the emit_text_content bridge — off-mode byte-identity
+ *   (additive-only proof), on-mode text_content = raw_text + word_count, a free
+ *   in-repo integration through the real content-filter (Bright Data LinkedIn-company
+ *   fixture → KEPT with text for content-analyzer), empty-updates[] and no-match/
+ *   not_found paths.
+ *
  * All HTTP mocked. No credentials, no network.
  */
 
@@ -684,6 +690,148 @@ async function main() {
     assert(!('name' in item), 'E1 inert: no top-level name key when field_map omits it');
     assert(!('current_company_name' in item), 'E1 inert: no top-level current_company_name key when field_map omits it');
     assert(item.url === 'https://r.test/a' && item.title === 'A', 'E1 inert: existing item shape unchanged');
+  }
+
+  // ── emit_text_content bridge (v1.2.0) — LinkedIn-company Datasets Search shape ──
+  //
+  // Live-schema note (verified 2026-08-11 raw sample + 2026-08-25 pushgaming.com probe,
+  //   brightdata-live-findings-2026-08-11/): the Bright Data company dataset
+  //   (gd_l1vikfnt1wgvvqz95w) Search route returns { hits, total_hits, took }; each hit
+  //   carries the top-level fields used in the field_map below (url, name, about,
+  //   description, specialties, industries, company_size, headquarters, followers) plus a
+  //   `updates[]` array of recent posts { date, text, post_url, likes_count, title }.
+  //   `updates` is bimodal per record: populated to the 10-post cap, or empty [].
+  //   This fixture mirrors that shape; it is not a live call.
+  process.env.BRIGHTDATA_API_KEY = 'test-bd-key-dummy';
+
+  const LI_RECORD = {
+    url: 'https://www.linkedin.com/company/push-gaming',
+    name: 'Push Gaming',
+    about: 'Push Gaming is a game studio that designs and builds premium slot games for the online casino industry. We are trusted by operators around the world for a player-first design philosophy.',
+    description: 'Push Gaming | 12,000 followers on LinkedIn. Premium slot games built for the regulated online casino market.',
+    specialties: 'Slot games, Game development, iGaming, HTML5 games',
+    industries: 'Computer Games',
+    company_size: '51-200 employees',
+    headquarters: 'London, England',
+    followers: 12000,
+    updates: [
+      { date: '2026-08-07T08:43:35.969Z', text: 'We are thrilled to announce the launch of our newest slot game, which brings a fresh mechanic to the reels and has already been a hit with players in early testing.', post_url: 'https://www.linkedin.com/posts/push-gaming_launch-activity-1', likes_count: 42, title: 'Push Gaming' },
+      { date: '2026-07-30T10:00:00.000Z', text: 'Our team had a fantastic time at the industry conference this week, meeting operators and partners from across the world.', post_url: 'https://www.linkedin.com/posts/push-gaming_conf-activity-2', likes_count: 30, title: 'Push Gaming' },
+    ],
+  };
+
+  // The paste-ready README provider block (kept in sync with README.md).
+  const LI_PROVIDER = {
+    id: 'linkedin-company',
+    name: 'Bright Data — LinkedIn Company (Datasets Search, synchronous)',
+    response_format: 'json',
+    auth: { type: 'bearer', env_var: 'BRIGHTDATA_API_KEY' },
+    identifier_source: { entity_field: 'website' },
+    empty_is_error: true,
+    endpoints: [{
+      id: 'search', method: 'POST',
+      url: 'https://api.brightdata.com/datasets/search/gd_l1vikfnt1wgvvqz95w',
+      body: { size: 1, filter: { name: 'website', operator: 'includes', value: '{identifier}' } },
+      results_path: 'hits',
+      field_map: {
+        url: 'url', title: 'name', about: 'about', description: 'description',
+        specialties: 'specialties', industries: 'industries', company_size: 'company_size',
+        headquarters: 'headquarters', followers: 'followers', updates: 'updates',
+      },
+    }],
+  };
+
+  const liMock = (record) => makeTools({ post: async () => json(200, { hits: record ? [record] : [], total_hits: record ? 1 : 0 }) });
+  const liInput = () => makeInput([{ name: 'Push Gaming', website: 'pushgaming.com' }]);
+
+  // ── 29. emit_text_content OFF (default): output byte-identical to legacy contract ──
+  //   (a) no item carries text_content / word_count keys; (b) the ONLY difference between
+  //   off and on is those two additive keys — strip them from the on-output and it deep-
+  //   equals the off-output, proving the change is purely additive (nothing else moves).
+  console.log('\n[29] emit_text_content OFF is byte-identical (additive-only proof)');
+  {
+    const off = await execute(liInput(), { ...defaults, providers: [LI_PROVIDER] }, liMock(LI_RECORD));
+    const offItems = off.results[0].items;
+    assert(offItems.length === 1, 'off: one company item');
+    assert(!('text_content' in offItems[0]) && !('word_count' in offItems[0]), 'off: no text_content/word_count keys (legacy shape)');
+
+    const on = await execute(liInput(), { ...defaults, providers: [LI_PROVIDER], emit_text_content: true }, liMock(LI_RECORD));
+    const strip = (arr) => arr.map((it) => { const c = { ...it }; delete c.text_content; delete c.word_count; return c; });
+    assert(JSON.stringify(strip(on.results[0].items)) === JSON.stringify(offItems),
+      'on minus {text_content,word_count} === off output (purely additive, byte-identical)');
+  }
+
+  // ── 30. emit_text_content ON: text_content mirrors raw_text; word_count is a real count ──
+  console.log('\n[30] emit_text_content ON mirrors raw_text into text_content + word_count');
+  {
+    const res = await execute(liInput(), { ...defaults, providers: [LI_PROVIDER], emit_text_content: true }, liMock(LI_RECORD));
+    const item = res.results[0].items[0];
+    assert(item.status === 'success', 'on: success item');
+    assert(item.text_content === item.raw_text, 'on: text_content is exactly the flattened raw_text');
+    assert(item.text_content.length > 0, 'on: text_content non-empty');
+    assert(item.word_count === item.raw_text.split(/\s+/).filter(Boolean).length, 'on: word_count = raw_text word count');
+    assert(item.text_content.includes('newest slot game'), 'on: updates[] post text is inline in text_content (field_map maps updates)');
+  }
+
+  // ── 31. Realistic record survives Step-4 content-filter and reaches the analyzer ──
+  //   assembleEntityContent (content-analyzer/execute.js:17-22) concatenates item.text_content;
+  //   so "kept with non-empty text_content" == "lands in {entity_content}".
+  console.log('\n[31] emit-on record ≥50 words → content-filter KEEPS it → analyzer sees text');
+  {
+    const contentFilter = require('../../step-4-filtering/content-filter/execute.js');
+    const res = await execute(liInput(), { ...defaults, providers: [LI_PROVIDER], emit_text_content: true }, liMock(LI_RECORD));
+    const item = res.results[0].items[0];
+    assert(item.word_count >= 50, `on: realistic record yields ≥50 words (got ${item.word_count})`);
+
+    const cfTools = makeTools();
+    const cf = await contentFilter(
+      makeInput([{ name: 'Push Gaming', items: [item] }]),
+      {}, // content-filter defaults (min_word_count 50, require_english true)
+      cfTools
+    );
+    const kept = cf.results[0].items.find((i) => i.filter_status === 'kept');
+    assert(kept, 'content-filter KEEPS the emit-on company item (not dropped as too-short/non-english)');
+    assert(kept && kept.text_content && kept.text_content.length > 0, 'kept item carries text_content for content-analyzer assembleEntityContent');
+  }
+
+  // ── 32. Empty updates[] (bimodal record) still clears 50 words from profile fields ──
+  console.log('\n[32] empty updates[] record still ≥50 words (profile fields) and kept');
+  {
+    const contentFilter = require('../../step-4-filtering/content-filter/execute.js');
+    const noUpdates = { ...LI_RECORD, updates: [] };
+    const res = await execute(liInput(), { ...defaults, providers: [LI_PROVIDER], emit_text_content: true }, liMock(noUpdates));
+    const item = res.results[0].items[0];
+    assert(item.status === 'success', 'empty-updates: still a success record');
+    assert(!item.text_content.includes('newest slot game'), 'empty-updates: no post text (updates were [])');
+    assert(item.word_count >= 50, `empty-updates: profile fields alone clear 50 words (got ${item.word_count})`);
+    const cf = await contentFilter(makeInput([{ name: 'Push Gaming', items: [item] }]), {}, makeTools());
+    assert(cf.results[0].items.some((i) => i.filter_status === 'kept'), 'empty-updates: content-filter still keeps it');
+  }
+
+  // ── 33. No-match (empty hits) with emit on + empty_is_error → error item, empty text ──
+  console.log('\n[33] no-match: error item carries text_content "" / word_count 0 (filtered by design)');
+  {
+    const res = await execute(liInput(), { ...defaults, providers: [LI_PROVIDER], emit_text_content: true }, liMock(null));
+    const item = res.results[0].items[0];
+    assert(item.status === 'error' && item.reason === 'empty_result', 'no-match: empty_is_error surfaces an error item');
+    assert(item.text_content === '' && item.word_count === 0, 'no-match: emit-on error item has empty text_content and word_count 0');
+    // and the parallel not_found path (empty_is_error OFF) with emit on:
+    const lookup = { ...LI_PROVIDER, id: 'lookup', empty_is_error: false };
+    const res2 = await execute(liInput(), { ...defaults, providers: [lookup], emit_text_content: true }, liMock(null));
+    const nf = res2.results[0].items[0];
+    assert(nf.status === 'not_found', 'not_found: empty hits without empty_is_error stays not_found');
+    assert(nf.text_content === '' && nf.word_count === 0, 'not_found: emit-on not_found item has empty text_content and word_count 0');
+  }
+
+  // ── 34. Option arrives as the string "true" (UI storage) → fields still emitted ──
+  console.log('\n[34] emit_text_content = "true" (string) enables the bridge');
+  {
+    const res = await execute(liInput(), { ...defaults, providers: [LI_PROVIDER], emit_text_content: 'true' }, liMock(LI_RECORD));
+    const item = res.results[0].items[0];
+    assert('text_content' in item && item.text_content.length > 0, 'string "true" parsed as on: text_content emitted');
+    // a non-"true" string must NOT enable it (only true / "true")
+    const off = await execute(liInput(), { ...defaults, providers: [LI_PROVIDER], emit_text_content: 'false' }, liMock(LI_RECORD));
+    assert(!('text_content' in off.results[0].items[0]), 'string "false" stays off (no text_content)');
   }
 
   console.log(`\n${'='.repeat(50)}\nTOTAL: ${pass} passed, ${fail} failed\n`);

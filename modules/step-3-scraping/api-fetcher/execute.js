@@ -4,8 +4,12 @@
  * Given an entity carrying an API identifier (a channel id, a podcast feed URL,
  * a company registry number), fetch structured records from the corresponding
  * API and add them to the pool as items with source_api / data_json / raw_text /
- * fetch_date / status. Downstream Step 5 consumes raw_text / data_json exactly
- * like scraped text_content.
+ * fetch_date / status. Step 5 (content-analyzer/writer) reads `text_content`, NOT
+ * raw_text — so by default these structured items are invisible to it (and are
+ * dropped by Step-4 content-filter on word_count 0). Set `emit_text_content: true`
+ * to also mirror raw_text into a `text_content` field (+ `word_count`) so the record
+ * survives content-filter and reaches Step-5 generation. Off by default → output is
+ * byte-identical to the legacy contract.
  *
  * Adding a new API source = a JSON provider config, not writing code. All
  * provider knowledge (endpoints, params, field maps, auth, RSS tag names) lives
@@ -490,6 +494,12 @@ async function runEndpointsForIdentifier(provider, identifier, authParts, extraP
         raw_text: '',
         fetch_date: new Date().toISOString().slice(0, 10),
       };
+      // emit_text_content bridge: a dead/empty identifier has no text — text_content
+      // '' / word_count 0 means content-filter drops it (correct; nothing to write).
+      if (options.emit_text_content) {
+        base.text_content = '';
+        base.word_count = 0;
+      }
       if (provider.empty_is_error) {
         errorCount++;
         items.push({ ...base, externalId: `${provider.id}:${identifier}:empty`, status: 'error', reason: 'empty_result' });
@@ -537,6 +547,15 @@ async function runEndpointsForIdentifier(provider, identifier, authParts, extraP
       // byte-identical for every existing provider config.
       if (mapped.name != null) item.name = String(mapped.name);
       if (mapped.current_company_name != null) item.current_company_name = String(mapped.current_company_name);
+      // emit_text_content bridge (default off): mirror the flattened raw_text into
+      // text_content (+ word_count) so Step-4 content-filter keeps the item and Step-5
+      // content-analyzer/writer read it like scraped text. What lands in raw_text —
+      // profile fields, inline updates[] posts — is the provider's field_map, not code
+      // (Rule 13). Gated so every existing config's item stays byte-identical when off.
+      if (options.emit_text_content) {
+        item.text_content = item.raw_text;
+        item.word_count = item.raw_text ? item.raw_text.split(/\s+/).filter(Boolean).length : 0;
+      }
       items.push(item);
     }
   }
@@ -560,6 +579,7 @@ async function execute(input, options, tools) {
     max_items: toNumber(options.max_items, 25),
     requests_per_minute: toNumber(options.requests_per_minute, 30),
     raw_text_max_chars: toNumber(options.raw_text_max_chars, 20000),
+    emit_text_content: options.emit_text_content === true || options.emit_text_content === 'true',
   };
   const skipWithoutAuth = options.skip_providers_without_auth !== false;
 

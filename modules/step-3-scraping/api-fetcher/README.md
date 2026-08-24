@@ -1,8 +1,10 @@
 # API Fetcher
 
-**Step 3 — Scraping (structured-source enrichment)** · `add` · `empty_ok` · cost: `medium` · v1.1.0
+**Step 3 — Scraping (structured-source enrichment)** · `add` · `empty_ok` · cost: `medium` · v1.2.0
 
-Generic identifier-driven structured-API fetcher. Given an entity carrying an API identifier (a channel id, a podcast feed URL, a company registry number), it fetches structured records from the matching API and adds them to the pool as items with `source_api`, `data_json`, `raw_text`, `fetch_date`, `status`. Downstream Step 5 modules consume `raw_text` / `data_json` exactly like scraped `text_content`. Adding a new API source = a JSON provider config, **not** code (canonical brief: `docs/submodule-briefs-rev-2026-07-03/step3-api-data-fetcher.md`).
+Generic identifier-driven structured-API fetcher. Given an entity carrying an API identifier (a channel id, a podcast feed URL, a company registry number), it fetches structured records from the matching API and adds them to the pool as items with `source_api`, `data_json`, `raw_text`, `fetch_date`, `status`. Adding a new API source = a JSON provider config, **not** code (canonical brief: `docs/submodule-briefs-rev-2026-07-03/step3-api-data-fetcher.md`).
+
+**Reaching Step 4/5:** Step-5 generation (content-analyzer/writer) reads `text_content`, **not** `raw_text` — and Step-4 content-filter drops any item with `word_count < 50`. So by default a structured record is invisible to generation and filtered out before it. Set **`emit_text_content: true`** to also write `text_content` (a mirror of the flattened `raw_text`) and `word_count`, so the record survives content-filter and lands in `{entity_content}`. `text_content` is in `downloadable_fields`, so the skeleton persists it and re-hydrates it into content-analyzer via `requires_columns` (`§7b` hydration, `server/services/poolHydration.js`). Off by default = byte-identical legacy output. This is the LinkedIn-company enrichment bridge (see the Bright Data company block below).
 
 **Why a new module (not a config of api-search):** `api-search` (Step 1) is keyword-search discovery into an empty pool — one identifier-less call per keyword, flat responses. This is identifier-driven *enrichment*: per-entity lookups, multi-endpoint chaining (fetch A, use a field of A in request B), XML/RSS support, and structured `data_json` output. Same config *pattern*, different behaviour class.
 
@@ -163,6 +165,30 @@ POST + `bearer`, `empty_is_error` — **Bright Data LinkedIn People via the sync
 }
 ```
 
+POST + `bearer`, `empty_is_error`, **`emit_text_content` ON** — **Bright Data LinkedIn *Company* via the synchronous Datasets *Search* endpoint** (`gd_l1vikfnt1wgvvqz95w`; field_map live-verified against pushgaming.com 2026-08-25, and the record shape 2026-08-11 — `brightdata-live-findings-2026-08-11/`). Keyed on the entity's **bare website domain** (`website includes {identifier}` resolves 1:1 for most companies). The record carries the full company profile (`about`, `description`, `specialties`, `industries`, `company_size`, `headquarters`, `followers`) **and a populated `updates[]` array of up to 10 recent posts inline** (post `text`, `date`, `post_url`, `likes_count`) — so a company's profile *and* its recent LinkedIn posts arrive in **one synchronous ~1.3 s call, no poll**. Because the field_map maps `updates`, those posts flow into `raw_text` → `text_content`, giving Step-5 the company's own words.
+
+```json
+{
+  "id": "linkedin-company",
+  "name": "Bright Data — LinkedIn Company (Datasets Search API, synchronous)",
+  "response_format": "json",
+  "auth": { "type": "bearer", "env_var": "BRIGHTDATA_API_KEY" },
+  "identifier_source": { "entity_field": "website" },
+  "empty_is_error": true,
+  "endpoints": [
+    { "id": "search", "method": "POST",
+      "url": "https://api.brightdata.com/datasets/search/gd_l1vikfnt1wgvvqz95w",
+      "body": { "size": 1, "filter": { "name": "website", "operator": "includes", "value": "{identifier}" } },
+      "results_path": "hits",
+      "field_map": { "url": "url", "title": "name", "about": "about", "description": "description",
+        "specialties": "specialties", "industries": "industries", "company_size": "company_size",
+        "headquarters": "headquarters", "followers": "followers", "updates": "updates" } }
+  ]
+}
+```
+
+Set the module option **`emit_text_content: true`** for this provider (it's the point of the block — without it the company record is dropped at Step 4). Env var is **`BRIGHTDATA_API_KEY`** (the working key name — *not* `BRIGHT_DATA_API_KEY`). Live notes: `updates[]` is **bimodal per record** — either populated to the 10-post cap or empty `[]` (Bright Data has no cached feed for that company); the profile fields alone still clear the 50-word bar, so an empty-`updates` company is still kept. A few domains resolve to >1 or 0 hits (`size: 1` keeps cost at ~1 record either way; the top hit is used). Cost ≈ **$0.0025 / company** (1 record at list price). `updates[]` gives ≤10 most-recent posts for free inside the company fetch; deeper/older post history needs the async posts dataset (BACKLOG #56 — not this module).
+
 ### Config schema
 
 - **`response_format`** — `"json"` (default) or `"xml"`. XML (RSS/Atom) is converted to a JSON object generically: elements → keys, repeated siblings → arrays, attributes → `@name` keys (e.g. `enclosure.@url`), CDATA/text → strings. `results_path` / `field_map` then apply identically. RSS tag names live in config, not code.
@@ -187,10 +213,11 @@ POST + `bearer`, `empty_is_error` — **Bright Data LinkedIn People via the sync
 | `requests_per_minute` | `30` | Lower for strict registries (Companies House 600/5min) | Global token-bucket across all providers/entities/endpoints. |
 | `raw_text_max_chars` | `20000` | Lower to shrink Step-5 input | Truncates each item's flattened `raw_text`. |
 | `skip_providers_without_auth` | `true` | `false` to try an unauthenticated call | Missing auth env var → skip provider with a warning (true) vs call without the key (false). |
+| `emit_text_content` | `false` | `true` when the records should feed Step-5 generation (e.g. LinkedIn-company) | Also writes `text_content` (mirror of `raw_text`) + `word_count` so items survive Step-4 content-filter and content-analyzer reads them. Off = byte-identical legacy output. |
 
 ## What good output looks like
 
-Each emitted item: `source_api` (provider id), `url` (key), `title`, `raw_text` (flattened text for Step-5), `data_json` (the mapped fields, JSON-stringified), `fetch_date` (ISO date), `status` (`success` \| `not_found` \| `error`), `reason` (on `error` items — e.g. `empty_result`), and `entity_name`. `data_json` and `raw_text` are downloadable from the results pane.
+Each emitted item: `source_api` (provider id), `url` (key), `title`, `raw_text` (flattened text), `data_json` (the mapped fields, JSON-stringified), `fetch_date` (ISO date), `status` (`success` \| `not_found` \| `error`), `reason` (on `error` items — e.g. `empty_result`), and `entity_name`. When `emit_text_content: true`, each item also carries `text_content` (a copy of `raw_text`) and `word_count` — a dead/empty identifier gets `text_content: ""` / `word_count: 0` so content-filter drops it (nothing to write). `raw_text`, `data_json`, and `text_content` are downloadable from the results pane.
 
 **Warning signs:** all-`not_found` for a provider → the identifiers are wrong/dead (check the seed column). Provider missing from active list → its auth env var is unset (see the startup warning). Zero items with providers configured → no entity carried a matching identifier (each has a per-provider note in meta).
 
@@ -209,7 +236,7 @@ Items land in the Step-3 pool alongside scraped pages. Step-4 cleanup and Step-5
 
 ## Testing
 
-- `node modules/step-3-scraping/api-fetcher/test-api-fetcher.js` — 84 assertions, all HTTP mocked, no credentials, no network.
+- `node modules/step-3-scraping/api-fetcher/test-api-fetcher.js` — 112 assertions, all HTTP mocked, no credentials, no network. Includes the `emit_text_content` bridge: off-mode byte-identity (additive-only proof), on-mode `text_content`/`word_count`, and a free in-repo integration (LinkedIn-company fixture → real content-filter `execute` → item KEPT with text for content-analyzer).
 - `node modules/step-3-scraping/api-fetcher/test-live-api-fetcher.js` — **credential-free** live test (iTunes Lookup JSON + Podcast RSS XML against real free APIs, chained). Passed 2026-07-06.
 
 ## Technical Reference
@@ -223,6 +250,7 @@ Items land in the Step-3 pool alongside scraped pages. Step-4 cleanup and Step-5
 
 ## Changelog
 
+- **1.2.0** (2026-08-25) — `emit_text_content` option (default `false`, byte-identical when off). When on, each emitted item also carries `text_content` (a mirror of the flattened `raw_text`) and `word_count`, plus `text_content` is added to `output_schema.downloadable_fields`. This is the LinkedIn-company bridge (M2): Step-4 content-filter keeps items by `word_count` and Step-5 content-analyzer/writer read `text_content`, so structured API records were previously dropped at Step 4 and invisible to Step 5. The `downloadable_fields` entry is load-bearing — the skeleton persists only downloadable fields to `submodule_run_item_data` and re-hydrates a downstream module's `requires_columns` from those rows (`stageWorker.js:642-704` + `poolHydration.js:42-229`), so without it content-analyzer's `requires_columns: ["text_content"]` could never re-hydrate. Ships with the paste-ready **Bright Data LinkedIn-*Company* Datasets Search** block (`gd_l1vikfnt1wgvvqz95w`, `BRIGHTDATA_API_KEY`, field_map live-verified against pushgaming.com) whose `updates[]` posts flow inline into `text_content`. +28 test assertions (112 total). Also corrects the header comment that falsely claimed Step 5 consumes `raw_text` like `text_content`.
 - **1.1.2** (2026-08-09) — `empty_is_error` provider flag (default off): a 2xx with zero records on the first endpoint becomes a counted error (`meta.errors`, `meta.status: "error"`, item `status: "error"` + `reason: "empty_result"`) instead of a silent `not_found`. Closes the observability gap the 1.1.1 2xx fix opened — Apify's `201 []` moved from the error branch to the success branch, so an empty employees-actor result looked like a legitimate not_found. Set on the harvestapi `linkedin-company-employees` config (returns `201 []` for every company). +7 test assertions (84 total).
 - **1.1.1** (2026-08-07) — accept any 2xx status as success, not only 200. Apify's synchronous `run-sync-get-dataset-items` returns `201 Created` with the dataset rows in the body; the previous `!== 200` check logged that as an error and dropped the data. Enables the cookie-free LinkedIn company/profile/posts actors (harvestapi via Apify) as provider configs. +2 test assertions (77 total).
 - **1.1.0** (2026-07-17) — POST support: optional `method` (`GET` default | `POST`) and `body` (JSON object or string, placeholders interpolated) per endpoint, plus a `bearer` auth type (`Authorization: Bearer <token>`). Response side unchanged — a POST returning a bare top-level array maps through `field_map` with `results_path` omitted. Backward-compatible: no `method` = GET, so all v1.0.0 configs behave identically. Unlocks synchronous run-and-return dataset/actor providers; async trigger→poll→download still needs a separate primitive (see Limitations + BACKLOG).

@@ -2,7 +2,7 @@
   "id": "api-fetcher",
   "name": "API Fetcher",
   "description": "Generic identifier-driven structured-API fetcher. Per-entity lookups against configured APIs (JSON + XML/RSS), multi-endpoint chaining, field mapping, raw-text flattening. Adding an API source = JSON config, not code.",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "step": 3,
   "category": "enrichment",
   "cost": "medium",
@@ -11,7 +11,7 @@
   "sort_order": 6,
   "depends_on": [],
   "requires_columns": ["name"],
-  "usage_notes": "Enriches entities from structured APIs keyed by an identifier (a channel id, feed URL, or registry number). Identifiers come from an entity seed column (Step 0) or a Step-1 pool-item field, so this Step-3 module is empty_ok (runs without prior URLs). Configure at least one provider (JSON config; see README for schemas and ready-made blocks). ALL provider knowledge — endpoints, params, field maps, auth, RSS tag names — is template configuration; no vertical is baked into code or defaults. providers: [] default is a loud no-op.",
+  "usage_notes": "Enriches entities from structured APIs keyed by an identifier (a channel id, feed URL, or registry number). Identifiers come from an entity seed column (Step 0) or a Step-1 pool-item field, so this Step-3 module is empty_ok (runs without prior URLs). Configure at least one provider (JSON config; see README for schemas and ready-made blocks). ALL provider knowledge — endpoints, params, field maps, auth, RSS tag names — is template configuration; no vertical is baked into code or defaults. providers: [] default is a loud no-op. emit_text_content (default false) mirrors raw_text into text_content + word_count so structured records survive Step-4 content-filter and reach Step-5 (needed for the LinkedIn-company bridge; text_content is in downloadable_fields so §7b hydration re-supplies it to content-analyzer). Bright Data bearer auth uses env var BRIGHTDATA_API_KEY (NOT BRIGHT_DATA_API_KEY).",
 
   "options": [
     {
@@ -62,6 +62,13 @@
       "label": "Skip providers with missing credentials",
       "description": "When a provider declares auth with an env var that is not set, skip it with a warning (true) rather than calling the API unauthenticated (false).",
       "default": true
+    },
+    {
+      "name": "emit_text_content",
+      "type": "boolean",
+      "label": "Emit text_content (for Step-4/5 consumption)",
+      "description": "Also write text_content (mirror of the flattened raw_text) and word_count on each item. Step-4 content-filter keeps items by word_count and Step-5 content-analyzer/writer read text_content — so without this, structured API records are dropped at Step 4 and invisible to Step 5. Off = byte-identical legacy output (raw_text/data_json only). Turn ON for provider configs whose records should feed content generation (e.g. the Bright Data LinkedIn-company block).",
+      "default": false
     }
   ],
 
@@ -71,7 +78,8 @@
     "max_items": 25,
     "requests_per_minute": 30,
     "raw_text_max_chars": 20000,
-    "skip_providers_without_auth": true
+    "skip_providers_without_auth": true,
+    "emit_text_content": false
   },
 
   "item_key": "url",
@@ -83,13 +91,16 @@
     "url": "string (required)",
     "title": "string",
     "raw_text": "string",
+    "text_content": "string",
+    "word_count": "number",
     "fetch_date": "string (ISO date)",
     "status": "string",
     "error": "string",
     "flagged_when": { "status": ["error"] },
     "downloadable_fields": [
       { "field": "raw_text", "extension": "txt", "label": "Flattened Text" },
-      { "field": "data_json", "extension": "json", "label": "Structured Data" }
+      { "field": "data_json", "extension": "json", "label": "Structured Data" },
+      { "field": "text_content", "extension": "txt", "label": "Text Content" }
     ],
     "detail_schema": {
       "header_fields": [
