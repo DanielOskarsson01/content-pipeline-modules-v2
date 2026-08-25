@@ -3,7 +3,7 @@
 > Resolves redirect chains so every URL in the pool points to its real destination before scraping begins, and drops duplicates that only become visible after redirects resolve.
 
 **Module ID:** `url-canonicalizer` | **Step:** 2 (Validation) | **Category:** filtering | **Cost:** cheap
-**Version:** 1.0.0 | **Data Operation:** transform (=)
+**Version:** 1.1.0 | **Data Operation:** transform (=)
 
 ---
 
@@ -41,6 +41,22 @@ url-dedup -> URL CANONICALIZER -> url-filter -> url-relevance -> scraping
 |--------|---------|----------------|--------------|
 | `request_timeout` | 5000 | Raise to 10000-15000 for slow or Cloudflare-protected sites; lower to 3000 for known-fast sites (range 1000-15000) | Timeout per HEAD request in milliseconds |
 | `concurrency` | 20 | Lower to 5-10 if target sites rate-limit HEAD requests; raise to 30-50 for large batches against tolerant servers (range 1-50) | How many HEAD requests run in parallel per batch |
+| `v2_behavior` | false | Set `true` for any auto-execute run (and for the v3 template's R1 slot). Leave `false` only for the legacy v1 template flow | Merge-safe, auto-execute-compatible emit mode — see "v2 behavior" below |
+
+## v2 behavior (v1.1.0)
+
+The v1 (default) emit shape is **incompatible with auto-execute**, for two reasons proven in production (2026-08 forensics: 1213/1262 pool rows re-attributed, `link_text` surviving on 41/1262):
+
+1. **Zero canonicalization applied.** v1 emits redirected items with `status: "redirected"`, which matches the manifest's `flagged_when`. The skeleton's step<6 auto-approval excludes flagged items (`content-pipeline-v2/server/routes/submoduleRuns.js:1177-1190`), so the redirect emit never reaches the pool — the old URL survives and the rewrite is silently discarded.
+2. **Provenance destroyed on every other row.** v1 re-emits unchanged rows with a 5-field whitelist (`url`, `original_url`, `status`, `redirect_detail`, `entity_name`). The skeleton's `transform` operation replaces a pool row wholesale with the approved item (`content-pipeline-v2/server/lib/applyDataOperation.js:112-121` — replace, not merge), and approval stamps `source_submodule` on every approved item unconditionally (`submoduleRuns.js:1199-1203`). Result: `found_via`, `source_location`, `link_text`, and original source attribution are wiped from ~96% of rows.
+
+With `v2_behavior: true`:
+
+- **Redirected items** are emitted **unflagged** (`status: "canonicalized"`) with a **full field-spread** — every incoming field survives, plus `url` (the canonical URL), `original_url` (the old URL), and `redirect_from` (durable record of the rewrite). Under `transform`, a single emitted item with `url = new` and `original_url = old` puts **both** keys into the removal set and pushes the item (`applyDataOperation.js:108-121`) — i.e. the emit verifiably produces the add-new + remove-old pair, and auto-approval actually applies it.
+- **Unchanged rows are not emitted at all.** This is deliberate, and it is the only shape that provably preserves pool state: a non-emitted row is untouched by `transform` (only emitted keys enter the removal set, `applyDataOperation.js:105-119`; the pass-through case is even called out at `:124-129`). A full-spread re-emit was rejected because (a) `transform` replaces the row rather than merging (`:112-121`), so any accidental field drift overwrites the pool copy, and (b) approval re-stamps `source_submodule: "url-canonicalizer"` on every approved item regardless of what the module emitted (`submoduleRuns.js:1199-1203`) — re-attribution is unavoidable on any re-emit. No emit = no replacement = no re-attribution.
+- **Failed HEAD requests (timeout, DNS)** count as unchanged: not emitted, row passes through untouched. Timeouts never drop a row in either mode.
+- The module's output-level dedup is **skipped** in v2 mode. Dropping an emit at the module level would leave its old-URL pool row alive (only emitted `original_url`s enter the transform's removal set), so every redirect is emitted. Duplicate canonical rows are collapsed by the skeleton itself (`applyDataOperation.js:130-138`, first occurrence wins), and a redirect whose canonical URL collides with an existing unchanged pool row collapses the two rows into one via the removal set. Net result in all cases: one pool row per canonical URL, with every stale pre-redirect row removed.
+- The run summary still reports `unchanged` counts; `output_items` counts emitted rows only, and the description marks unchanged rows as "pool passthrough".
 
 Both options are straightforward. The defaults work well for most iGaming company sites. The main risk is setting `concurrency` too high against a single domain -- some servers interpret rapid HEAD requests as a scan and start returning 429s. If you see many errors in the output, lower concurrency first.
 
@@ -80,7 +96,10 @@ concurrency: 40
 - `original_url` -- the URL as discovered. Preserved for transparency
 - `status` -- `redirected` (URL was changed) or `unchanged` (URL was already canonical)
 - `redirect_detail` -- human-readable description of the redirect (e.g., `https://example.com/old → https://example.com/new`), or `Error: <message>` when the HEAD request failed
+- `redirect_from` -- (`v2_behavior` only) the pre-redirect URL, kept as a durable record of the rewrite
 - `entity_name` -- which entity this URL belongs to
+
+With `v2_behavior: true` the output contains only redirected items (status `canonicalized`, full field-spread); unchanged rows are deliberately absent — see "v2 behavior" above.
 
 The run summary also reports `output_items` (items after dedup) and `deduplicated` (how many rows were dropped because they resolved to a canonical URL already seen).
 

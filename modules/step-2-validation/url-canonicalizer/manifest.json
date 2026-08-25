@@ -2,7 +2,7 @@
   "id": "url-canonicalizer",
   "name": "URL Canonicalizer",
   "description": "Resolves redirects to canonical URLs. Sends HEAD requests to each URL and replaces it with the final destination if redirected (301/302/307/308). Catches www/non-www, HTTP/HTTPS, path rewrites, and vanity URL redirects before they reach scraping.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "step": 2,
   "category": "filtering",
   "sort_order": 2,
@@ -10,7 +10,7 @@
   "data_operation_default": "transform",
   "pool_precondition": "requires_items",
   "depends_on": ["url-dedup"],
-  "usage_notes": "Run after url-dedup and before url-filter. Makes one HEAD request per URL to detect redirects. URLs that redirect are replaced with their final destination. Dead URLs (timeout, DNS failure) are kept unchanged — url-filter handles liveness checks.",
+  "usage_notes": "Run after url-dedup and before url-filter. Makes one HEAD request per URL to detect redirects. URLs that redirect are replaced with their final destination. Dead URLs (timeout, DNS failure) are kept unchanged — url-filter handles liveness checks. DEFAULT (v1) BEHAVIOR IS AUTO-EXECUTE INCOMPATIBLE: redirected items are emitted flagged (status=redirected), and step<6 auto-approval excludes flagged items, so under auto-execute the rewrite is never applied; meanwhile the unchanged re-emits carry only 5 whitelisted fields and replace their pool rows wholesale, destroying provenance (found_via, link_text, source attribution). Set v2_behavior=true for auto-execute runs: redirects are emitted unflagged with a full field-spread and applied as an add+remove pair by the transform operation; unchanged rows are not emitted and pass through the pool untouched. v2_behavior is the intended configuration for the v3 template's R1 reinsertion; v1 default is kept only for byte-identical behavior under the live v1 template.",
 
   "requires_columns": ["url"],
 
@@ -32,12 +32,20 @@
       "default": 20,
       "min": 1,
       "max": 50
+    },
+    {
+      "name": "v2_behavior",
+      "type": "boolean",
+      "label": "v2 behavior (auto-execute compatible)",
+      "description": "Emit redirects unflagged with a full field-spread (all incoming fields survive) so auto-approval applies the URL rewrite as an add+remove pair; unchanged rows are not emitted and pass through the pool untouched. Leave false only for the legacy v1 template flow (flagged redirects for manual review; 5-field whitelist emit).",
+      "default": false
     }
   ],
 
   "options_defaults": {
     "request_timeout": 5000,
-    "concurrency": 20
+    "concurrency": 20,
+    "v2_behavior": false
   },
 
   "item_key": "url",
@@ -50,6 +58,7 @@
     "original_url": "string",
     "status": "string",
     "redirect_detail": "string",
+    "redirect_from": "string (v2_behavior only)",
     "entity_name": "string"
   }
 }

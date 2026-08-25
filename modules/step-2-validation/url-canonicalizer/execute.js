@@ -7,12 +7,20 @@
  *
  * Data operation: TRANSFORM (＝) — URLs are updated in place.
  * Items flagged as "redirected" show the change for user review.
+ *
+ * v2_behavior (default false, v1.1.0): auto-execute-compatible mode.
+ * Redirects are emitted UNFLAGGED with a full field-spread (all incoming
+ * fields survive) so step<6 auto-approval actually applies the rewrite;
+ * unchanged rows are not emitted at all — under the skeleton's `transform`
+ * they pass through the pool untouched, which is the only shape that
+ * preserves their provenance and source_submodule attribution (the skeleton
+ * re-stamps source_submodule on every approved item). See README.
  */
 
 async function execute(input, options, tools) {
   const { entities } = input;
   const { logger, http, progress } = tools;
-  const { request_timeout = 5000, concurrency = 20 } = options;
+  const { request_timeout = 5000, concurrency = 20, v2_behavior = false } = options;
 
   // Flatten all items across entities
   const allItems = [];
@@ -84,26 +92,40 @@ async function execute(input, options, tools) {
       if (status === 'redirected') {
         logger.info(`Redirect: ${detail}`);
         redirectCount++;
-        const resultItem = {
-          url: finalUrl,
-          original_url: item.url,
-          status: 'redirected',
-          redirect_detail: detail,
-          entity_name: item.entity_name,
-        };
+        const resultItem = v2_behavior
+          ? {
+              ...item,
+              url: finalUrl,
+              original_url: item.url, // transform reads this to remove the old-URL row
+              redirect_from: item.url,
+              status: 'canonicalized', // must NOT match flagged_when, or auto-approval drops it
+              redirect_detail: detail,
+            }
+          : {
+              url: finalUrl,
+              original_url: item.url,
+              status: 'redirected',
+              redirect_detail: detail,
+              entity_name: item.entity_name,
+            };
         results.push(resultItem);
         if (tools._partialItems) tools._partialItems.push(resultItem);
       } else {
         unchangedCount++;
-        const resultItem = {
-          url: item.url,
-          original_url: item.url,
-          status: 'unchanged',
-          redirect_detail: detail || null,
-          entity_name: item.entity_name,
-        };
-        results.push(resultItem);
-        if (tools._partialItems) tools._partialItems.push(resultItem);
+        if (!v2_behavior) {
+          const resultItem = {
+            url: item.url,
+            original_url: item.url,
+            status: 'unchanged',
+            redirect_detail: detail || null,
+            entity_name: item.entity_name,
+          };
+          results.push(resultItem);
+          if (tools._partialItems) tools._partialItems.push(resultItem);
+        }
+        // v2: no emit — a non-emitted row passes through `transform` untouched,
+        // keeping its provenance and source_submodule (a re-emit would be
+        // replaced wholesale and re-stamped by the skeleton at approval).
       }
     }
 
@@ -113,23 +135,29 @@ async function execute(input, options, tools) {
 
   logger.info(`Canonicalization complete: ${redirectCount} redirected, ${unchangedCount} unchanged`);
 
-  // Deduplicate by final URL — multiple discovery URLs can resolve to same canonical
-  const seenUrls = new Map();
-  const dedupedResults = [];
+  // Deduplicate by final URL — multiple discovery URLs can resolve to same canonical.
+  // v2: skipped — dropping an emit here would leave its old-URL pool row alive
+  // (only emitted original_urls enter the transform's removal set); the skeleton
+  // collapses duplicate canonical rows to first-occurrence itself.
+  let dedupedResults = results;
   let dedupCount = 0;
-  for (const result of results) {
-    const normUrl = result.url.replace(/\/+$/, '').toLowerCase();
-    if (seenUrls.has(normUrl)) {
-      const existing = seenUrls.get(normUrl);
-      logger.info(`Dedup: ${result.original_url} resolves to same canonical as ${existing.original_url} → ${result.url}`);
-      dedupCount++;
-    } else {
-      seenUrls.set(normUrl, result);
-      dedupedResults.push(result);
+  if (!v2_behavior) {
+    const seenUrls = new Map();
+    dedupedResults = [];
+    for (const result of results) {
+      const normUrl = result.url.replace(/\/+$/, '').toLowerCase();
+      if (seenUrls.has(normUrl)) {
+        const existing = seenUrls.get(normUrl);
+        logger.info(`Dedup: ${result.original_url} resolves to same canonical as ${existing.original_url} → ${result.url}`);
+        dedupCount++;
+      } else {
+        seenUrls.set(normUrl, result);
+        dedupedResults.push(result);
+      }
     }
-  }
-  if (dedupCount > 0) {
-    logger.info(`Deduplication: ${dedupCount} duplicate canonical URLs removed`);
+    if (dedupCount > 0) {
+      logger.info(`Deduplication: ${dedupCount} duplicate canonical URLs removed`);
+    }
   }
 
   // Group results by entity
@@ -143,7 +171,9 @@ async function execute(input, options, tools) {
 
   const entityResults = [];
   for (const [entityName, items] of byEntity) {
-    const redirected = items.filter((i) => i.status === 'redirected').length;
+    // status is binary per mode ('redirected'|'unchanged' in v1, all
+    // 'canonicalized' in v2), so !== 'unchanged' counts rewrites in both
+    const redirected = items.filter((i) => i.status !== 'unchanged').length;
     entityResults.push({
       entity_name: entityName,
       items,
@@ -159,8 +189,8 @@ async function execute(input, options, tools) {
   const parts = [];
   if (redirectCount > 0) parts.push(`${redirectCount} redirected`);
   if (dedupCount > 0) parts.push(`${dedupCount} deduped`);
-  parts.push(`${unchangedCount} unchanged`);
-  const description = `${parts.join(', ')} of ${allItems.length} total → ${dedupedResults.length} output`;
+  parts.push(v2_behavior ? `${unchangedCount} unchanged (pool passthrough)` : `${unchangedCount} unchanged`);
+  const description = `${parts.join(', ')} of ${allItems.length} total → ${dedupedResults.length} ${v2_behavior ? 'emitted' : 'output'}`;
 
   return {
     results: entityResults,
