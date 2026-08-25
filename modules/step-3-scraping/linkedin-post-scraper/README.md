@@ -3,7 +3,7 @@
 > Fetch recent LinkedIn posts via the Profile API. Three modes: `posts` (Voyager, personal profiles), `post_engagers` (Voyager + commenter data), `feed_posts` (DOM scraping for company pages, groups, and personal feeds).
 
 **Module ID:** `linkedin-post-scraper` | **Step:** 3 (Scraping) | **Category:** linkedin | **Cost:** medium
-**Version:** 1.2.0 | **Data Operation:** add (+)
+**Version:** 1.3.0 | **Data Operation:** add (+)
 
 ---
 
@@ -85,7 +85,8 @@ Scrapes posts from company pages, group feeds, or personal activity feeds using 
 
 - Entity `linkedin`/`linkedin_url` accepts `/company/`, `/groups/`, and `/in/` URLs
 - Auto-detects feed type from the URL. Bare slugs (no URL) need an explicit `feed_type` field on the entity (`company`, `group`, or `profile`) -- invalid values skip the entity with a warning
-- Always reads from entity fields -- the `source` option is ignored in this mode (`profile_scraper` is posts/post_engagers only)
+- **Since v1.3.0 the `source` option is honored in this mode.** Default `entity_field` reads entity fields as before (byte-identical to v1.2.0 behavior). `profile_scraper` reads the LinkedIn **company** URL from each pool item's `linkedin_url` field instead: the `/company/<slug>` is extracted, targets are deduped across items, and non-company URLs (`/in/`, `/groups/`) are rejected with a warning. This pairs with api-fetcher's linkedin-company provider, whose `field_map` can place the company URL on a pool-item field -- config-only on the api-fetcher side, no code change there
+- **Feed-reachability honesty note:** only ~40% of company pages expose a DOM-reachable posts feed. Don't feed every company in -- gate on companies whose fetched record shows `updates[] > 0` (the api-fetcher linkedin-company record carries an updates array; a company with zero updates has nothing to scrape and burns a 30-120s DOM call)
 - Each feed costs 1 API call but takes 30-120s (Chrome scrolls to load posts)
 - Supports up to 200 posts per feed
 - Output includes: post text, engagement counts, reaction type icons, post format, shared article info, hashtags, author info
@@ -101,7 +102,7 @@ Scrapes posts from company pages, group feeds, or personal activity feeds using 
 | `engagers_per_post` | 50 | Lower for faster runs; raise to 100 for thorough commenter capture | Max commenters to fetch per post (post_engagers mode only). Each post costs 1 extra API call |
 | `requests_per_hour` | 20 | Lower to 10-15 for safety; raise to 30-40 for faster throughput (riskier) | Minimum time between API calls. 20/hr = ~3 min between profiles |
 | `min_word_count` | 10 | Set to 0 to include image-only posts; raise to 25+ for text-heavy posts only | Skip posts with fewer words (filters link shares, image posts with short captions) |
-| `source` | `entity_field` | Switch to `profile_scraper` if entities don't have linkedin fields but linkedin-profile-scraper has already run | Where to find LinkedIn slugs. `entity_field` reads entity.linkedin/linkedin_url. `profile_scraper` reads from pool items (posts/post_engagers only) |
+| `source` | `entity_field` | Switch to `profile_scraper` if entities don't have linkedin fields but pool items carry `linkedin_url` (linkedin-profile-scraper output for posts modes; api-fetcher company records for feed_posts) | Where to find LinkedIn slugs. `entity_field` reads entity.linkedin/linkedin_url. `profile_scraper` reads pool items' `linkedin_url`: `/in/` profile URLs in posts/post_engagers, `/company/` page URLs in feed_posts (v1.3.0) |
 
 **Most impactful option:** `posts_per_profile` -- at 10 posts x 20 profiles = 200 items. At 25 posts x 20 profiles = 500 items. More posts = richer data but longer runtime.
 

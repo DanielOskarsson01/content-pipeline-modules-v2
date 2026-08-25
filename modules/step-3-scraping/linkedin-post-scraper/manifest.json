@@ -2,7 +2,7 @@
   "id": "linkedin-post-scraper",
   "name": "LinkedIn Post Scraper",
   "description": "Fetch recent LinkedIn posts via the Profile API. Modes: posts (default, Voyager) scrapes personal profile posts. post_engagers extends posts with commenter data. feed_posts (DOM scraping) scrapes company pages, group feeds, or personal activity feeds — works where Voyager returns 403. Uses the same authenticated Chrome session as linkedin-profile-scraper.",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "step": 3,
   "category": "linkedin",
   "cost": "medium",
@@ -11,7 +11,7 @@
   "sort_order": 5,
 
   "depends_on": [],
-  "usage_notes": "Requires the Profile API (localhost:3847) with an active LinkedIn session. Default mode reads LinkedIn slugs from entity linkedin/linkedin_url field. Set source to 'profile_scraper' to read from linkedin-profile-scraper output instead (requires running that module first). Rate limited to avoid LinkedIn detection.",
+  "usage_notes": "Requires the Profile API (localhost:3847) with an active LinkedIn session. Default mode reads LinkedIn slugs from entity linkedin/linkedin_url field. Set source to 'profile_scraper' to read from pool items' linkedin_url field instead (posts/post_engagers: /in/ profile URLs from linkedin-profile-scraper output; feed_posts since v1.3.0: /company/ page URLs — pairs with api-fetcher's linkedin-company provider, whose field_map can place the company URL on a pool-item field, config-only on that side; non-company URLs such as /in/ are rejected in feed mode). Honesty note: only ~40% of company pages have a DOM-reachable posts feed — gate feed scraping on companies whose fetched record shows updates[] > 0 rather than feeding every company in. Rate limited to avoid LinkedIn detection.",
 
   "requires_columns": [],
 
@@ -64,7 +64,7 @@
       "name": "source",
       "type": "select",
       "label": "Profile source",
-      "description": "Where to find LinkedIn URLs: 'entity_field' reads from entity linkedin/linkedin_url field (supports /company/, /groups/, and /in/ URLs). 'profile_scraper' reads from linkedin-profile-scraper output (posts/post_engagers modes only).",
+      "description": "Where to find LinkedIn URLs: 'entity_field' reads from entity linkedin/linkedin_url field (supports /company/, /groups/, and /in/ URLs). 'profile_scraper' reads pool items' linkedin_url field: /in/ profile URLs in posts/post_engagers modes, /company/ page URLs in feed_posts mode (non-company URLs rejected).",
       "options": ["profile_scraper", "entity_field"],
       "default": "entity_field"
     }

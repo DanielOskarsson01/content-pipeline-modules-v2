@@ -724,6 +724,26 @@ function collectFeedTargets(entities, source, logger) {
   const seen = new Set();
 
   for (const entity of entities) {
+    if (source !== 'entity_field') {
+      // Pool-item source (mirrors collectProfiles): company URLs only —
+      // feed targets from pool items are /company/ pages (e.g. placed there
+      // by api-fetcher's linkedin-company provider via field_map).
+      for (const item of entity.items || []) {
+        const itemUrl = item.linkedin_url;
+        if (!itemUrl) continue;
+        const match = itemUrl.match(/\/company\/([^/?#]+)/);
+        if (!match) {
+          logger.warn(`${entity.name}: pool item URL "${itemUrl}" is not a /company/ URL, skipping`);
+          continue;
+        }
+        const itemKey = `company:${match[1]}`;
+        if (seen.has(itemKey)) continue;
+        seen.add(itemKey);
+        targets.push({ entity_name: entity.name, type: 'company', slug: match[1] });
+      }
+      continue;
+    }
+
     const url = entity.linkedin || entity.linkedin_url;
     if (!url) {
       logger.warn(`${entity.name}: no linkedin field, skipping`);
