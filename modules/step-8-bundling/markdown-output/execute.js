@@ -75,11 +75,35 @@ function removeMetaSection(markdown) {
   return markdown.replace(/\n## \[?Meta\]?[\s\S]*?(?=\n## |$)/, '').trim();
 }
 
+// Field list may arrive as a JSON string (UI stores JSON options as strings).
+// Malformed input degrades to [] but warns — a silent [] would quietly strip
+// the identifiers a delivery consumer depends on (W1-class silent-green).
+function parseFieldList(raw, warn) {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      const p = JSON.parse(raw);
+      if (Array.isArray(p)) return p;
+      warn(`frontmatter_entity_fields parsed but is not a JSON array — ignoring: ${raw}`);
+    } catch {
+      warn(`frontmatter_entity_fields is not valid JSON — ignoring: ${raw}`);
+    }
+  }
+  return [];
+}
+
 /**
- * Build YAML frontmatter from entity name and analysis data.
+ * Build YAML frontmatter from the entity, analysis data, and the QA verdict.
+ * entityFields (B032-2): names of entity properties to stamp after title —
+ * skipped silently when absent/null, so default [] output is byte-identical
+ * to the pre-option version.
  */
-function buildFrontmatter(entityName, analysisItems, qaVerdict) {
-  const fm = { title: entityName };
+function buildFrontmatter(entity, entityFields, analysisItems, qaVerdict) {
+  const fm = { title: entity.name };
+
+  for (const f of entityFields) {
+    if (entity[f] != null) fm[f] = entity[f];
+  }
 
   // M2: surface the QA verdict where the human reviewing the file sees it.
   // Additive — absent entirely when the pool carries no QA shapes.
@@ -139,8 +163,10 @@ async function execute(input, options, tools) {
     citation_format = 'footnotes',
     include_frontmatter = true,
     include_meta_section = false,
+    frontmatter_entity_fields = [],
   } = options;
   const { logger, progress } = tools;
+  const entityFields = parseFieldList(frontmatter_entity_fields, (msg) => logger.warn(`markdown-output: ${msg}`));
 
   const results = [];
 
@@ -202,7 +228,7 @@ async function execute(input, options, tools) {
       let finalMarkdown = content.trim();
       const hasFrontmatter = include_frontmatter;
       if (include_frontmatter) {
-        finalMarkdown = buildFrontmatter(entity.name, analysisItems, qaVerdict) + finalMarkdown;
+        finalMarkdown = buildFrontmatter(entity, entityFields, analysisItems, qaVerdict) + finalMarkdown;
       }
 
       const wordCount = countWords(finalMarkdown);

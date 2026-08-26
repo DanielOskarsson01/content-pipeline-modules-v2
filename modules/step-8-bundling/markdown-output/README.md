@@ -3,13 +3,15 @@
 > Transform pipeline content into clean, publishable Markdown with optional YAML frontmatter.
 
 **Module ID:** `markdown-output` | **Step:** 8 (Bundling) | **Category:** formatting | **Cost:** cheap
-**Version:** 1.2.0 | **Data Operation:** add (+)
+**Version:** 1.3.0 | **Data Operation:** add (+)
 
 > **v1.0.1 (W1.5):** the heading-marker regex is now sourced from the shared `modules/_shared/marker-parser.js` (single source of truth, also used by tone-seo-editor's marker-preservation gate). Strip behavior is byte-identical to v1.0.0 -- verified by an old-vs-new output diff.
 >
 > **v1.1.0 (M2):** the QA verdict travels with the content -- `qa_verdict` / `qa_flagged` / `qa_failed_checks` in the YAML frontmatter, plus a `qa_flagged` field on every item row that is emitted even when frontmatter is off. See "QA verdict propagation" below.
 >
 > **v1.2.0 (M1):** two publish-layer fixes. (1) `strip_markers` now removes the ENTIRE bracketed prefix and keeps the descriptive title -- `## [Tag: mobile] Mobile-First Slots Design` → `## Mobile-First Slots Design` (previously it prepended the marker word: `## Mobile Mobile-First Slots Design`). (2) With `include_meta_section: false`, only the `## [Meta]` section is removed (up to the next `## ` heading or EOF); a following `## [Sources]` section is now preserved (previously deleted along with everything after Meta).
+>
+> **v1.3.0 (B032-2):** new `frontmatter_entity_fields` option (json array, default `[]`). Named entity fields (e.g. `company_id`) are copied from the entity into YAML frontmatter directly after `title` when present; absent/null fields are skipped silently. Default `[]` output is byte-identical to v1.2.0 (A/B-verified). Lets delivery consumers key artifacts on entity identifiers instead of `entity_name` alone.
 
 ---
 
@@ -56,6 +58,7 @@ When an entity carries several `content_markdown` items (re-runs, or the tone-se
 | `citation_format` | `footnotes` | Set to `inline` to keep `[#n]` as-is; set to `strip` to remove all citations | `footnotes` converts `[#n]` to `[^n]` with a footnote definitions section at the bottom |
 | `include_frontmatter` | `true` (boolean) | Disable if your CMS does not support YAML frontmatter or you want raw Markdown only | Adds `---` delimited YAML block with title, categories, and tags from analysis data, plus QA verdict fields when the pool carries QA shapes |
 | `include_meta_section` | `false` (boolean) | Enable to keep the `## [Meta]` section for debugging or if meta-output is not being used | The Meta section contains structured metadata that is typically handled by meta-output instead |
+| `frontmatter_entity_fields` | `[]` (json) | Set to a JSON array of entity field names (e.g. `["company_id"]`) when a delivery consumer needs entity identifiers stamped into the artifact | Each named field present on the entity is emitted into frontmatter directly after `title`; absent/null fields are skipped silently. Default `[]` keeps output byte-identical to v1.2.0 |
 
 ## Recipes
 
