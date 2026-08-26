@@ -13,19 +13,44 @@
 /**
  * Assemble all scraped page content for an entity into a single text block.
  * Each page is separated with a header showing URL and title.
+ *
+ * B029-1: `includePageIntent` (default false → byte-identical legacy framing)
+ * switches the per-page header to the measured framing B — a numbered header
+ * with url/title lines plus the item's Step-2 intent classification when
+ * present (+~25 tokens/page). The intent line is omitted for items without
+ * `page_intent`.
+ *
+ * B029-2: returns { text, totalChars, truncated } so the caller can surface
+ * input truncation (previously only an in-prompt marker). The truncation
+ * marker text itself is unchanged — prompt bytes are identical to before.
  */
-function assembleEntityContent(items, maxChars) {
+function assembleEntityContent(items, maxChars, includePageIntent) {
   const parts = [];
+  let n = 0;
   for (const item of items) {
-    const header = `--- Page: ${item.title || 'Untitled'} (${item.url}) ---`;
+    n++;
+    let header;
+    if (includePageIntent) {
+      header = `--- PAGE ${n} ---\nurl: ${item.url}\ntitle: ${item.title || 'Untitled'}`;
+      if (item.page_intent) {
+        header += `\nintent: ${item.page_intent}`;
+        if (item.intent_confidence !== undefined && item.intent_confidence !== null) {
+          header += ` (confidence ${item.intent_confidence})`;
+        }
+      }
+    } else {
+      header = `--- Page: ${item.title || 'Untitled'} (${item.url}) ---`;
+    }
     const content = item.text_content || '';
     parts.push(`${header}\n${content}`);
   }
   let assembled = parts.join('\n\n');
-  if (assembled.length > maxChars) {
+  const totalChars = assembled.length;
+  const truncated = totalChars > maxChars;
+  if (truncated) {
     assembled = assembled.substring(0, maxChars) + '\n\n[Content truncated at ' + maxChars + ' characters]';
   }
-  return assembled;
+  return { text: assembled, totalChars, truncated };
 }
 
 /**
@@ -438,7 +463,7 @@ function mergeSourceCitations(prev, next) {
 
 async function execute(input, options, tools) {
   const { entities } = input;
-  const { ai_model, ai_provider, max_content_chars, prompt: promptTemplate, reference_docs, temperature, max_tokens, vocabulary_checks } = options;
+  const { ai_model, ai_provider, max_content_chars, prompt: promptTemplate, reference_docs, temperature, max_tokens, vocabulary_checks, include_page_intent, json_retry } = options;
   const { logger, progress, ai } = tools;
 
   // Warn if critical reference docs are missing — the prompt relies on {doc:master_categories.md}
@@ -521,8 +546,13 @@ async function execute(input, options, tools) {
       const totalWords = items.reduce((sum, item) => sum + (item.word_count || 0), 0);
       logger.info(`${entity.name}: analyzing ${items.length} pages (${totalWords} words) with ${ai_provider}/${ai_model}`);
 
-      // Assemble all page content
-      const entityContent = assembleEntityContent(items, max_content_chars);
+      // Assemble all page content. B029-2: surface input truncation — the
+      // 200k head-keep used to be visible only as an in-prompt marker.
+      const assembled = assembleEntityContent(items, max_content_chars, include_page_intent === true);
+      const entityContent = assembled.text;
+      if (assembled.truncated) {
+        logger.warn(`${entity.name}: assembled source content truncated — ${assembled.totalChars} chars total, ${max_content_chars} kept (raise max_content_chars or trim the source pool)`);
+      }
 
       // Build prompt; split the stable reference-doc prefix for Anthropic prompt
       // caching (BACKLOG #21). cachePrefix + prompt is byte-identical to the old
@@ -547,15 +577,49 @@ async function execute(input, options, tools) {
         analysis = parseJsonResponse(response.text);
         flat = flattenAnalysis(analysis);
       } catch (parseErr) {
-        // LLM returned non-JSON (prose, markdown, etc.) — display as single section
-        logger.warn(`${entity.name}: LLM returned non-JSON, displaying as raw text`);
-        analysis = null;
-        const rawText = response.text || '(empty response)';
-        flat = {
-          summary_preview: rawText.substring(0, 100) + (rawText.length > 100 ? '...' : ''),
-          section_analysis: rawText,
-          _dynamic_sections: [{ field: 'section_analysis', label: 'Analysis', display: 'prose' }],
-        };
+        if (json_retry === true) {
+          // B029-3: corrective JSON retry + fail-loud (port of seo-planner's
+          // v2.2.1 completeWithJsonRetry). One temperature-0 re-ask embedding
+          // the invalid response — a reformat, which models comply with far
+          // more reliably than a fresh generation. On a second failure, throw
+          // into the outer catch → meta.status:'error', analysis_json:null —
+          // instead of the default degraded success that ships raw prose to
+          // the writer with the root cause invisible.
+          logger.warn(`${entity.name}: LLM returned non-JSON (${parseErr.message}) — retrying once with a strict JSON-only correction (json_retry)`);
+          const correction =
+            'Your previous response was NOT valid JSON — it contained markdown, headings, prose, or code fences.\n\n' +
+            'Re-output the EXACT SAME information as ONLY a single valid JSON object and nothing else: ' +
+            'no markdown, no "#" headings, no "**" bold, no prose, no commentary, no code fences, no preamble. ' +
+            'Your response MUST start with "{" and end with "}".\n\n' +
+            'Your previous (invalid) response was:\n' + (response.text || '');
+          // cache_prefix stripped: the correction prompt is standalone —
+          // prepending the cached template head would change what the model sees.
+          const second = await ai.complete({
+            prompt: correction,
+            model: ai_model,
+            provider: ai_provider,
+            temperature: 0,
+            max_tokens,
+            cache_prefix: undefined,
+          });
+          try {
+            analysis = parseJsonResponse(second.text);
+            flat = flattenAnalysis(analysis);
+          } catch (secondErr) {
+            throw new Error(`LLM returned non-JSON after corrective retry: ${secondErr.message}`);
+          }
+        } else {
+          // Default path (json_retry off): LLM returned non-JSON (prose,
+          // markdown, etc.) — display as single section (degraded success)
+          logger.warn(`${entity.name}: LLM returned non-JSON, displaying as raw text`);
+          analysis = null;
+          const rawText = response.text || '(empty response)';
+          flat = {
+            summary_preview: rawText.substring(0, 100) + (rawText.length > 100 ? '...' : ''),
+            section_analysis: rawText,
+            _dynamic_sections: [{ field: 'section_analysis', label: 'Analysis', display: 'prose' }],
+          };
+        }
       }
 
       // CONTENT gate (M2 / A4): the parse above validated JSON shape only. A
@@ -627,6 +691,16 @@ async function execute(input, options, tools) {
         }
       }
 
+      // B029-2: input-truncation visibility — additive fields, only stamped
+      // when the assembled source exceeded max_content_chars.
+      const truncationFields = assembled.truncated
+        ? {
+            content_truncated: true,
+            content_chars_total: assembled.totalChars,
+            content_chars_kept: max_content_chars,
+          }
+        : {};
+
       const resultItem = {
         entity_name: entity.name,
         status: 'analyzed',
@@ -639,12 +713,13 @@ async function execute(input, options, tools) {
         _dynamic_sections: flat._dynamic_sections,
         // Full JSON carried to pool for downstream submodules
         analysis_json: analysis,
+        ...truncationFields,
       };
 
       results.push({
         entity_name: entity.name,
         items: [resultItem],
-        meta: { pages_analyzed: items.length, total_words: totalWords, status: 'success' },
+        meta: { pages_analyzed: items.length, total_words: totalWords, status: 'success', ...truncationFields },
       });
 
       logger.info(`${entity.name}: analysis complete — ${flat.summary_preview}`);
@@ -698,4 +773,5 @@ module.exports.__testing = {
   parseVocabularyChecks,
   resolveReferenceDoc,
   extractVocabSlugs,
+  assembleEntityContent,
 };
