@@ -2,14 +2,14 @@
   "id": "keyword-sufficiency-checker",
   "name": "Keyword Sufficiency Checker",
   "description": "Validate that generated content includes target SEO keywords at the right density and in the right positions (headlines, first paragraphs, meta tags).",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "step": 6,
   "category": "qa",
   "cost": "cheap",
   "data_operation_default": "add",
   "pool_precondition": "requires_items",
   "depends_on": ["content-writer", "seo-planner"],
-  "usage_notes": "Run after content-writer and seo-planner. Checks keyword placement, density, and negative keyword absence. Works without seo-planner data (returns pass with warning). Pure text analysis -- no API calls.",
+  "usage_notes": "Run after content-writer and seo-planner. Checks keyword placement, density, and negative keyword absence. Works without seo-planner data (returns pass with warning). Pure text analysis -- no API calls. B029-4 (v1.1.0, template-v3 unit): keyword extraction now ADDITIVELY unions a shape-agnostic harvester (any `target_keywords`/`keywords`/`head_terms` key at any nesting, plus `keyword_summary_table[].keyword` -- the same collector meta-compliance-checker and seo-planner carry) with the legacy fixed buckets. Legacy shapes score identically; terms only the harvester finds land in the mid-tail bucket (conservative weight). Closes the v3 gap where a section-container plan (category_sections/tag_sections per-section target_keywords, keyword_distribution.tags/credentials/faq keywords) under-counted to zero targets.",
 
   "requires_columns": ["seo_plan_json"],
 

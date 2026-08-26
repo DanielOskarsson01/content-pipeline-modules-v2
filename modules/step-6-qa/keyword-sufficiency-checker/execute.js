@@ -4,7 +4,8 @@
  * Validates that generated content includes target SEO keywords at the right
  * density and in the right positions (headlines, first paragraphs, meta tags).
  *
- * Data operation: TRANSFORM (=) -- same items, enriched with QA verdicts.
+ * Data operation: ADD (+) -- item_key entity_name; QA verdict items upsert
+ * alongside other submodules' items (the manifest declares add).
  * Data-shape routing: finds input by field presence, never by source_submodule.
  *
  * Scoring components (weighted):
@@ -223,12 +224,69 @@ function extractKeywords(seoPlanJson) {
     }
   }
 
+  // --- B029-4: shape-agnostic harvest, ADDITIVE union ---
+  // The fixed shapes above miss container layouts other templates produce
+  // (per-section target_keywords arrays under category_sections/tag_sections,
+  // keyword_distribution.tags/credentials/faq `keywords`, keyword_summary_table).
+  // Harvest every keyword string shape-agnostically; terms not already captured
+  // by a legacy bucket land in midTail (conservative weight). Legacy buckets
+  // are untouched, so default-shape results are identical.
+  for (const s of collectPlanKeywords(plan)) {
+    const t = s.trim().toLowerCase();
+    if (!t) continue;
+    if (headTerms.has(t) || midTail.has(t) || entities.has(t) || negatives.has(t)) continue;
+    midTail.add(t);
+  }
+
   return {
     headTerms: [...headTerms],
     midTail: [...midTail],
     entities: [...entities],
     negatives: [...negatives],
   };
+}
+
+// ---------------------------------------------------------------------------
+// B029-4: shape-agnostic keyword harvester.
+//
+// Keyword FIELD names are the pipeline-agnostic contract; section CONTAINER
+// names (overview / category_sections / tag_sections / sections / credentials
+// ...) are TEMPLATE-specific and must NEVER be enumerated here (Rule 13). So we
+// HARVEST every non-empty string reachable under any key named
+// `target_keywords`, `keywords`, or `head_terms`, wherever it nests, whether
+// the value is a string, a flat string[] or a {primary,secondary,long_tail}
+// object. Plus the typed `keyword_summary_table[].keyword` rollup.
+// `keyword_sources`/`notes`/`meta` are NOT keyword fields (exact key match), so
+// research provenance and prose are never mistaken for keywords.
+//
+// Rule 4 self-contained copy — meta-compliance-checker (step 6) and seo-planner
+// (step 5) carry IDENTICAL collectors; keep the three in sync if any changes.
+// ---------------------------------------------------------------------------
+const KEYWORD_FIELD_KEYS = new Set(['target_keywords', 'keywords', 'head_terms']);
+
+function harvestKeywordStrings(node, out) {
+  if (typeof node === 'string') { const s = node.trim(); if (s) out.push(s); return; }
+  if (Array.isArray(node)) { for (const v of node) harvestKeywordStrings(v, out); return; }
+  if (node && typeof node === 'object') { for (const v of Object.values(node)) harvestKeywordStrings(v, out); }
+}
+
+function collectPlanKeywords(plan) {
+  const out = [];
+  const walk = (node, depth) => {
+    if (depth > 8 || !node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { for (const v of node) walk(v, depth + 1); return; }
+    for (const [key, val] of Object.entries(node)) {
+      if (KEYWORD_FIELD_KEYS.has(key)) harvestKeywordStrings(val, out);
+      else walk(val, depth + 1);
+    }
+  };
+  walk(plan, 0);
+  if (plan && Array.isArray(plan.keyword_summary_table)) {
+    for (const row of plan.keyword_summary_table) {
+      if (row && typeof row.keyword === 'string' && row.keyword.trim()) out.push(row.keyword.trim());
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -786,3 +844,6 @@ module.exports = async function execute(input, options, tools) {
     },
   };
 };
+
+// Exported for test harness use only — not part of the public submodule interface.
+module.exports.__testing = { extractKeywords, collectPlanKeywords };

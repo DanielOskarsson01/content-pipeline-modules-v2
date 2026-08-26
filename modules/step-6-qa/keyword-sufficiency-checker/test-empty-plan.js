@@ -93,7 +93,10 @@ const goodPlanEntity = {
   // Manifest sanity (config part of W1.1)
   // -----------------------------------------------------------------------
   console.log('\n=== Manifest sanity ===');
-  assert(MANIFEST.version === '1.0.2', 'manifest version bumped to 1.0.2');
+  assert(
+    MANIFEST.version.localeCompare('1.0.2', undefined, { numeric: true }) >= 0,
+    'manifest version at least 1.0.2 (W1.1 bump)'
+  );
   assert(
     MANIFEST.options.some(o => o.name === 'allow_empty_keyword_plan'),
     'allow_empty_keyword_plan option present'

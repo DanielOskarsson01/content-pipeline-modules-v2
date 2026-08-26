@@ -42,12 +42,28 @@ This module uses data-shape routing. It finds its input by checking which fields
 - **Content items**: items with `content_markdown`
 - **SEO plan items**: items with `seo_plan_json`
 
-The SEO plan keywords are extracted from two possible shapes:
+The SEO plan keywords are extracted from two fixed legacy shapes:
 
 1. `seo_plan_json.keywords_used` (with `head_terms`, `mid_tail`, `entities`, `negatives` arrays)
 2. `seo_plan_json.target_keywords` (with `primary`, `secondary`, `long_tail`) plus `keyword_distribution`
 
 Both shapes are handled transparently.
+
+**B029-4 (v1.1.0): shape-agnostic harvest, additive union.** On top of the fixed
+shapes, the extractor now runs the same shape-agnostic harvester that
+meta-compliance-checker and seo-planner carry (Rule-4 self-contained copy): every
+non-empty string under any key named `target_keywords`, `keywords`, or
+`head_terms` at any nesting depth (≤8), plus `keyword_summary_table[].keyword`.
+Section CONTAINER names (`category_sections`, `tag_sections`, `overview`,
+`credentials`, `faq`, …) are never enumerated — that is template vocabulary
+(Rule 13). The union is ADDITIVE: legacy buckets populate exactly as before
+(identical scores on legacy shapes, A/B-proven vs the pre-change extractor);
+terms only the harvester finds land in the **mid-tail** bucket (conservative
+weight — they get coverage scoring, never the stricter head-term
+placement/density rules). This closes the gap where a §9.C-shaped plan
+(per-section `target_keywords` arrays, `keyword_distribution.tags/credentials/faq`
+`keywords`) counted zero keyword targets and tripped the W1.1 empty-plan fail on
+a keyword-rich plan.
 
 ---
 
@@ -244,3 +260,5 @@ Results feed into Step 7 (loop-router) for routing decisions:
 - **Dependencies**: Upstream `content-writer` (for `content_markdown`), `seo-planner` (for `seo_plan_json`)
 - **No external API calls**: All checks are local string operations
 - **No AI calls**: Purely deterministic rule-based checks
+- **Tests**: `test-empty-plan.js` (17, W1.1 loud-fail), `test-reads-content.js` (8, H19 fail-closed), `test-keyword-harvest.js` (20, B029-4 additive harvest — legacy-shape identity + §9.C container shapes)
+- **v1.1.0 (B029-4, template-v3 unit)**: shape-agnostic keyword harvest added as an additive union with the legacy fixed buckets (see Input Data above)
