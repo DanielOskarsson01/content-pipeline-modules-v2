@@ -175,8 +175,9 @@ async function execute(input, options, tools) {
 
       // Get source citations for link conversion
       let sourceCitations = null;
-      if (analysisItems.length > 0 && analysisItems[0].analysis_json) {
-        sourceCitations = analysisItems[0].analysis_json.source_citations;
+      // B029-5: latest analysis (.at(-1)), matching the other Step-8 consumers
+      if (analysisItems.length > 0 && analysisItems.at(-1).analysis_json) {
+        sourceCitations = analysisItems.at(-1).analysis_json.source_citations;
       }
 
       // Process citations before markdown-to-HTML conversion
@@ -196,7 +197,7 @@ async function execute(input, options, tools) {
       let schemaOrgHtml = '';
       const hasSchemaOrg = include_schema_org && analysisItems.length > 0;
       if (hasSchemaOrg) {
-        const schemaObj = buildSchemaOrg(entity.name, analysisItems[0].analysis_json);
+        const schemaObj = buildSchemaOrg(entity.name, analysisItems.at(-1).analysis_json);
         schemaOrgHtml = `<script type="application/ld+json">\n${JSON.stringify(schemaObj, null, 2)}\n</script>`;
       }
 

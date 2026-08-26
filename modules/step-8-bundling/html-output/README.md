@@ -152,7 +152,7 @@ The other Step 8 modules run in parallel on the same working pool, allowing you 
 - **Step:** 8 (Bundling)
 - **Category:** formatting
 - **Cost:** cheap
-- **Data operation:** transform (=) -- content converted to HTML format
+- **Data operation:** add (+) -- item_key is entity_name; the HTML output upserts alongside other Step-8 outputs (README previously said transform; the manifest has always declared add)
 - **Requires columns:** none (reads from pool items, not CSV columns)
 - **Depends on:** content-writer
 - **Input:** `input.entities[]` with `items[]` containing `content_markdown` and optionally `analysis_json`
@@ -162,3 +162,4 @@ The other Step 8 modules run in parallel on the same working pool, allowing you 
 - **Detail view:** header fields (entity_name, html_size_kb, heading_count, has_schema_org badge) and prose section for final_html
 - **Dependencies:** `marked` (Markdown to HTML conversion), `tools.logger`, `tools.progress`
 - **Files:** `manifest.json`, `execute.js`
+- **Analysis selection (v1.1.1, B029-5):** source citations and schema.org are built from the **latest** `analysis_json` item (`.at(-1)`), matching the other Step-8 consumers (H18b class). Content already used the latest `content_markdown`; previously the analysis side used `[0]`, which could grade a stale analysis when the pool carried several. Tests: `test-marker-strip.js` (8), `test-latest-analysis.js` (7)
