@@ -2,16 +2,16 @@
   "id": "schema-org-injector",
   "name": "Schema.org Injector",
   "description": "Generate Schema.org structured data (JSON-LD) for company profiles — Organization, Product, FAQPage — for SEO rich snippets.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "step": 8,
   "category": "bundling",
   "cost": "cheap",
   "data_operation_default": "add",
   "pool_precondition": "requires_items",
   "depends_on": ["json-output", "content-analyzer"],
-  "usage_notes": "Enable all three schema types for maximum rich snippet coverage. Disable Product if the entity is not product-focused. FAQPage maps directly to Google's FAQ rich snippet format.",
+  "usage_notes": "Enable all three schema types for maximum rich snippet coverage. Disable Product if the entity is not product-focused. FAQPage maps directly to Google's FAQ rich snippet format. B032-1 (v1.1.0): requires_columns now declares the seo_plan_json + analysis_json this module reads — the prod step-8 pool is STRIPPED (these columns live in submodule_run_item_data, rehydrated per-module ONLY via this declaration, §7b), so the previous [] starved the module into a per-entity hard error ('no recognized data shapes') whenever scheduled; June 2026 pools predate stripping. content_markdown is not read here. CROSS-FLAG: final_json (json-output shape) is read when present and is the SAME stripped-field class — it is NOT declared because current templates do not schedule json-output upstream of this module; if a template ever does, add 'final_json' to requires_columns or the json-output data will silently not be seen.",
 
-  "requires_columns": [],
+  "requires_columns": ["seo_plan_json", "analysis_json"],
 
   "options": [
     {

@@ -2,16 +2,16 @@
   "id": "meta-output",
   "name": "Meta Output",
   "description": "Assemble validated SEO metadata from the entity pool: meta title and description (resolved in the same priority order meta-compliance-checker validates -- writer meta fields, frontmatter, planner meta/candidates, heuristics), keywords array from categories/tags/per-section target keywords, Open Graph tags (og:title, og:description, og:type), and optional Twitter Card tags.",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "step": 8,
   "category": "seo",
   "cost": "cheap",
   "data_operation_default": "add",
   "pool_precondition": "requires_items",
   "depends_on": ["seo-planner"],
-  "usage_notes": "Validates SEO metadata against length constraints. Default title/description lengths follow Google's current display limits. Enable twitter_tags if publishing to platforms with Twitter Card support.",
+  "usage_notes": "Validates SEO metadata against length constraints. Default title/description lengths follow Google's current display limits. Enable twitter_tags if publishing to platforms with Twitter Card support. B032-1 (v1.1.0): requires_columns now declares the seo_plan_json + analysis_json this module reads — the prod step-8 pool is STRIPPED (these columns live in submodule_run_item_data and are rehydrated per-module ONLY via this declaration, §7b), so the previous [] starved the module into a per-entity hard error ('No items with seo_plan_json found') whenever scheduled. content_markdown / meta_title / meta_description are deliberately NOT declared: content_markdown rides §7c blob-hydration for all modules; the meta fields are small inline writer fields. Note: June 2026 run 5512e8b5 succeeded with [] because it predates pool stripping.",
 
-  "requires_columns": [],
+  "requires_columns": ["seo_plan_json", "analysis_json"],
 
   "options": [
     {

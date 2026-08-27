@@ -3,7 +3,9 @@
 > Generate Schema.org structured data (JSON-LD) for company profiles -- Organization, Product, FAQPage -- for SEO rich snippets.
 
 **Module ID:** `schema-org-injector` | **Step:** 8 (Bundling) | **Category:** bundling | **Cost:** cheap
-**Version:** 1.0.0 | **Data Operation:** add (+)
+**Version:** 1.1.0 | **Data Operation:** add (+)
+
+> **v1.1.0 (B032-1):** `requires_columns` is now `["seo_plan_json", "analysis_json"]` (was `[]`). The prod step-8 pool is **stripped** — these columns live in `submodule_run_item_data` and are rehydrated per-module ONLY via this manifest declaration (§7b). With `[]`, the module hard-errored every entity ("no recognized data shapes") the moment it was scheduled against a stripped pool (STEP78 Run A); with the declaration it emits a parseable JSON-LD `@graph` with zero validation errors (Run B). June 2026 pools predate stripping. **Cross-flag:** `final_json` (json-output shape) is read when present and is the same stripped-field class — NOT declared because no current template schedules json-output upstream of this module; add `final_json` to `requires_columns` if one ever does. Honest scope note: rehydration itself is skeleton-side; `test-hydration-contract.js` proves the declaration contract (declared == code reads) and on-hydrated behavior — the end-to-end proof on a real stripped prod pool is an R0 item.
 
 ---
 

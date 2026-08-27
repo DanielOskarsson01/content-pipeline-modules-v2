@@ -2,16 +2,16 @@
   "id": "html-output",
   "name": "HTML Output",
   "description": "Convert content-writer Markdown to HTML. Supports schema.org Organization JSON-LD injection, [#n] citation-to-superscript conversion with Sources section, CSS templates (basic/article), and full HTML document wrapping for standalone pages or email.",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "step": 8,
   "category": "formatting",
   "cost": "cheap",
   "data_operation_default": "add",
   "pool_precondition": "requires_items",
   "depends_on": ["content-writer"],
-  "usage_notes": "Enable schema_org for SEO. Use css_template 'article' for standalone preview pages. Set wrap_in_document for complete HTML files (email, standalone hosting). B029-5 (v1.1.1, template-v3 unit): analysis selection now uses the LATEST analysis_json item (.at(-1)) for source citations and schema.org, matching the other Step-8 consumers (H18b class) -- previously [0] could grade a stale analysis when the pool carried several.",
+  "usage_notes": "Enable schema_org for SEO. Use css_template 'article' for standalone preview pages. Set wrap_in_document for complete HTML files (email, standalone hosting). B029-5 (v1.1.1, template-v3 unit): analysis selection now uses the LATEST analysis_json item (.at(-1)) for source citations and schema.org, matching the other Step-8 consumers (H18b class) -- previously [0] could grade a stale analysis when the pool carried several. B032-1 (v1.2.0): requires_columns now declares analysis_json — the prod step-8 pool is STRIPPED (analysis_json lives in submodule_run_item_data, rehydrated per-module ONLY via this declaration, §7b), so the previous [] silently dropped citations + schema.org from the output whenever scheduled against a stripped pool; June 2026 pools predate stripping. Declared set is analysis_json ONLY: this module never reads seo_plan_json, and content_markdown (its required input) rides §7c blob-hydration for all modules.",
 
-  "requires_columns": [],
+  "requires_columns": ["analysis_json"],
 
   "options": [
     {

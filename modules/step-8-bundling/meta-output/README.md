@@ -3,9 +3,14 @@
 > Generate validated SEO metadata (title, description, keywords, Open Graph, Twitter Card) from pipeline data.
 
 **Module ID:** `meta-output` | **Step:** 8 (Bundling) | **Category:** seo | **Cost:** cheap
-**Version:** 1.0.1 | **Data Operation:** add (+)
+**Version:** 1.1.0 | **Data Operation:** add (+)
 
 ## Changelog
+
+### v1.1.0 (2026-08-27) — B032-1: hydration contract declared
+- `requires_columns` is now `["seo_plan_json", "analysis_json"]` (was `[]`). The prod step-8 pool is **stripped** — these columns live in `submodule_run_item_data` and are rehydrated per-module ONLY via this manifest declaration (§7b). With `[]`, the module hard-errored every entity ("No items with seo_plan_json found") the moment it was scheduled against a stripped pool (STEP78 Run A); with the declaration it resolves the planner-candidate meta correctly (Run B: 56/160ch, status ok). June 2026 run `5512e8b5` succeeded with `[]` only because it predates pool stripping.
+- NOT declared, deliberately: `content_markdown` (arrives via §7c blob-hydration for ALL modules) and `meta_title`/`meta_description` (small inline writer fields, never stripped).
+- Honest scope note: the rehydration itself is skeleton-side (`poolHydration.js`); module tests prove the declaration contract (declared == code reads, `test-hydration-contract.js`) and correct behavior over a hydrated-shape fixture. The end-to-end proof on a real stripped prod pool is an R0 item.
 
 ### v1.0.1 (2026-07-16) — BACKLOG #52: ship the planned meta, not the entity name
 - Meta title/description now resolve in **the same priority order meta-compliance-checker validates** (the QA check is only honest if it verifies what ships): (1) direct `meta_title`/`meta_description` fields on any pool item (content-writer emits the planner candidate here since v1.6.2) → (2) YAML frontmatter in `content_markdown` → (3) `seo_plan_json.meta.{title,description}` (legacy), then `seo_plan_json.sections.meta.meta_{title,description}.candidate` (seo-planner's actual output) → (4) H1 / first-paragraph heuristics → (5) entity name / empty string (last resort, surfaced via length warnings).

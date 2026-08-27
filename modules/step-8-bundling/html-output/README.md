@@ -3,11 +3,15 @@
 > Convert pipeline Markdown to HTML with optional schema.org Organization JSON-LD and CSS styling.
 
 **Module ID:** `html-output` | **Step:** 8 (Bundling) | **Category:** formatting | **Cost:** cheap
-**Version:** 1.1.0 | **Data Operation:** transform (=)
+**Version:** 1.2.0 | **Data Operation:** add (+)
 
 > **v1.0.1 (W1.5):** the heading-marker regex is now sourced from the shared `modules/_shared/marker-parser.js` (single source of truth, also used by tone-seo-editor's marker-preservation gate). Strip behavior is byte-identical to v1.0.0 — verified by an old-vs-new output diff.
 >
 > **v1.1.0 (M1):** marker-stripping now removes the ENTIRE bracketed prefix and keeps the descriptive title — `## [Tag: mobile] Mobile-First Slots Design` → `<h2>Mobile-First Slots Design</h2>` (previously it prepended the marker word, rendering `<h2>Mobile Mobile-First Slots Design</h2>`).
+>
+> **v1.1.1 (B029-5):** analysis selection uses the LATEST `analysis_json` item (`.at(-1)`) for source citations and schema.org, matching the other Step-8 consumers (H18b class).
+>
+> **v1.2.0 (B032-1):** `requires_columns` is now `["analysis_json"]` (was `[]`). The prod step-8 pool is **stripped** — `analysis_json` lives in `submodule_run_item_data` and is rehydrated per-module ONLY via this manifest declaration (§7b); with `[]`, citations and schema.org silently vanished from output on a stripped pool. Declared set is `analysis_json` ONLY: this module never reads `seo_plan_json`, and `content_markdown` (its required input) arrives via §7c blob-hydration for all modules. June 2026 pools predate stripping. Honest scope note: rehydration itself is skeleton-side; `test-hydration-contract.js` proves the declaration contract (declared == code reads) and on-hydrated behavior — the end-to-end proof on a real stripped prod pool is an R0 item. *(Doc fix: the version line above previously said `transform (=)` — the manifest has always declared `data_operation_default: "add"`, per the repo Step-8 table.)*
 
 ---
 
