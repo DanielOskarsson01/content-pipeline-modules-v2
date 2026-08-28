@@ -2,14 +2,14 @@
   "id": "qa-structural",
   "name": "Structural Compliance Checker",
   "description": "Check format spec adherence: heading hierarchy, section count, FAQ presence, word count per section, and total word count. Pure structural checks, no LLM needed.",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "step": 6,
   "category": "qa",
   "cost": "cheap",
   "data_operation_default": "add",
   "pool_precondition": "requires_items",
   "depends_on": ["content-writer"],
-  "usage_notes": "Run after content-writer. Checks markdown structure against configurable thresholds. Pure text analysis -- no API calls.",
+  "usage_notes": "Run after content-writer. Checks markdown structure against configurable thresholds. Pure text analysis -- no API calls. Check 8 (taxonomy_leak_check, default OFF => byte-identical to <=1.1.1) simulates the step-8 publish transform (markdown-output 1.2.0 removeMetaSection + shared marker-parser stripMarkers) and force-fails qa_pass if any residual bracket would leak to the reader -- the #50 defect (a second heading marker, a body-prose marker, or a trailing heading marker survives the single-leading-strip). It emits through the existing structural item => structural:fail, adding no new routing key; template v3 flips it on. LOCKSTEP: the strip simulation is mirrored VERBATIM from markdown-output/execute.js (stripMarkers :26-28, removeMetaSection :74-76); if those change, Check 8 MUST change with them or it stops matching the published page. Option is string-coercion tolerant: accepts boolean true and the string \"true\" (UI presets are string-typed); anything else, incl. \"false\", is off.",
 
   "requires_columns": ["content_markdown"],
 
@@ -63,6 +63,13 @@
       "default": 0.8,
       "min": 0.5,
       "max": 1.0
+    },
+    {
+      "name": "taxonomy_leak_check",
+      "type": "boolean",
+      "label": "Taxonomy-leak check (post-strip residual brackets)",
+      "description": "Simulate the step-8 publish transform (markdown-output removeMetaSection + marker strip) and force-fail qa_pass if any bracket would still leak to the reader -- a second heading marker, a body-prose marker, or a trailing heading marker (the #50 defect). Citations [#n]/[n], footnote refs [^n], and markdown links [text](url) are excluded; code is skipped. Default off keeps output byte-identical to <=1.1.1.",
+      "default": false
     }
   ],
 
@@ -72,7 +79,8 @@
     "min_words_per_section": 100,
     "min_total_words": 1500,
     "required_heading_levels": "h1,h2",
-    "pass_threshold": 0.8
+    "pass_threshold": 0.8,
+    "taxonomy_leak_check": false
   },
 
   "item_key": "entity_name",

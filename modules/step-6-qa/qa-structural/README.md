@@ -3,7 +3,7 @@
 > Checks that generated content meets basic format requirements -- heading hierarchy, section count, FAQ presence, and word counts -- without using an LLM.
 
 **Module ID:** `qa-structural` | **Step:** 6 (QA) | **Category:** qa | **Cost:** cheap
-**Version:** 1.0.0 | **Data Operation:** add (+)
+**Version:** 1.2.0 | **Data Operation:** add (+)
 
 ---
 
@@ -46,6 +46,7 @@ content-writer (Step 5) -> qa-structural -> hallucination-detector / citation-co
 | `min_total_words` | 1500 | Lower to 800-1000 for shorter content types; raise to 2500-5000 for long-form articles | Minimum word count for the entire content. Catches content that has many sections but all are shallow |
 | `required_heading_levels` | `"h1,h2"` | Add `h3` if your format requires subheadings; remove `h1` if content is embedded without a title | Comma-separated list of heading levels that must appear at least once. Missing levels trigger a violation |
 | `pass_threshold` | 0.8 | Set to 1.0 for strict compliance (all checks must pass); lower to 0.6 for lenient gating | Fraction of checks that must pass for `qa_pass` to be true. 5 checks at 0.8 means 4 of 5 must pass |
+| `taxonomy_leak_check` | false | Set true when the format uses `[Type Marker]` headings (v3) and you want the #50 guarantee | Post-strip residual-bracket leak detector (Check 8, below). Off by default => output byte-identical to <=1.1.1. Force-fails `qa_pass` outside the score; adds no routing key |
 
 The most impactful options are `min_sections` and `min_total_words` -- these catch the most common structural failures. If content is consistently failing, check whether your format spec actually requires 5 H2 sections and 1500 words. Adjust the thresholds to match your spec, not the other way around.
 
@@ -140,7 +141,7 @@ pass_threshold: 0.6
 - **Per-section counts are H2 only** -- H1 and H3 sections are tracked for heading hierarchy but not individually word-counted for the thin-section check
 - **No content quality assessment** -- checks structure only. A section could have 200 words of nonsense and still pass. Use hallucination-detector and citation-coverage-checker for content quality
 - **Frontmatter is stripped** -- YAML frontmatter between `---` markers is removed before analysis
-- **Multiple content items are concatenated** -- if an entity has multiple items with `content_markdown`, they are joined before analysis. This means section counts and word counts reflect the combined content
+- **Grades the latest draft only** -- if an entity has multiple items with `content_markdown` (e.g. content-writer then tone-seo-editor), only the last one (`.at(-1)`) is graded -- the exact draft the Step 8 bundlers publish (H18b), not the concatenation
 
 ## What Happens Next
 
@@ -173,6 +174,46 @@ duplicates ("Api API"), so identical-case repeats ("Pago Pago") and
 hyphenated names ("Baden-Baden") do not false-positive. Counts surface in
 meta as `marker_leak_headings` / `dup_token_headings`.
 
+## Check 8 — post-strip residual-bracket leak (v1.2.0, B031-1, opt-in)
+
+Checks 6/7 catch marker leaks *in headings only*. The #50 defect is broader:
+`stripMarkers` removes only ONE leading `[…]` per heading, so a **second
+heading marker**, a **marker in body prose**, or a **trailing heading marker**
+all survive into the published page. Check 8 closes that gap.
+
+It runs only when `taxonomy_leak_check` is true (default off => byte-identical
+to `<=1.1.1`; template v3 flips it on). When on, it **simulates the step-8
+publish transform** on the graded draft — `removeMetaSection` then
+`stripMarkers`, mirrored VERBATIM from `markdown-output/execute.js` (`:74-76`
+and `:26-28`) and sharing the canonical heading-marker regex via
+`_shared/marker-parser.js` — then scans the would-be-published text for any
+bracket still visible to the reader.
+
+**Excluded (never flagged):** inline citations `[#n]`/`[n]`, footnote refs
+`[^n]`, markdown links `[text](url)`. **Skipped:** fenced code and inline code
+(bracketed code is not a visual leak). Each hit is reported as `heading` or
+`body` with its line.
+
+Like Checks 6/7, a leak sits **outside the score** and force-fails `qa_pass`
+directly — a pure leak would otherwise ride a passing ratio to publish. It
+emits through the existing structural item, so it routes on the existing
+`structural:fail` key with **no new routing key**. Count surfaces in meta as
+`residual_bracket_leaks` (added only when the check runs).
+
+**LOCKSTEP:** the strip simulation must match markdown-output's actual publish
+transform. If markdown-output changes `stripMarkers`/`removeMetaSection`, Check
+8 MUST change with it, or the simulation stops matching the reader's page. It
+mirrors markdown-output's *default* publish config (`include_meta_section:false`,
+`heading_style:strip_markers`); a non-default bundler config could only make
+Check 8 under-report (a false negative), never wrongly block clean content.
+
+**String coercion:** accepts boolean `true` and the string `"true"` (UI presets
+are string-typed); anything else, including `"false"`, is off.
+
+Validated zero-false-positive over all 6 real b717a531 editor drafts
+(`fixtures/real-drafts-b717a531/`) and 3/3 on the planted leak classes
+(`test-taxonomy-leak.js`).
+
 ## Technical Reference
 
 - **Step:** 6 (QA)
@@ -186,5 +227,5 @@ meta as `marker_leak_headings` / `dup_token_headings`.
 - **Selectable:** false -- QA verdicts are informational, not selectable by operators
 - **Detail view:** `detail_schema` with header fields (entity_name, qa_pass badge, structural_score, total_words, section_count) and expandable sections (violations as prose, section_report as prose)
 - **Error handling:** Entities with no `content_markdown` get a failing verdict with a clear message. All other entities are processed independently -- one failure does not block others
-- **External dependencies:** None -- pure JavaScript text parsing
-- **Files:** `manifest.json`, `execute.js`
+- **External dependencies:** `_shared/marker-parser.js` (shared heading-marker regex, used by Check 8's strip simulation in lockstep with the Step 8 bundlers) -- otherwise pure JavaScript text parsing
+- **Files:** `manifest.json`, `execute.js`, `README.md`, `test-taxonomy-leakage.js` (Checks 6/7), `test-taxonomy-leak.js` (Check 8), `fixtures/real-drafts-b717a531/` (6 real drafts, Check 8 zero-FP corpus)

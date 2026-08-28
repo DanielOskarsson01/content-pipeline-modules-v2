@@ -4,7 +4,8 @@
  * Checks format spec adherence: heading hierarchy, section count, FAQ
  * presence, word count per section, and total word count.
  *
- * Data operation: TRANSFORM (=) -- same entities, enriched with QA verdicts.
+ * Data operation: add (+) -- QA verdict items added alongside existing content
+ * (item_key entity_name; see manifest data_operation_default).
  * Data-shape routing: finds input by field presence (content_markdown),
  * never by source_submodule.
  *
@@ -90,6 +91,71 @@ function parseStructure(markdown) {
 }
 
 // ---------------------------------------------------------------------------
+// Check 8 (B031-1): post-strip residual-bracket taxonomy-leak detection (#50)
+//
+// stripMarkers removes only ONE leading marker per heading (shared grammar), so
+// a SECOND heading bracket, a bracket in body prose, or a trailing heading
+// bracket all survive to the reader today. The transform is mirrored VERBATIM
+// from markdown-output 1.2.0 so this check equals "what the reader sees":
+// removeMetaSection (markdown-output/execute.js:74-76) then stripMarkers
+// (markdown-output/execute.js:26-28), sharing the canonical heading-marker
+// regex via _shared/marker-parser.js — the same lockstep rationale W1.5
+// documents. If markdown-output's strip semantics change, this MUST change in
+// lockstep, or the simulation stops matching the published page.
+//
+// Simulates markdown-output's DEFAULT publish config (include_meta_section=false
+// => Meta removed; heading_style='strip_markers' => markers stripped) — both are
+// the bundler defaults. A non-default bundler config could only make Check 8
+// UNDER-report (a false negative, never a wrongful block), so plumbing the
+// bundler's per-template options into a Step-6 checker (cross-module coupling)
+// is not worth it.
+// ---------------------------------------------------------------------------
+const { headingMarkerRegex } = require('../../_shared/marker-parser.js');
+
+// VERBATIM markdown-output/execute.js:26-28
+function stripMarkers(markdown) {
+  return markdown.replace(headingMarkerRegex(), (_match, hashes) => hashes);
+}
+// VERBATIM markdown-output/execute.js:74-76
+function removeMetaSection(markdown) {
+  return markdown.replace(/\n## \[?Meta\]?[\s\S]*?(?=\n## |$)/, '').trim();
+}
+
+/**
+ * Scan strip-simulated (would-be-published) markdown for residual brackets that
+ * would leak to the reader. Excludes inline citations [#n]/[n], footnote refs
+ * [^n], and markdown links [text](url); skips fenced and inline code. Returns
+ * [{ line, heading, bracket }] — heading vs body per hit.
+ */
+function findResidualBrackets(published) {
+  if (typeof published !== 'string') return [];
+  const leaks = [];
+  const lines = published.split('\n');
+  let inFence = false;
+  for (let ln = 0; ln < lines.length; ln++) {
+    const line = lines[ln];
+    if (/^\s*```/.test(line)) { inFence = !inFence; continue; }
+    if (inFence) continue;
+    const isHeading = /^\s*#{1,6}\s/.test(line);
+    const scan = line.replace(/`[^`]*`/g, ''); // mask inline code so bracketed code is not a leak
+    const re = /\[([^\]]*)\]/g;
+    let m;
+    while ((m = re.exec(scan)) !== null) {
+      const content = m[1];
+      const after = scan.slice(m.index + m[0].length);
+      if (/^#?\d+$/.test(content)) continue;   // [#n] inline citation / [n]
+      if (/^\^\d+$/.test(content)) continue;    // [^n] footnote ref
+      if (after.startsWith('(')) continue;      // [text](url) markdown link
+      // ponytail: reference-style links [text][ref] are NOT excluded — the
+      // pipeline emits none and the real corpus has zero; add a `[` next-char
+      // skip only if that shape ever appears in output.
+      leaks.push({ line: ln + 1, heading: isHeading, bracket: `[${content}]` });
+    }
+  }
+  return leaks;
+}
+
+// ---------------------------------------------------------------------------
 // Main execute function
 // ---------------------------------------------------------------------------
 
@@ -103,16 +169,23 @@ async function execute(input, options, tools) {
     min_total_words = 1500,
     required_heading_levels = 'h1,h2',
     pass_threshold = 0.8,
+    taxonomy_leak_check = false,
   } = options;
 
   const requiredLevels = typeof required_heading_levels === 'string'
     ? required_heading_levels.split(',').map(s => s.trim().toLowerCase())
     : [];
 
+  // Accept both true and the string "true": UI presets are string-typed, and a
+  // bare === true would silently disable the check (STEP5 saw a real prod option
+  // arrive as disable_thinking:"false"). Anything else (incl. "false") => off.
+  const taxonomyLeakCheck = taxonomy_leak_check === true || taxonomy_leak_check === 'true';
+
   logger.info(
     `Config: min_sections=${min_sections}, require_faq=${require_faq}, ` +
     `min_words_per_section=${min_words_per_section}, min_total_words=${min_total_words}, ` +
-    `required_levels=${requiredLevels.join(',')}, pass_threshold=${pass_threshold}`
+    `required_levels=${requiredLevels.join(',')}, pass_threshold=${pass_threshold}, ` +
+    `taxonomy_leak_check=${taxonomyLeakCheck}`
   );
 
   const results = [];
@@ -258,6 +331,22 @@ async function execute(input, options, tools) {
       violations.push(`${dupTokenHeadings.length} heading(s) contain duplicated-token artifacts (e.g. "Api API"): ${shown}${more}`);
     }
 
+    // --- Check 8: post-strip residual-bracket taxonomy leak (#50, B031-1) ---
+    // OUTSIDE the score, like Checks 6/7: simulate the step-8 publish transform
+    // and flag any bracket still visible to the reader (a second heading marker,
+    // a body-prose marker, a trailing heading marker). A pure leak force-fails
+    // qa_pass so it cannot hide behind a passing ratio. Option-gated (default
+    // off) so prod's live v1 template is byte-identical; v3 flips it on.
+    const residualLeaks = taxonomyLeakCheck
+      ? findResidualBrackets(stripMarkers(removeMetaSection(allMarkdown)))
+      : [];
+    if (residualLeaks.length > 0) {
+      const shown = residualLeaks.slice(0, 5)
+        .map(l => `${l.heading ? 'heading' : 'body'} ${l.bracket} (L${l.line})`).join('; ');
+      const more = residualLeaks.length > 5 ? ` …and ${residualLeaks.length - 5} more` : '';
+      violations.push(`${residualLeaks.length} residual taxonomy marker(s) survive the publish strip (would leak to the reader): ${shown}${more}`);
+    }
+
     // --- Calculate structural_score and pass/fail ---
     // Score semantics unchanged from v1.0 (same 5-check ratio); taxonomy
     // leakage force-fails qa_pass without touching the score.
@@ -266,7 +355,8 @@ async function execute(input, options, tools) {
       : 0;
     const qaPassed = structuralScore >= pass_threshold
       && markerLeaks.length === 0
-      && dupTokenHeadings.length === 0;
+      && dupTokenHeadings.length === 0
+      && residualLeaks.length === 0;
 
     // --- Build section report ---
     const reportLines = [];
@@ -312,6 +402,8 @@ async function execute(input, options, tools) {
         dup_token_headings: dupTokenHeadings.length,
       },
     };
+    // Added ONLY when the check runs, so default-off output is byte-identical.
+    if (taxonomyLeakCheck) entityResult.meta.residual_bracket_leaks = residualLeaks.length;
     results.push(entityResult);
     if (tools._partialItems) tools._partialItems.push(...entityResult.items);
   }
