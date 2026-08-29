@@ -3,7 +3,7 @@
 > Compare generated content claims against original source material to flag statements that aren't supported by any source.
 
 **Module ID:** `hallucination-detector` | **Step:** 6 (QA) | **Category:** qa | **Cost:** medium
-**Version:** 1.0.3 | **Data Operation:** add (+)
+**Version:** 1.2.0 | **Data Operation:** add (+)
 
 ---
 
@@ -51,16 +51,19 @@ This module uses data-shape routing. It finds its input by checking which fields
 | `max_source_chars` | number | `100000` | Max total characters of source text in the LLM context (range 10,000--500,000). Truncates from the end if exceeded | Increase if sources are large and claims reference distant content. Decrease to save tokens |
 | `claims_per_batch` | number | `10` | Claims verified per LLM call (range 1--25) | Lower to 5 for more reliable results. Higher values use fewer API calls but may reduce accuracy |
 | `allow_empty_content` | boolean | `false` | When `false`, an entity with no `content_markdown` **fails closed** (`qa_pass: false`) -- content was expected but is absent, and a QA gate must not certify content it never read. When `true`, such an entity skips with a pass (nothing to verify) | Set `true` only for pipelines that legitimately produce entities with no content to check |
+| `claim_extraction` | select | `regex` | How claims are pulled from the draft. `regex` (default) keeps only enumerated numeric/date/company sentences in **prose** -- fast, free, but blind to facts in markdown **tables and lists**. `llm` runs a code-locked extraction pass over the FULL draft (prose + tables + lists), then verifies those claims unchanged. Adds one LLM call per entity | Set `llm` for formats that place facts in tables/lists (e.g. a Quick-Facts table), where the regex path finds too few claims and one partial dominates the score |
+| `severity_floor` | boolean | `false` | When `true`, a claim verified as **unsupported + high-severity** (a specific fabricated number, date, statistic, or financial claim) force-fails the check regardless of the numeric score. The score still reports the honest ratio; only `qa_pass` is forced false, through the same `hallucination:fail` routing key | Turn on when a single hard fabrication must never pass just because the ratio clears the threshold (closes the "1 fabrication in 10 claims = 0.9 = pass" hole) |
 
 The model options are no longer hardcoded: the manifest declares `values_from` and the skeleton resolves the actual provider/model lists from the shared LLM registry at load time. Adding a provider or model to the registry makes it available here with no manifest change.
 
-> **Verification prompt is code-locked (W2.3).** The fact-checking prompt is a
-> truth metric standardized system-wide -- it is inlined in `execute.js`
-> (`MANIFEST_DEFAULT_PROMPT`) and is **not** a template-overridable option. A
-> template must not be able to weaken the fact-check (a `prompt` supplied by a
-> template is silently ignored). To change the verdict criteria or severity
-> definitions, edit the module code (a deliberate, reviewed change), not a
-> template preset.
+> **Both prompts are code-locked (W2.3).** The fact-checking prompt
+> (`MANIFEST_DEFAULT_PROMPT`) AND the `llm`-mode claim-extraction prompt
+> (`CLAIM_EXTRACTION_PROMPT`) are truth metrics standardized system-wide -- they
+> are inlined in `execute.js` and are **not** template-overridable options. A
+> template can choose the extraction *strategy* (`claim_extraction`) but cannot
+> supply the extraction or verification *prompt* (a `prompt` supplied by a
+> template is silently ignored). To change what counts as a claim or the verdict
+> criteria, edit the module code (a deliberate, reviewed change), not a preset.
 
 ---
 
@@ -85,6 +88,10 @@ Each unsupported claim is rated by severity:
 - **high** = specific number, date, statistic, or financial claim not found in sources
 - **medium** = specific factual claim (company name, product, feature) not found in sources
 - **low** = general phrasing, opinion, or common knowledge that is hard to verify
+
+### Severity floor (`severity_floor: true`)
+
+By default the verdict is purely `hallucination_score >= pass_threshold`. With the floor on, **any high-severity unsupported claim force-fails the check** even if the ratio clears the threshold -- e.g. 9 supported + 1 high-severity fabrication = 0.9 would pass at threshold 0.9, but force-fails with the floor. The score field is unchanged (it still reports the honest 0.9); only `qa_pass` flips to false, and it routes through the same `hallucination:fail` key (no new fail key). `meta.severity_floor_tripped: true` marks the entities where the floor fired.
 
 ### Special cases
 

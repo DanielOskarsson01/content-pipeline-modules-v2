@@ -56,6 +56,30 @@ CLAIMS:
 SOURCE MATERIAL:
 {{SOURCES}}`;
 
+// ─── Code-locked claim-extraction prompt (B033, W2.3) ───
+//
+// Used only when claim_extraction:"llm". Like the verification prompt above it is
+// inlined here, NOT a manifest option -- a template must not be able to weaken what
+// counts as a claim. Reads the FULL draft (prose + markdown tables + lists), which the
+// regex extractor cannot: v3 moves facts into Quick-Facts tables and bullet lists, so
+// the prose-only regex collapses claim granularity (R0: 4 claims on push-gaming.md, one
+// partial costing 12.5%). Domain-neutral (Rule 13 -- no content-type assumptions).
+const CLAIM_EXTRACTION_PROMPT = `You are a claim-extraction assistant. You will be given the full text of a generated article in markdown, including headings, prose, tables, and bullet/numbered lists.
+
+Extract every distinct, verifiable factual claim the article asserts -- a specific, checkable statement about a name, date, number, location, relationship, product, feature, certification, partnership, award, or any concrete assertion that could be true or false against source material.
+
+Rules:
+- Include claims stated in TABLES and LISTS, not only prose sentences. A table row that asserts a fact (e.g. "Founded | 2010") is a claim -- render it as a natural sentence ("Founded in 2010").
+- One claim per array element. Split a compound sentence into separate claims.
+- Exclude pure opinion, marketing adjectives, rhetorical framing, and general common knowledge with no specific checkable content.
+- Do NOT judge whether a claim is true. Only extract the claims; a later stage verifies them.
+
+Return a JSON array of strings and nothing else (no markdown fences, no commentary):
+["claim 1", "claim 2", "claim 3"]
+
+ARTICLE:
+{{CONTENT}}`;
+
 // ─── Heuristic patterns for factual claims ───
 
 /**
@@ -194,6 +218,48 @@ function extractClaims(markdown) {
 }
 
 /**
+ * Coerce an LLM extraction response into an array of claim strings. Accepts a raw
+ * JSON array of strings, or of {claim|text|statement} objects. Truncates long claims
+ * for verification-context efficiency (same 200-char cap the regex path applies).
+ */
+function parseExtractedClaims(responseText) {
+  const arr = parseLlmResponse(responseText); // reuses fence-stripping + array recovery
+  const out = [];
+  for (const el of arr) {
+    let s = typeof el === 'string' ? el : (el && (el.claim || el.text || el.statement)) || '';
+    s = String(s).trim();
+    if (!s) continue;
+    out.push(s.length > 200 ? s.substring(0, 197) + '...' : s);
+  }
+  return out;
+}
+
+/**
+ * LLM claim extraction (claim_extraction:"llm"). Sends the FULL draft (prose +
+ * tables + lists) to the code-locked extraction prompt and returns claim strings.
+ * On an empty/unparseable result or an LLM error, falls back to the regex extractor
+ * (logged) so the entity stays gradeable -- a degraded extraction reverts to the old
+ * behavior rather than silently green-lighting or hard-erroring. The zero-claims
+ * guard (H21) still fires downstream if regex also finds nothing.
+ */
+async function extractClaimsLlm(markdown, ai, model, provider, logger, entityName) {
+  const prompt = CLAIM_EXTRACTION_PROMPT.replace('{{CONTENT}}', markdown);
+  try {
+    const response = await ai.complete({ prompt, model, provider });
+    const claims = parseExtractedClaims(response.text);
+    if (claims.length === 0) {
+      logger.warn(`${entityName}: LLM claim extraction returned no claims -- falling back to regex extractor`);
+      return extractClaims(markdown);
+    }
+    logger.info(`${entityName}: LLM claim extraction found ${claims.length} claim(s)`);
+    return claims;
+  } catch (err) {
+    logger.warn(`${entityName}: LLM claim extraction failed (${err.message}) -- falling back to regex extractor`);
+    return extractClaims(markdown);
+  }
+}
+
+/**
  * Combine source text_content items into a single string,
  * respecting max_source_chars limit. Truncates from the end.
  */
@@ -288,7 +354,22 @@ async function execute(input, options, tools) {
     // no-claim content is a low-confidence pass (needs_review). Calibration knob:
     // measure the trip rate; do not dial down to silence a genuine halt.
     flag_zero_claims_over_chars = 500,
+    // B033: extraction strategy. "regex" (default) = the enumerated numeric/date/
+    // company regex path (byte-identical to today). "llm" = a code-locked LLM pass
+    // that reads the FULL draft incl. tables/lists -- restores claim granularity on
+    // v3 drafts where facts live in Quick-Facts tables the regex cannot see.
+    claim_extraction = 'regex',
+    // B033: severity floor. When true, any claim verified as unsupported AND rated
+    // high-severity force-fails the check regardless of the numeric ratio (B031/M3
+    // pattern). Closes the "1 hard fabrication in 10 claims = exactly 0.9 = PASS"
+    // hole (STEP6 sec 0.4). Emits through the same qa_pass:false -> hallucination:fail
+    // routing key -- no new fail key.
+    severity_floor = false,
   } = otherOptions;
+
+  // Accept both true and "true" (UI presets store booleans/selects as strings).
+  const useLlmExtraction = claim_extraction === 'llm';
+  const severityFloor = severity_floor === true || severity_floor === 'true';
 
   // Verification prompt is code-locked (W2.3) -- NOT template-overridable.
   // Any `prompt` a template supplies lands in otherOptions and is ignored.
@@ -379,7 +460,12 @@ async function execute(input, options, tools) {
 
     // --- Extract factual claims (BEFORE the source guard, so a no-sources ---
     // --- failure can report how many claims went unverifiable) ---
-    const claims = extractClaims(allMarkdown);
+    // B033: llm mode routes extraction through the code-locked LLM pass (reads
+    // tables/lists), falling back to regex on empty/error. Default is regex --
+    // byte-identical to the prior contract.
+    const claims = useLlmExtraction
+      ? await extractClaimsLlm(allMarkdown, ai, ai_model, ai_provider, logger, entity.name)
+      : extractClaims(allMarkdown);
 
     // --- H20: no source text_content -- cannot verify anything ---
     // UNIT_50 Decision 1 ("THE SEVERE ONE"): content asserting claims with no
@@ -573,7 +659,13 @@ async function execute(input, options, tools) {
       ? verifiedValue / totalClaims
       : 1;
 
-    const qaPassed = hallucinationScore >= pass_threshold;
+    // B033 severity floor (B031/M3 force-fail pattern): a hard, high-severity
+    // fabrication force-fails the check regardless of the numeric ratio. The SCORE
+    // still reports the honest ratio (never masked); only qa_pass is forced false,
+    // and it emits through the same hallucination:fail key -- no new fail key.
+    const highSevUnsupported = unsupportedClaims.filter(v => (v.severity || 'medium') === 'high');
+    const severityFloorTripped = severityFloor && highSevUnsupported.length > 0;
+    const qaPassed = severityFloorTripped ? false : (hallucinationScore >= pass_threshold);
 
     // --- Build flagged claims output ---
     const flaggedClaims = unsupportedClaims.map(v => ({
@@ -618,6 +710,13 @@ async function execute(input, options, tools) {
       `(threshold: ${(pass_threshold * 100).toFixed(1)}%).`
     );
 
+    if (severityFloorTripped) {
+      summaryParts.push(
+        `SEVERITY FLOOR: ${highSevUnsupported.length} high-severity unsupported claim(s) ` +
+        `force-fail this check regardless of the score.`
+      );
+    }
+
     const summaryText = summaryParts.join(' ');
 
     const logFn = qaPassed ? 'info' : 'warn';
@@ -651,6 +750,8 @@ async function execute(input, options, tools) {
         partial: partialClaims.length,
         unsupported: unsupportedClaims.length,
         batches_sent: batches.length,
+        // Only present when the floor actually fired -- keeps default output byte-identical.
+        ...(severityFloorTripped ? { severity_floor_tripped: true } : {}),
       },
     };
     results.push(entityResult);

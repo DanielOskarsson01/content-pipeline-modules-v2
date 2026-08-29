@@ -2,7 +2,7 @@
   "id": "hallucination-detector",
   "name": "Hallucination Detector",
   "description": "Compare generated content claims against original source material to flag statements that aren't supported by any source.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "step": 6,
   "category": "qa",
   "cost": "medium",
@@ -80,6 +80,21 @@
       "default": 500,
       "min": 0,
       "max": 100000
+    },
+    {
+      "name": "claim_extraction",
+      "type": "select",
+      "label": "Claim extraction strategy",
+      "description": "How factual claims are pulled from the draft before verification. 'regex' (default) keeps only enumerated numeric/date/company sentences in prose -- fast, zero cost, but blind to facts placed in markdown tables and lists. 'llm' runs a code-locked extraction pass over the FULL draft (prose + tables + lists), restoring claim granularity on formats that move facts into Quick-Facts tables. The verification stage is unchanged; only extraction differs. LLM mode adds one LLM call per entity.",
+      "values": ["regex", "llm"],
+      "default": "regex"
+    },
+    {
+      "name": "severity_floor",
+      "type": "boolean",
+      "label": "High-severity fabrication force-fails",
+      "description": "When true, any claim verified as unsupported AND rated high-severity (a specific fabricated number, date, statistic, or financial claim) force-fails the check regardless of the numeric score -- closing the '1 hard fabrication in 10 claims = exactly 0.9 = pass' hole. The score still reports the honest ratio; only qa_pass is forced false, emitted through the same hallucination:fail routing key (no new key). Default false preserves pure-threshold behavior.",
+      "default": false
     }
   ],
 
@@ -91,7 +106,9 @@
     "claims_per_batch": 10,
     "allow_empty_content": false,
     "no_sources_behavior": "fail",
-    "flag_zero_claims_over_chars": 500
+    "flag_zero_claims_over_chars": 500,
+    "claim_extraction": "regex",
+    "severity_floor": false
   },
 
   "item_key": "entity_name",
