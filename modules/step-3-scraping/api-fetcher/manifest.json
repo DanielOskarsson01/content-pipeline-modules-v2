@@ -2,7 +2,7 @@
   "id": "api-fetcher",
   "name": "API Fetcher",
   "description": "Generic identifier-driven structured-API fetcher. Per-entity lookups against configured APIs (JSON + XML/RSS), multi-endpoint chaining, field mapping, raw-text flattening. Adding an API source = JSON config, not code.",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "step": 3,
   "category": "enrichment",
   "cost": "medium",
@@ -69,6 +69,14 @@
       "label": "Emit text_content (for Step-4/5 consumption)",
       "description": "Also write text_content (mirror of the flattened raw_text) and word_count on each item. Step-4 content-filter keeps items by word_count and Step-5 content-analyzer/writer read text_content — so without this, structured API records are dropped at Step 4 and invisible to Step 5. Off = byte-identical legacy output (raw_text/data_json only). Turn ON for provider configs whose records should feed content generation (e.g. the Bright Data LinkedIn-company block).",
       "default": false
+    },
+    {
+      "name": "domain_source",
+      "type": "select",
+      "label": "Provider lookup value source",
+      "description": "Where the provider lookup value (the {identifier}) comes from. 'entity_field' (default) uses each provider's identifier_source (an entity seed column or a pool-item field) — byte-identical to the legacy contract. 'pool_url_host' derives the entity's registrable domain from the most frequent host across its own pool item urls (ignoring obvious third-party hosts like youtube/linkedin). It is FALLBACK-ONLY: a provider that resolves its own identifier keeps it; only a provider that resolves nothing falls back to the derived domain — so the mode composes with a multi-provider template. Use it for domain-keyed providers (e.g. a Bright Data LinkedIn-company lookup) when the seed website column does not survive to Step 3 — the entity is rebuilt from the pool with only {entity_name}, so an entity_field:'website' resolves to nothing. When no host is derivable the entity is skipped with a loud warning, never a silent empty fetch.",
+      "values": ["entity_field", "pool_url_host"],
+      "default": "entity_field"
     }
   ],
 
@@ -79,7 +87,8 @@
     "requests_per_minute": 30,
     "raw_text_max_chars": 20000,
     "skip_providers_without_auth": true,
-    "emit_text_content": false
+    "emit_text_content": false,
+    "domain_source": "entity_field"
   },
 
   "item_key": "url",

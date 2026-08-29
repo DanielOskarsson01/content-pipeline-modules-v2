@@ -365,6 +365,64 @@ function resolveIdentifiers(entity, identifierSource) {
   return [...new Set(ids)];
 }
 
+// ── Pool-domain derivation (domain_source: "pool_url_host") ───────────
+// R0: seed fields (website) don't survive past step 1 -- the per-step entity is
+// rebuilt from the pool with only {entity_name}, so identifier_source.entity_field
+// resolves to nothing and the provider goes inert. Deriving the domain from the
+// entity's OWN pool item urls (M2b pool-item read) makes a domain-keyed provider work
+// without any seed carry. Generic infra, no vertical (Rule 13).
+
+// Obvious third-party hosts to ignore -- social/video/aggregator/CDN domains appear
+// in many pools as references, not as the entity's own site. Domain-neutral.
+const THIRD_PARTY_HOSTS = new Set([
+  'youtube.com', 'youtu.be', 'linkedin.com', 'facebook.com', 'twitter.com', 'x.com',
+  'instagram.com', 'tiktok.com', 'wikipedia.org', 'wikimedia.org', 'reddit.com',
+  'medium.com', 'github.com', 'apple.com', 'google.com',
+  'crunchbase.com', 'bloomberg.com', 'pinterest.com', 'vimeo.com', 'yahoo.com',
+  't.co', 'bit.ly', 'amazon.com', 'cloudfront.net', 'gstatic.com', 'googleapis.com',
+]);
+
+// Extract a normalized host (scheme/path/port/userinfo stripped, lowercased, no www.)
+// from a url string. Returns null for anything that isn't a plausible host.
+function hostFromUrl(url) {
+  if (typeof url !== 'string' || !url) return null;
+  let s = url.trim();
+  const scheme = s.indexOf('://');
+  if (scheme !== -1) s = s.slice(scheme + 3);
+  else if (s.startsWith('//')) s = s.slice(2);
+  s = s.split(/[/?#]/)[0];                 // strip path/query/fragment
+  const at = s.indexOf('@');
+  if (at !== -1) s = s.slice(at + 1);       // strip userinfo
+  s = s.split(':')[0].toLowerCase();        // strip port
+  if (s.startsWith('www.')) s = s.slice(4);
+  if (!s || s.indexOf('.') === -1 || /[\s@]/.test(s)) return null; // must look like a host
+  return s;
+}
+
+// Reduce a host to a last-two-labels proxy, used ONLY to test membership in
+// THIRD_PARTY_HOSTS (so m.youtube.com / apps.apple.com match). A mis-reduction on a
+// multi-part public suffix (foo.co.uk -> co.uk) can only fail to match the denylist,
+// never mis-key the returned value -- the derived value is always the full host.
+// ponytail: no Public Suffix List; add `psl` only if subdomain fragmentation matters.
+function registrableProxy(host) {
+  const parts = host.split('.');
+  return parts.length <= 2 ? host : parts.slice(-2).join('.');
+}
+
+// Most frequent non-third-party host across the entity's pool item urls, or null.
+function deriveDomainFromPool(items) {
+  if (!Array.isArray(items)) return null;
+  const counts = new Map();
+  for (const item of items) {
+    const host = hostFromUrl(item && item.url);
+    if (!host || THIRD_PARTY_HOSTS.has(registrableProxy(host))) continue;
+    counts.set(host, (counts.get(host) || 0) + 1);
+  }
+  let best = null, bestN = 0;
+  for (const [host, n] of counts) if (n > bestN) { best = host; bestN = n; }
+  return best;
+}
+
 // ── Endpoint execution for one identifier ────────────────────────────
 // Returns { items, errorCount, notes }.
 async function runEndpointsForIdentifier(provider, identifier, authParts, extraParams, options, tools, rateLimiter, entityName) {
@@ -582,6 +640,11 @@ async function execute(input, options, tools) {
     emit_text_content: options.emit_text_content === true || options.emit_text_content === 'true',
   };
   const skipWithoutAuth = options.skip_providers_without_auth !== false;
+  // B034: where the provider lookup value comes from. "entity_field" (default) uses
+  // each provider's identifier_source (seed/pool field) -- byte-identical to today.
+  // "pool_url_host" derives the entity's registrable domain from its own pool item
+  // urls and uses THAT as the lookup value for every active provider.
+  const domainSource = options.domain_source === 'pool_url_host' ? 'pool_url_host' : 'entity_field';
 
   // Filter providers whose auth env var is missing (when configured to skip).
   const activeProviders = providers.filter((p) => {
@@ -619,6 +682,19 @@ async function execute(input, options, tools) {
     const entityName = entity.name || 'unknown';
     progress.update(ei + 1, entities.length, `Fetching for ${entityName}`);
 
+    // B034: derive the domain once per entity (same pool for every provider). Logged
+    // at info so R1 can prove which domain was used; a loud warn (not silent) when the
+    // pool yields no usable host so a domain-keyed provider isn't quietly skipped.
+    let derivedDomain = null;
+    if (domainSource === 'pool_url_host') {
+      derivedDomain = deriveDomainFromPool(entity.items);
+      if (derivedDomain) {
+        logger.info(`${entityName}: domain_source=pool_url_host derived "${derivedDomain}" from ${(entity.items || []).length} pool item(s)`);
+      } else {
+        logger.warn(`${entityName}: domain_source=pool_url_host but no usable host in pool item urls -- providers keyed on it are skipped (no silent empty fetch)`);
+      }
+    }
+
     const entityItems = [];
     const notes = [];
     let errorCount = 0;
@@ -626,7 +702,16 @@ async function execute(input, options, tools) {
     for (const provider of activeProviders) {
       const authParts = buildAuth(provider);
       const extraParams = providerParams[provider.id] || {};
-      const identifiers = resolveIdentifiers(entity, provider.identifier_source);
+      // entity_field mode: each provider's own identifier_source. pool_url_host mode
+      // is fallback-only: a provider that resolves its OWN identifier (a channel id,
+      // feed url, registry number via entity/item field) keeps it; only a provider that
+      // resolves NOTHING falls back to the derived domain. This is what fixes R0 (the
+      // domain-keyed Company block whose entity_field:"website" resolves to nothing at
+      // step 3) WITHOUT clobbering a co-configured provider that has its own key.
+      const ownIds = resolveIdentifiers(entity, provider.identifier_source);
+      const identifiers = (domainSource === 'pool_url_host' && ownIds.length === 0)
+        ? (derivedDomain ? [derivedDomain] : [])
+        : ownIds;
 
       if (identifiers.length === 0) {
         const note = `${provider.id}: no identifier for "${entityName}"`;
