@@ -3,7 +3,9 @@
 > Re-scrape pages that failed text extraction using a real browser (Playwright Chromium) to render JavaScript-heavy content.
 
 **Module ID:** `browser-scraper` | **Step:** 3 (Scraping) | **Category:** scraping | **Cost:** expensive
-**Version:** 1.1.0 | **Data Operation:** transform (=)
+**Version:** 1.1.1 | **Data Operation:** transform (=)
+
+> **v1.1.1 (memory fix, output-unchanged):** the extracted `title`, `meta_description`, `og_description`, `text_content` and `text_preview` fields are now detached (flattened) from the full page HTML they were sliced from. Previously each result item transitively pinned its whole multi-MB rendered body in memory (a V8 SlicedString retention leak), so peak heap grew with the *total* page count — at 852 pages (a fat sitemapped studio) this exceeded the 1.5 GB stage-worker heap and OOM-crashed the entity at step 3. Peak is now bounded by concurrency, not by URL count. Output is byte-identical (proven by A/B test).
 
 ---
 
@@ -88,7 +90,7 @@ This is the transform (=) data operation -- the same items go in and come out, b
 | `concurrency` | 4 | Lower to 1-2 on memory-constrained servers; raise toward the max of 8 only on powerful machines | Number of browser tabs running simultaneously. Each tab uses significant memory |
 | `auto_scroll` | true | Set to false when target sites have no lazy-loaded content and you want speed | Scrolls through the page before extraction to trigger lazy-loaded content. Adds ~3-6 seconds per page |
 
-The most impactful option is `min_word_threshold`: it controls both which pages get re-scraped AND what counts as a successful re-scrape. The most common mistake is running high `concurrency` on a small server -- each Playwright tab is a real Chromium page, and OOM kills lose the whole batch (partial results are saved, but the run still fails).
+The most impactful option is `min_word_threshold`: it controls both which pages get re-scraped AND what counts as a successful re-scrape. Note on memory: as of v1.1.1, peak heap is bounded by `concurrency` (a few concurrent rendered pages), not by the total number of URLs, so large fat-entity batches no longer OOM the way they did before the flatten fix. Running very high `concurrency` on a small server can still spike transient RAM (each Playwright tab is a real Chromium page), so keep it low (2-4) on constrained hosts.
 
 ## Recipes
 
@@ -172,7 +174,7 @@ auto_scroll: false
 ## Limitations & Edge Cases
 
 - **Requires Playwright on the server** -- throws an error immediately if `tools.browser.fetch` is not available
-- **Memory-intensive** -- each concurrent browser tab uses significant RAM. Several concurrent tabs on a 2GB server can cause OOM
+- **Memory** -- each concurrent browser tab uses transient RAM while rendering. As of v1.1.1, retained memory is bounded by `concurrency` rather than the total page count (result items no longer pin their full source HTML), so high-count batches are safe; only very high `concurrency` on a tiny server risks a transient spike
 - **Does not handle cookie consent banners** -- banner elements are stripped from the extracted DOM, but content hidden behind an "Accept cookies" overlay will not be extracted
 - **Does not handle login walls** -- pages requiring authentication are out of scope
 - **Truncation detection** -- after browser extraction, content length is compared against the `og:description` meta tag (when that tag is 100+ chars). If the extracted text is no longer than the og:description, the page is treated as a browser failure (likely truncated/incomplete rendering) and falls through to the Wayback Machine tier

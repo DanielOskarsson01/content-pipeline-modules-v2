@@ -84,6 +84,19 @@ function countWords(text) {
   return text.split(/\s+/).filter((w) => w.length > 0).length;
 }
 
+// Detach a string from any large parent it was sliced from.
+// V8 keeps the results of `.substring()`/`.slice()`/`.trim()` and regex captures
+// as SlicedString/ConsString views that pin their *entire* parent alive. The
+// extract helpers below return trimmed regex captures of the full page HTML and a
+// substring of the full extracted text, so every result item would otherwise pin
+// its whole rendered body (multi-MB) — at 850+ pages that OOMs the 1.5 GB
+// stage-worker. `split('').join('')` forces a standalone flat copy (byte-identical
+// for all UTF-16, incl. lone surrogates from decodeEntities' &#NNNN; path), letting
+// the body/DOM be GC'd once only the small kept fields remain.
+function flat(s) {
+  return typeof s === 'string' && s.length > 0 ? s.split('').join('') : s;
+}
+
 function cleanText(text) {
   return text
     .replace(/[^\S\n]+/g, ' ')
@@ -281,7 +294,17 @@ async function execute(input, options, tools) {
       ? textContent.substring(0, 150) + '...'
       : textContent;
 
-    return { title, metaDescription, ogDescription, textContent, wordCount, textPreview, extractionMethod };
+    // flat() detaches these from the full HTML/extracted-text they were sliced
+    // from, so the multi-MB body + DOM can be GC'd. Output is byte-identical.
+    return {
+      title: flat(title),
+      metaDescription: flat(metaDescription),
+      ogDescription: flat(ogDescription),
+      textContent: flat(textContent),
+      wordCount,
+      textPreview: flat(textPreview),
+      extractionMethod,
+    };
   }
 
   /**

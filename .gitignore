@@ -3,3 +3,4 @@ node_modules/
 .claude/
 .vscode/
 .env
+._baseline_execute.tmp.js

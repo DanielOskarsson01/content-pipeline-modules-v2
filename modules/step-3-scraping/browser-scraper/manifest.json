@@ -2,7 +2,7 @@
   "id": "browser-scraper",
   "name": "Browser Scraper",
   "description": "Re-scrape pages that failed text extraction using Playwright Chromium with CMS-aware fallback (Elementor, WordPress, Divi). Detects Cloudflare/bot-blocker pages in both input and own output (text markers + duplicate detection). Targets pages where page-scraper extracted < 50 words — JS-rendered SPAs, page-builder sites, Cloudflare-protected pages.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "step": 3,
   "category": "scraping",
   "cost": "expensive",
