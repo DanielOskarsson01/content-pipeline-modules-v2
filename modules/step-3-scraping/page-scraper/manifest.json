@@ -2,7 +2,7 @@
   "id": "page-scraper",
   "name": "Page Scraper",
   "description": "Fetch HTML pages and extract text content using Readability with CMS-aware fallback (Elementor, WordPress, Divi). Detects Cloudflare/bot-blocker pages and marks them as errors. First scraper in Step 3 — handles most sites via HTTP.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "step": 3,
   "category": "scraping",
   "cost": "expensive",
@@ -11,7 +11,7 @@
   "sort_order": 1,
 
   "depends_on": [],
-  "usage_notes": "Run first in Step 3. Handles most sites via HTTP fetch + Readability. Increase concurrency for large URL sets (100+), decrease for rate-limited sites. Default timeout (10s) is fine for most sites.",
+  "usage_notes": "Run first in Step 3. Handles most sites via HTTP fetch + Readability. Increase concurrency for large URL sets (100+), decrease for rate-limited sites. Default timeout (10s) is fine for most sites. v1.0.1: memory fix — title/meta_description/og_description/text_content/text_preview are trimmed regex captures / substrings of the full page HTML, which V8 keeps as SlicedString views that pin the entire multi-MB body alive; at 850+ pages this OOM-crashed the stage-worker. flat() forces standalone copies (byte-identical output). Same class as browser-scraper v1.1.1 (F1).",
 
   "requires_columns": ["url"],
 

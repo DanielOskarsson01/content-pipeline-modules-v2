@@ -11,6 +11,20 @@
 const { Readability } = require('@mozilla/readability');
 const { parseHTML } = require('linkedom');
 
+// Detach a string from any large parent it was sliced from.
+// V8 keeps the results of `.substring()`/`.slice()`/`.trim()` and regex captures
+// as SlicedString/ConsString views that pin their *entire* parent alive. The
+// extract helpers below return trimmed regex captures of the full page HTML (and,
+// via the truncation substring, a slice of the full extracted text), so every
+// result item would otherwise pin its whole body (multi-MB) — at 850+ pages that
+// OOMs the 1.5 GB stage-worker. `split('').join('')` forces a standalone flat copy
+// (byte-identical for all UTF-16, incl. lone surrogates from decodeEntities'
+// &#NNNN; path), letting the body be GC'd once only the small kept fields remain.
+// Precedent: browser-scraper v1.1.1 (F1) — same extractTitle/Meta/substring pattern.
+function flat(s) {
+  return typeof s === 'string' && s.length > 0 ? s.split('').join('') : s;
+}
+
 async function execute(input, options, tools) {
   const { entities } = input;
   const { logger, http, progress } = tools;
@@ -93,9 +107,9 @@ async function execute(input, options, tools) {
 
       // Extract content from HTML using Readability (Firefox Reader Mode algorithm)
       const html = res.body;
-      const title = extractTitle(html);
-      const metaDescription = extract_meta ? extractMetaDescription(html) : null;
-      const ogDescription = extractOgDescription(html);
+      const title = flat(extractTitle(html));
+      const metaDescription = extract_meta ? flat(extractMetaDescription(html)) : null;
+      const ogDescription = flat(extractOgDescription(html));
       let textContent = extractTextReadability(html, item.url);
 
       // Truncate extracted text to max_content_length
@@ -103,11 +117,14 @@ async function execute(input, options, tools) {
         logger.info(`Truncated text for ${item.url} from ${textContent.length} to ${max_content_length} chars`);
         textContent = textContent.substring(0, max_content_length);
       }
+      // Detach the retained text fields from the full HTML / pre-truncation text
+      // (SlicedString pins) so the page body can be GC'd. Byte-identical. See flat().
+      textContent = flat(textContent);
 
       const wordCount = textContent.split(/\s+/).filter((w) => w.length > 0).length;
       const finalUrl = detectFinalUrl(res, item.url);
       const textPreview = textContent.length > 150
-        ? textContent.substring(0, 150) + '...'
+        ? flat(textContent.substring(0, 150) + '...')
         : textContent;
 
       // Check for Cloudflare / bot-blocker pages that masquerade as real content

@@ -210,4 +210,5 @@ The `word_count` field from this module directly feeds the minimum word count fi
 - **Detail view:** `detail_schema` with header fields (url as link, title, status, word_count) and expandable sections (text_content as prose, meta_description as text); `text_content` downloadable as .txt
 - **Error handling:** HTTP errors, timeouts, and non-HTML content are handled per-URL (partial success pattern). No URL is lost -- all are returned with a status. Each result is pushed to `tools._partialItems` for timeout resilience
 - **Dependencies:** `@mozilla/readability` (content extraction), `linkedom` (DOM parsing), `tools.http`, `tools.logger`, `tools.progress`
-- **Files:** `manifest.json`, `execute.js`
+- **Memory (v1.0.1):** `title`, `meta_description`, `og_description`, `text_content`, and `text_preview` are trimmed regex captures / substrings of the full page HTML. V8 keeps these as `SlicedString` views that pin the *entire* multi-MB page body alive, so at 850+ pages the retained set OOM-crashed the 1.5 GB stage-worker. A `flat()` helper (`s.split('').join('')`) forces standalone byte-exact copies so the body can be garbage-collected. Output is byte-identical (proven in `test-memory.js`). Same defect class as **browser-scraper v1.1.1** (F1)
+- **Files:** `manifest.json`, `execute.js`, `test-memory.js`
