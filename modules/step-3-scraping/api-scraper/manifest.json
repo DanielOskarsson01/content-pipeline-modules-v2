@@ -2,7 +2,7 @@
   "id": "api-scraper",
   "name": "API Scraper (ScrapFly)",
   "description": "Paid API fallback for pages that failed both page-scraper and browser-scraper. Uses ScrapFly's Anti-Scraping Protection to bypass Cloudflare, Turnstile, and aggressive bot detection. Only processes pages with status 'error' or word_count below threshold — never wastes credits on already-scraped pages.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "step": 3,
   "category": "scraping",
   "cost": "expensive",
@@ -11,7 +11,7 @@
   "sort_order": 3,
 
   "depends_on": ["browser-scraper"],
-  "usage_notes": "Run after browser-scraper. Only re-scrapes pages that failed all previous scrapers. Requires SCRAPFLY_KEY environment variable. Each request costs ~30 ScrapFly credits (ASP + JS rendering). Monitor credit usage in ScrapFly dashboard.",
+  "usage_notes": "Run after browser-scraper. Only re-scrapes pages that failed all previous scrapers. Requires SCRAPFLY_KEY environment variable. Each request costs ~30 ScrapFly credits (ASP + JS rendering). Monitor credit usage in ScrapFly dashboard. v1.0.1: memory fix — title/meta_description/og_description/text_content/text_preview are trimmed regex captures / substrings of the full page HTML, which V8 keeps as SlicedString views that pin the entire multi-MB body alive. flat() forces standalone copies (byte-identical output). Same class as browser-scraper v1.1.1 (F1); lower aggregate impact here since api-scraper runs only on the failed-page subset.",
 
   "requires_columns": ["url"],
 

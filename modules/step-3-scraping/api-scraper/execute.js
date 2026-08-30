@@ -53,6 +53,18 @@ function cleanText(text) {
     .trim();
 }
 
+// Detach a string from any large parent it was sliced from.
+// V8 keeps the results of `.substring()`/`.slice()`/`.trim()` and regex captures
+// as SlicedString/ConsString views that pin their *entire* parent alive. extractTitle/
+// Meta/Og return trimmed regex captures of the full page HTML and textContent may be a
+// substring of the full extracted text, so every result item would otherwise pin its
+// whole body (multi-MB). `split('').join('')` forces a standalone flat copy (byte-
+// identical for all UTF-16, incl. lone surrogates from the &#NNNN; decode path),
+// letting the body be GC'd. Precedent: browser-scraper v1.1.1 (F1) — same pattern.
+function flat(s) {
+  return typeof s === 'string' && s.length > 0 ? s.split('').join('') : s;
+}
+
 async function execute(input, options, tools) {
   const { entities } = input;
   const { logger, progress } = tools;
@@ -605,7 +617,17 @@ function extractFromHtml(html, url, item, maxContentLength, logger) {
   const wordCount = countWords(textContent);
   const textPreview = textContent.length > 150 ? textContent.substring(0, 150) + '...' : textContent;
 
-  return { title, metaDescription, ogDescription, textContent, wordCount, textPreview, extractionMethod };
+  // Detach the retained string fields from the full page HTML / extracted text
+  // (V8 SlicedString views pin the whole multi-MB body). Byte-identical output. See flat().
+  return {
+    title: flat(title),
+    metaDescription: flat(metaDescription),
+    ogDescription: flat(ogDescription),
+    textContent: flat(textContent),
+    wordCount,
+    textPreview: flat(textPreview),
+    extractionMethod,
+  };
 }
 
 function extractTextRegex(html) {
