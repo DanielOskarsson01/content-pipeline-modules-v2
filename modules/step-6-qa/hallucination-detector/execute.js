@@ -6,7 +6,7 @@
  * verification to handle paraphrasing, analysis-derived facts, and
  * general knowledge.
  *
- * Data operation: TRANSFORM (=) -- same entities, enriched with QA verdicts.
+ * Data operation: add (+) -- one QA-verdict item per entity, keyed by entity_name.
  * Data-shape routing: finds input by field presence, never by source_submodule.
  *
  * Process:
@@ -287,6 +287,199 @@ function combineSourceText(sourceItems, maxChars) {
   return combined;
 }
 
+// ─── Claim-anchored retrieval + honest window instrumentation (U1) ───
+//
+// DIAGNOSIS Task 2: combineSourceText() truncates the corpus HEAD at
+// max_source_chars, so on a fat entity (Vermantia: 633,916 chars; the window saw
+// 15.8%) the supporting page is frequently BEYOND the window and its claim is
+// flagged "unsupported" as a pure truncation artifact (SNAITECH at char 320,933,
+// Stanleybet/Vision NextGen at 155,069). source_selection:"claim_anchored" builds
+// a per-batch window from the source chunks whose terms overlap the batch's claims
+// -- deterministic lexical overlap, no second LLM pass -- so far evidence is SHOWN.
+// Default "head" stays byte-identical (window-raise-only is head + a bigger
+// max_source_chars; no code path change).
+
+const CHUNK_SIZE = 4000;   // per-page chunking; pages <= this stay whole
+const CHUNK_OVERLAP = 200; // applied only when splitting an oversized page
+const SOURCE_SEP = '\n\n---SOURCE BOUNDARY---\n\n';
+
+// Smallest useful stopword set -- only the highest-frequency function words.
+// Over-filtering discards discriminating terms, so this stays deliberately tiny.
+const STOPWORDS = new Set(['the','and','for','with','was','were','are','has','have','had','its','their','they','which','also','into','over','more','than','from','this','that','these','those','been','being']);
+
+// Accept both true and "true": UI presets store booleans/selects as strings, so a
+// naive `if (opt)` treats the string "false" as truthy. Coerce every boolean here.
+function asBool(v) { return v === true || v === 'true'; }
+
+// Word-boundary containment: "corp" must NOT match inside "zebracorp". Plain
+// substring matching mislabels evidence for short common terms; this checks the
+// chars around each occurrence are non-alphanumeric. Both args already lowercased.
+function isWordChar(ch) { return ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9'; }
+function hasWord(haystack, term) {
+  let from = 0;
+  for (;;) {
+    const i = haystack.indexOf(term, from);
+    if (i < 0) return false;
+    const before = i === 0 ? '' : haystack[i - 1];
+    const after = haystack[i + term.length] || '';
+    if (!isWordChar(before) && !isWordChar(after)) return true;
+    from = i + 1;
+  }
+}
+
+// Weighted match terms for a claim. Proper-noun / acronym tokens and numbers are
+// discriminating (weight 2); ordinary content words weight 1. Lowercased keys.
+function extractClaimTerms(claim) {
+  const terms = new Map();
+  const add = (t, w) => {
+    const k = String(t).toLowerCase();
+    if (k.length < 3 || STOPWORDS.has(k)) return;
+    terms.set(k, Math.max(terms.get(k) || 0, w));
+  };
+  for (const m of claim.match(/\b[A-Z][A-Za-z0-9&.'\-]{2,}\b/g) || []) add(m, 2); // SNAITECH, Stanleybet, AAMS
+  for (const m of claim.match(/\b\d[\d,.]*\b/g) || []) add(m, 2);                 // years / stats
+  for (const m of (claim.toLowerCase().match(/[a-z][a-z0-9'\-]{2,}/g) || [])) add(m, 1);
+  return terms;
+}
+
+// Split source items into ordered chunks. Per-page granularity preserves page
+// semantics; a page larger than CHUNK_SIZE is windowed (with overlap so a fact on
+// a chunk seam isn't lost).
+function chunkSources(sourceItems) {
+  const chunks = [];
+  let order = 0;
+  for (let idx = 0; idx < sourceItems.length; idx++) {
+    const text = sourceItems[idx].text_content || '';
+    if (!text) continue;
+    if (text.length <= CHUNK_SIZE) {
+      chunks.push({ text, lower: text.toLowerCase(), order: order++, itemIdx: idx });
+    } else {
+      for (let s = 0; s < text.length; s += (CHUNK_SIZE - CHUNK_OVERLAP)) {
+        const slice = text.slice(s, s + CHUNK_SIZE);
+        chunks.push({ text: slice, lower: slice.toLowerCase(), order: order++, itemIdx: idx });
+        if (s + CHUNK_SIZE >= text.length) break;
+      }
+    }
+  }
+  return chunks;
+}
+
+// Inverse document frequency across the corpus chunks, for the claims' terms. The
+// entity name (in nearly every chunk) and common words approach idf 0 and STOP
+// dominating the match; rare, discriminating terms (SNAITECH, in one chunk) carry
+// the signal. Without this, "vermantia" being in every chunk makes every claim look
+// covered/in-window -- the exact bug the ELK/Vermantia acceptance runs exposed.
+function buildIdf(chunks, claims) {
+  const N = chunks.length || 1;
+  const terms = new Set();
+  for (const cl of claims) for (const [t] of extractClaimTerms(cl)) terms.add(t);
+  const idf = new Map();
+  for (const t of terms) {
+    let df = 0;
+    for (const c of chunks) if (hasWord(c.lower, t)) df++;
+    idf.set(t, df ? Math.max(0, Math.log(N / df)) : 0); // df===N (ubiquitous) -> 0
+  }
+  return idf;
+}
+
+// Weighted, IDF-scaled overlap of a claim against one chunk. A chunk that shares
+// only the (ubiquitous) entity name scores ~0; one carrying a rare discriminating
+// term scores high.
+function scoreChunkForClaim(chunkLower, terms, idf) {
+  let s = 0;
+  for (const [t, w] of terms) if (hasWord(chunkLower, t)) s += w * (idf.get(t) || 0);
+  return s;
+}
+
+function bestChunkForClaim(claim, chunks, idf) {
+  const terms = extractClaimTerms(claim);
+  let best = null, bestScore = 0;
+  for (const c of chunks) {
+    const s = scoreChunkForClaim(c.lower, terms, idf);
+    if (s > bestScore) { bestScore = s; best = c; }
+  }
+  return { best, bestScore };
+}
+
+// Build a per-batch source window. CRITICAL invariant: the window is a SUPERSET of
+// the head window (at whole-chunk granularity) -- the verifier does not see LESS
+// than head mode would show, so an entity whose evidence already sits in the head
+// (e.g. ELK) cannot regress. (Head appends a partial trailing page; a claim that
+// references it is pulled in WHOLE via the supplement, so it is covered even better
+// -- the only theoretical gap is a partial-tail-only fact with zero discriminating
+// terms, which a regex-extracted claim never is.) On top of the full head, pull in
+// the single best (IDF-ranked) FAR chunk for each claim whose best evidence is
+// BEYOND the head, up to an EQUAL supplement budget -- so the window is up to ~2x
+// max_source_chars total (still far cheaper than a full-corpus window-raise). Cost
+// is adaptive: evidence concentrated in the head (ELK) -> ~no supplement; scattered
+// deep (Vermantia: SNAITECH at char 323k) -> the far pages come in. Purely lexical
+// + positional -- deterministic, no second LLM pass.
+function selectAnchoredWindow(chunks, claims, maxChars, idf = buildIdf(chunks, claims)) {
+  // 1. Base = the head window, positional, up to maxChars (identical coverage to head mode).
+  const base = [];
+  let used = 0;
+  for (const c of chunks) {
+    const addLen = (base.length ? SOURCE_SEP.length : 0) + c.text.length;
+    if (used + addLen > maxChars) break;
+    base.push(c);
+    used += addLen;
+  }
+  if (base.length === 0 && chunks.length && maxChars > 100) {
+    base.push({ ...chunks[0], text: chunks[0].text.slice(0, maxChars) }); // first chunk bigger than budget
+  }
+  const baseOrders = new Set(base.map(c => c.order));
+
+  // 2. For each claim whose single best chunk is BEYOND the head, pull that chunk in.
+  //    (IDF ranking means the entity name can't make a head chunk win spuriously.)
+  const suppOrders = new Set();
+  for (const claim of claims) {
+    const { best, bestScore } = bestChunkForClaim(claim, chunks, idf);
+    if (best && bestScore > 0 && !baseOrders.has(best.order)) suppOrders.add(best.order);
+  }
+
+  // 3. Supplement (in corpus order) up to an equal maxChars budget on top of the base.
+  const selected = [...base];
+  let suppUsed = 0;
+  for (const c of chunks) {
+    if (baseOrders.has(c.order) || !suppOrders.has(c.order)) continue;
+    const addLen = SOURCE_SEP.length + c.text.length;
+    if (suppUsed + addLen > maxChars) continue;
+    selected.push(c);
+    suppUsed += addLen;
+  }
+
+  const selectedOrders = new Set(selected.map(s => s.order));
+  const ordered = selected.slice().sort((a, b) => a.order - b.order);
+  const text = ordered.map(c => c.text).join(SOURCE_SEP);
+  return { text, selectedOrders, shownChars: text.length };
+}
+
+// Per-claim evidence location: does the corpus carry the claim's DISCRIMINATING
+// evidence (IDF-scored > 0, so the entity name alone doesn't count), and if so was
+// it inside the selected window? Distinguishes a truncation-driven "unsupported"
+// from a real fabrication:
+//   in_window     -- discriminating evidence is in a shown chunk (a genuine verdict)
+//   beyond_window -- it exists but was dropped from the window (truncation artifact)
+//   absent        -- no chunk carries discriminating evidence (candidate fabrication)
+function classifyClaimEvidence(claim, chunks, selectedOrders, idf = buildIdf(chunks, [claim])) {
+  const terms = extractClaimTerms(claim);
+  // Prefer discriminating terms (idf > 0) so the ubiquitous entity name can't mark a
+  // chunk as "evidence". But on a small corpus every term can be in every chunk
+  // (idf 0 for all) -- there, fall back to raw presence so genuine in-window evidence
+  // isn't mislabelled "absent" (a confidently-wrong "candidate fabrication").
+  const hasDiscriminating = [...terms.keys()].some(t => (idf.get(t) || 0) > 0);
+  const present = (lower) => hasDiscriminating
+    ? [...terms].some(([t]) => (idf.get(t) || 0) > 0 && hasWord(lower, t))
+    : [...terms.keys()].some(t => hasWord(lower, t));
+  let anywhere = false;
+  for (const c of chunks) {
+    if (!present(c.lower)) continue;
+    anywhere = true;
+    if (selectedOrders.has(c.order)) return 'in_window';
+  }
+  return anywhere ? 'beyond_window' : 'absent';
+}
+
 /**
  * Split claims into batches of the specified size.
  */
@@ -365,11 +558,23 @@ async function execute(input, options, tools) {
     // hole (STEP6 sec 0.4). Emits through the same qa_pass:false -> hallucination:fail
     // routing key -- no new fail key.
     severity_floor = false,
+    // U1: source selection strategy. "head" (default) = combineSourceText, the
+    // corpus-head truncation, byte-identical to today (window-raise-only is this
+    // mode with a bigger max_source_chars -- no code change). "claim_anchored" =
+    // per-batch window built from the source chunks whose terms overlap the batch's
+    // claims, so evidence beyond the head window is SHOWN (DIAGNOSIS Task 2 fix).
+    // Claim-anchored mode also emits honest-window meta (corpus/shown chars +
+    // per-flagged-claim evidence location) so a truncation artifact is never again
+    // indistinguishable from a fabrication.
+    source_selection = 'head',
   } = otherOptions;
 
-  // Accept both true and "true" (UI presets store booleans/selects as strings).
   const useLlmExtraction = claim_extraction === 'llm';
-  const severityFloor = severity_floor === true || severity_floor === 'true';
+  // Coerce every boolean through asBool (the string-typed-preset bug class):
+  // "false" is a truthy string, so a naive read would silently enable the option.
+  const severityFloor = asBool(severity_floor);
+  const allowEmptyContent = asBool(allow_empty_content);
+  const claimAnchored = source_selection === 'claim_anchored';
 
   // Verification prompt is code-locked (W2.3) -- NOT template-overridable.
   // Any `prompt` a template supplies lands in otherOptions and is ignored.
@@ -401,7 +606,7 @@ async function execute(input, options, tools) {
     // fail -- NOT meta.status:error). allow_empty_content restores the legacy
     // skip-with-pass for pipelines that legitimately have no content to check.
     if (contentItems.length === 0) {
-      if (allow_empty_content) {
+      if (allowEmptyContent) {
         logger.warn(`${entity.name}: no content_markdown found -- skipping (allow_empty_content=true)`);
         results.push({
           entity_name: entity.name,
@@ -557,17 +762,29 @@ async function execute(input, options, tools) {
       continue;
     }
 
-    // --- Combine source text ---
-    const sourceText = combineSourceText(sourceItems, max_source_chars);
+    // --- Prepare source context ---
+    // Head (default): one head-truncated window shared by every batch, byte-identical.
+    // Claim-anchored: per-batch windows built below from ranked chunks of the corpus.
+    const corpusChars = sourceItems.reduce((n, it) => n + (it.text_content || '').length, 0);
+    const chunks = claimAnchored ? chunkSources(sourceItems) : null;
+    // IDF is corpus-wide, so build it once per entity (over all claims' terms) and
+    // share it across batches rather than recomputing per batch.
+    const idf = claimAnchored ? buildIdf(chunks, claims) : null;
+    const sourceText = claimAnchored ? null : combineSourceText(sourceItems, max_source_chars);
 
     logger.info(
       `${entity.name}: ${claims.length} claims extracted, ` +
-      `${sourceItems.length} source(s), ${sourceText.length} chars of source text`
+      `${sourceItems.length} source(s), ` +
+      (claimAnchored
+        ? `${corpusChars} corpus chars, claim-anchored windows <= ${max_source_chars} chars`
+        : `${sourceText.length} chars of source text`)
     );
 
     // --- Batch claims and verify with LLM ---
     const batches = batchClaims(claims, claims_per_batch);
     const allVerdicts = [];
+    const claimEvidence = {}; // claim text -> 'in_window' | 'beyond_window' | 'absent' (claim_anchored only)
+    let maxShownChars = 0;
 
     for (let b = 0; b < batches.length; b++) {
       const batch = batches[b];
@@ -578,9 +795,23 @@ async function execute(input, options, tools) {
 
       const claimsText = batch.map((c, idx) => `${idx + 1}. ${c}`).join('\n');
 
+      // Head mode reuses the shared window; claim_anchored builds a focused window
+      // for THIS batch's claims and records where each claim's evidence sits.
+      let batchSourceText;
+      if (claimAnchored) {
+        const win = selectAnchoredWindow(chunks, batch, max_source_chars, idf);
+        batchSourceText = win.text;
+        maxShownChars = Math.max(maxShownChars, win.shownChars);
+        for (const c of batch) {
+          if (!(c in claimEvidence)) claimEvidence[c] = classifyClaimEvidence(c, chunks, win.selectedOrders, idf);
+        }
+      } else {
+        batchSourceText = sourceText;
+      }
+
       const filledPrompt = verificationPrompt
         .replace('{{CLAIMS}}', claimsText)
-        .replace('{{SOURCES}}', sourceText);
+        .replace('{{SOURCES}}', batchSourceText);
 
       try {
         const response = await ai.complete({
@@ -668,14 +899,20 @@ async function execute(input, options, tools) {
     const qaPassed = severityFloorTripped ? false : (hallucinationScore >= pass_threshold);
 
     // --- Build flagged claims output ---
-    const flaggedClaims = unsupportedClaims.map(v => ({
-      claim: v.claim,
-      severity: v.severity,
-    }));
+    // Head mode emits {claim, severity} exactly as before (byte-identical). Claim-
+    // anchored adds the evidence location so a truncation artifact is visible.
+    const flaggedClaims = unsupportedClaims.map(v => (
+      claimAnchored
+        ? { claim: v.claim, severity: v.severity, evidence: claimEvidence[v.claim] || 'unknown' }
+        : { claim: v.claim, severity: v.severity }
+    ));
 
     const flaggedClaimsText = unsupportedClaims.length > 0
       ? unsupportedClaims
-          .map((v, idx) => `${idx + 1}. [${(v.severity || 'medium').toUpperCase()}] ${v.claim}`)
+          .map((v, idx) => {
+            const tag = claimAnchored ? ` {${claimEvidence[v.claim] || 'unknown'}}` : '';
+            return `${idx + 1}. [${(v.severity || 'medium').toUpperCase()}]${tag} ${v.claim}`;
+          })
           .join('\n')
       : 'None -- all claims are supported by source material.';
 
@@ -717,6 +954,18 @@ async function execute(input, options, tools) {
       );
     }
 
+    // Claim-anchored only: split the flagged claims by where their evidence sits, so
+    // a truncation artifact (beyond-window) reads differently from a fabrication (absent).
+    const evBeyond = claimAnchored ? unsupportedClaims.filter(v => claimEvidence[v.claim] === 'beyond_window').length : 0;
+    const evAbsent = claimAnchored ? unsupportedClaims.filter(v => claimEvidence[v.claim] === 'absent').length : 0;
+    const evInWindow = claimAnchored ? unsupportedClaims.filter(v => claimEvidence[v.claim] === 'in_window').length : 0;
+    if (claimAnchored && unsupportedClaims.length > 0) {
+      summaryParts.push(
+        `Evidence location of flagged claims: ${evInWindow} in-window, ${evBeyond} beyond-window ` +
+        `(likely truncation), ${evAbsent} absent from source (candidate fabrication).`
+      );
+    }
+
     const summaryText = summaryParts.join(' ');
 
     const logFn = qaPassed ? 'info' : 'warn';
@@ -752,6 +1001,16 @@ async function execute(input, options, tools) {
         batches_sent: batches.length,
         // Only present when the floor actually fired -- keeps default output byte-identical.
         ...(severityFloorTripped ? { severity_floor_tripped: true } : {}),
+        // U1 honest-window instrumentation -- claim_anchored only, so head output
+        // stays byte-identical. Distinguishes truncation artifacts from fabrications.
+        ...(claimAnchored ? {
+          source_selection: 'claim_anchored',
+          source_corpus_chars: corpusChars,
+          source_chars_shown: maxShownChars,
+          evidence_in_window: evInWindow,
+          evidence_beyond_window: evBeyond,
+          evidence_absent: evAbsent,
+        } : {}),
       },
     };
     results.push(entityResult);
@@ -795,3 +1054,9 @@ async function execute(input, options, tools) {
 module.exports = execute;
 // Exported for the W2.3 code-lock tests (behavior-equivalence + neutrality).
 module.exports.MANIFEST_DEFAULT_PROMPT = MANIFEST_DEFAULT_PROMPT;
+// Exported for the U1 claim-anchored retrieval tests.
+module.exports.asBool = asBool;
+module.exports.extractClaimTerms = extractClaimTerms;
+module.exports.chunkSources = chunkSources;
+module.exports.selectAnchoredWindow = selectAnchoredWindow;
+module.exports.classifyClaimEvidence = classifyClaimEvidence;

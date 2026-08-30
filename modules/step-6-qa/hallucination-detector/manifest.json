@@ -2,14 +2,14 @@
   "id": "hallucination-detector",
   "name": "Hallucination Detector",
   "description": "Compare generated content claims against original source material to flag statements that aren't supported by any source.",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "step": 6,
   "category": "qa",
   "cost": "medium",
   "data_operation_default": "add",
   "pool_precondition": "requires_items",
   "depends_on": ["content-writer", "page-scraper"],
-  "usage_notes": "Run after content-writer has produced content_markdown and page-scraper/browser-scraper has produced text_content. Grades only the LATEST content_markdown draft (.at(-1), matching the step-8 output modules). Uses LLM to verify each factual claim against source material. If no source text_content is available, the entity FAILS closed by default (unverifiable is not verified) -- set no_sources_behavior to soften. Substantial content that yields zero extractable claims also fails closed (padding-blind signature); the regex extractor cannot see qualitative claims (coverage gap tracked as UNIT_50 #51).",
+  "usage_notes": "Run after content-writer has produced content_markdown and page-scraper/browser-scraper has produced text_content. Grades only the LATEST content_markdown draft (.at(-1), matching the step-8 output modules). Uses LLM to verify each factual claim against source material. If no source text_content is available, the entity FAILS closed by default (unverifiable is not verified) -- set no_sources_behavior to soften. Substantial content that yields zero extractable claims also fails closed (padding-blind signature); the regex extractor cannot see qualitative claims (coverage gap tracked as UNIT_50 #51). SOURCE SELECTION (U1): by default (source_selection='head') the source window is the corpus HEAD truncated at max_source_chars -- on a fat entity (600k+ char corpus) the supporting page is often BEYOND the window, so its claim is flagged as a truncation artifact. Set source_selection='claim_anchored' to build a per-batch window from the source chunks whose terms overlap the batch's claims (deterministic, no extra LLM call); claim_anchored also emits honest-window meta (source_corpus_chars, source_chars_shown, evidence_in_window/beyond_window/absent) so a truncation-driven verdict is distinguishable from a real fabrication.",
 
   "requires_columns": ["text_content"],
 
@@ -95,6 +95,14 @@
       "label": "High-severity fabrication force-fails",
       "description": "When true, any claim verified as unsupported AND rated high-severity (a specific fabricated number, date, statistic, or financial claim) force-fails the check regardless of the numeric score -- closing the '1 hard fabrication in 10 claims = exactly 0.9 = pass' hole. The score still reports the honest ratio; only qa_pass is forced false, emitted through the same hallucination:fail routing key (no new key). Default false preserves pure-threshold behavior.",
       "default": false
+    },
+    {
+      "name": "source_selection",
+      "type": "select",
+      "label": "Source selection strategy",
+      "description": "How the source window sent to the verifier is built. 'head' (default) concatenates pages in pool order and truncates at max_source_chars -- byte-identical to prior behaviour, but on a fat entity (600k+ char corpus) the supporting page is frequently BEYOND the window, so its claim is flagged 'unsupported' as a pure truncation artifact. 'claim_anchored' sends the full head window PLUS a supplement of the best IDF-ranked far chunks for claims the head misses -- so the window is up to ~2x max_source_chars (still far cheaper than a full-corpus raise) and can never regress an entity whose evidence is already in the head. It emits honest-window meta (source_corpus_chars, source_chars_shown, evidence_in_window/beyond_window/absent) that distinguishes a truncation artifact from a real fabrication. NOTE: because claim_anchored can roughly double the payload, set max_source_chars with ~2x headroom against the model's context limit. To measure a raw window-raise instead, keep 'head' and increase max_source_chars.",
+      "values": ["head", "claim_anchored"],
+      "default": "head"
     }
   ],
 
@@ -108,7 +116,8 @@
     "no_sources_behavior": "fail",
     "flag_zero_claims_over_chars": 500,
     "claim_extraction": "regex",
-    "severity_floor": false
+    "severity_floor": false,
+    "source_selection": "head"
   },
 
   "item_key": "entity_name",

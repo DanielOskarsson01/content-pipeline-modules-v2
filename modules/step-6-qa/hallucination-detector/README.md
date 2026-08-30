@@ -3,7 +3,7 @@
 > Compare generated content claims against original source material to flag statements that aren't supported by any source.
 
 **Module ID:** `hallucination-detector` | **Step:** 6 (QA) | **Category:** qa | **Cost:** medium
-**Version:** 1.2.0 | **Data Operation:** add (+)
+**Version:** 1.3.0 | **Data Operation:** add (+)
 
 ---
 
@@ -15,7 +15,7 @@ Extracts factual claims from content_markdown using heuristic patterns (numbers,
 
 1. **Claim extraction** -- Sentences containing numbers, dates, percentages, currency amounts, or company-specific assertions ("founded in", "headquartered in", "employs", "licensed by", "operates in") are extracted from content_markdown. General knowledge sentences are excluded.
 
-2. **Source gathering** -- All text_content from scraped pages (page-scraper, browser-scraper) is combined into a single source corpus, respecting the max_source_chars limit.
+2. **Source gathering** -- All text_content from scraped pages (page-scraper, browser-scraper) is assembled into the source window sent to the verifier. By default (`source_selection: head`) pages are concatenated in pool order and truncated at max_source_chars. With `source_selection: claim_anchored`, a focused per-batch window is built from the source chunks whose terms overlap that batch's claims, so evidence beyond the head is still shown (see [Source selection](#source-selection-head-vs-claim_anchored)).
 
 3. **LLM verification** -- Claims are batched (default 10 per batch) and sent to the configured LLM with the source text. The LLM returns a verdict per claim: supported, unsupported, or partial, along with a severity rating and supporting quote.
 
@@ -53,6 +53,7 @@ This module uses data-shape routing. It finds its input by checking which fields
 | `allow_empty_content` | boolean | `false` | When `false`, an entity with no `content_markdown` **fails closed** (`qa_pass: false`) -- content was expected but is absent, and a QA gate must not certify content it never read. When `true`, such an entity skips with a pass (nothing to verify) | Set `true` only for pipelines that legitimately produce entities with no content to check |
 | `claim_extraction` | select | `regex` | How claims are pulled from the draft. `regex` (default) keeps only enumerated numeric/date/company sentences in **prose** -- fast, free, but blind to facts in markdown **tables and lists**. `llm` runs a code-locked extraction pass over the FULL draft (prose + tables + lists), then verifies those claims unchanged. Adds one LLM call per entity | Set `llm` for formats that place facts in tables/lists (e.g. a Quick-Facts table), where the regex path finds too few claims and one partial dominates the score |
 | `severity_floor` | boolean | `false` | When `true`, a claim verified as **unsupported + high-severity** (a specific fabricated number, date, statistic, or financial claim) force-fails the check regardless of the numeric score. The score still reports the honest ratio; only `qa_pass` is forced false, through the same `hallucination:fail` routing key | Turn on when a single hard fabrication must never pass just because the ratio clears the threshold (closes the "1 fabrication in 10 claims = 0.9 = pass" hole) |
+| `source_selection` | select | `head` | How the source window is built. `head` (default) concatenates pages in pool order and truncates at `max_source_chars` -- byte-identical to prior behaviour. `claim_anchored` builds a focused per-batch window from the chunks whose terms overlap that batch's claims (deterministic, no extra LLM call) and emits honest-window meta. See [Source selection](#source-selection-head-vs-claim_anchored) | Set `claim_anchored` on fat entities (large source corpus) where the supporting page is often past the head window; keep `head` (and raise `max_source_chars`) to measure a raw window-raise |
 
 The model options are no longer hardcoded: the manifest declares `values_from` and the skeleton resolves the actual provider/model lists from the shared LLM registry at load time. Adding a provider or model to the registry makes it available here with no manifest change.
 
@@ -64,6 +65,30 @@ The model options are no longer hardcoded: the manifest declares `values_from` a
 > supply the extraction or verification *prompt* (a `prompt` supplied by a
 > template is silently ignored). To change what counts as a claim or the verdict
 > criteria, edit the module code (a deliberate, reviewed change), not a preset.
+
+---
+
+## Source selection (`head` vs `claim_anchored`)
+
+The verifier can only mark a claim "supported" if the supporting text is inside the source window it was shown. On a **fat entity** the corpus dwarfs the window — e.g. a 633,916-char corpus against the default `max_source_chars: 100000` means the verifier sees ~16% of the source. In `head` mode that 16% is the corpus **head**, so a fact that lives on page 100 (SNAITECH at char 320,933; Stanleybet/Vision NextGen at 155,069) is simply not in the window, and its claim is flagged "unsupported" — a pure **truncation artifact**, indistinguishable from a real fabrication.
+
+- **`head` (default)** — pool-order concatenation truncated at `max_source_chars`. Unchanged, byte-identical to prior behaviour. A raw *window-raise* is just this mode with a larger `max_source_chars` (no new code path).
+- **`claim_anchored`** — the window is the **full head window** (so it can never show less than `head`, i.e. an entity whose evidence is already in the head cannot regress) **plus a supplement**: the single best far chunk for each claim whose evidence sits beyond the head. Chunks are ranked by **IDF-weighted lexical overlap** — the ubiquitous entity name approaches zero weight, so rare discriminating terms (an acronym, a partner name, a number) drive the match; the entity name can't make every claim look "already covered". Deterministic — no second LLM pass, no embeddings service. Because the supplement adds an equal budget on top of the head, the window is **up to ~2× `max_source_chars`** (still far cheaper than a full-corpus raise — see cost note below); set `max_source_chars` with ~2× headroom against the model's context limit.
+
+### Honest-window instrumentation (claim_anchored only)
+
+In `claim_anchored` mode the module records where each flagged claim's evidence actually sits, so a truncation-driven verdict is never again indistinguishable from a fabrication:
+
+| `meta` field | Meaning |
+|--------------|---------|
+| `source_selection` | `"claim_anchored"` (present only in this mode) |
+| `source_corpus_chars` | total characters of source that existed for the entity |
+| `source_chars_shown` | size of the largest per-batch window actually sent |
+| `evidence_in_window` | flagged claims whose evidence was in a shown chunk (a genuine verdict) |
+| `evidence_beyond_window` | flagged claims whose evidence exists in the corpus but was dropped from the window (**truncation artifact**) |
+| `evidence_absent` | flagged claims whose terms appear nowhere in the corpus (**candidate fabrication**) |
+
+Each flagged claim in `flagged_claims[].evidence` and in `flagged_claims_text` (as `{in_window}` / `{beyond_window}` / `{absent}`) carries the same tag. `head` mode emits none of these fields — its output is byte-identical to prior versions.
 
 ---
 
@@ -204,7 +229,7 @@ flagged_claims_text: "1. [HIGH] Revenue reached $2.1 billion in 2025.\n2. [MEDIU
 
 - **LLM-dependent accuracy.** The verification quality depends on the LLM model. Smaller models may miss nuanced paraphrasing or incorrectly flag supported claims. Larger models are more accurate but cost more.
 - **Heuristic claim extraction.** The factual claim patterns cover common cases but will miss unusual phrasings and may flag non-factual sentences that happen to contain numbers (e.g. "Step 3 of the process").
-- **Source text truncation.** If source material exceeds max_source_chars, some sources are truncated. Claims referencing truncated content may be incorrectly flagged.
+- **Source text truncation (`head` mode).** In the default `head` mode, if source material exceeds max_source_chars the corpus tail is truncated and claims whose evidence lives there are incorrectly flagged. `source_selection: claim_anchored` addresses this by pulling the relevant chunks into each batch's window regardless of position, and reports `evidence_beyond_window` so any residual truncation is visible rather than silent.
 - **No cross-reference verification.** Claims are checked against the combined source corpus, not against external databases or APIs. If the source itself is wrong, the claim passes.
 - **General knowledge is subjective.** The heuristic filter for general knowledge is conservative. Some domain-specific common knowledge may still be sent to the LLM for verification, adding cost without value.
 - **Cost scales with claims.** Each batch of claims requires an LLM call. Content with many factual claims will generate more API calls. Monitor costs with large batches of entities.
@@ -231,7 +256,7 @@ Results feed into Step 7 (loop-router) for routing decisions. Typical configurat
 - **Required input columns:** `text_content`
 - **Depends on:** `content-writer`, `page-scraper` (per manifest; via data-shape routing, any module producing `text_content` -- e.g. browser-scraper -- also qualifies as a source)
 - **Input format:** pool items with `content_markdown` (content to check) and `text_content` (sources), found by field presence, never by `source_submodule`
-- **Output format:** one item per entity matching the output fields table above; `meta` additionally carries `supported` / `partial` / `unsupported` / `batches_sent` (and `skipped` + `skip_reason` on skip paths)
+- **Output format:** one item per entity matching the output fields table above; `meta` additionally carries `supported` / `partial` / `unsupported` / `batches_sent` (and `skipped` + `skip_reason` on skip paths). In `claim_anchored` mode `meta` also carries `source_selection` / `source_corpus_chars` / `source_chars_shown` / `evidence_in_window` / `evidence_beyond_window` / `evidence_absent`, and each `flagged_claims[]` gains an `evidence` tag
 - **Error handling:** LLM failures and unparseable responses fail safe (affected claims marked unsupported, run continues); missing content fails closed unless `allow_empty_content`; successfully-verified per-entity results are pushed to `tools._partialItems` so a timeout preserves completed entities (the skip and fail-closed paths return immediately and do not push)
 - **External dependencies:** none beyond `tools.ai.complete()` -- no direct HTTP calls
 - **Spec:** `Content-Pipeline/specs/SUBMODULE_DEVELOPMENT.md`
