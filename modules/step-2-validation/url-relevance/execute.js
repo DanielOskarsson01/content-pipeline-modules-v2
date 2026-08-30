@@ -15,17 +15,30 @@ const CONFIDENCE_INSTRUCTIONS = {
   aggressive: 'When uncertain about a URL, classify it as DROP. Only KEEP pages that are clearly relevant.',
 };
 
+/** Accept a real boolean or the string "true" (string-typed-preset bug class). */
+function asBool(v) {
+  return v === true || v === 'true';
+}
+
 /**
  * Build the classification prompt for a batch of URLs.
+ *
+ * `includeHostname` controls whether each URL shows its full host (so the model
+ * can tell the entity's own pages from third-party pages about other companies)
+ * or, as before, only the pathname+search. `website` is the entity's own domain
+ * shown to the model — either a real seed value or the pool-derived own domain.
  */
 function buildPrompt(entityName, website, urls, options, metadataFields) {
   const confidenceInstruction = CONFIDENCE_INSTRUCTIONS[options.confidence_threshold] || CONFIDENCE_INSTRUCTIONS.balanced;
   const promptContext = options.prompt_context ||
     'You are a URL relevance classifier for a company research content pipeline.\nClassify each URL based on its relevance for creating a comprehensive company profile.';
+  const includeHostname = asBool(options.include_hostname);
 
   const urlList = urls.map((item, i) => {
     const urlObj = safeParseUrl(item.url);
-    const slug = urlObj ? urlObj.pathname + (urlObj.search || '') : item.url;
+    const slug = urlObj
+      ? (includeHostname ? urlObj.host : '') + urlObj.pathname + (urlObj.search || '')
+      : item.url;
     const parts = [`${i + 1}. ${slug}`];
     if (item.link_text) parts.push(`  link_text: ${item.link_text}`);
     if (item.source_location) parts.push(`  source: ${item.source_location}`);
@@ -74,6 +87,57 @@ function safeParseUrl(url) {
   }
 }
 
+// ── Own-domain derivation (entity_domain_source: "pool_dominant_host") ──────
+// The entity's seed website doesn't survive past step 1 (the per-step entity is
+// rebuilt from the pool with only {entity_name}), so the prompt otherwise reads
+// "Website: unknown". For a thin, ambiguously-named entity that lets the model
+// keep third-party pages about a DIFFERENT same-named company and drop the
+// entity's own homepage (Gate-1: Pocket Rockets). Deriving the own domain from
+// the entity's OWN-CRAWL pool items gives the model that missing anchor.
+// Mirrors api-fetcher B034's host normalization (copied, not imported — Rule 4).
+
+// Own-crawl provenance: own-site crawlers (sitemap-parser, page-links,
+// browser-crawler, seed-url-builder) leave found_via absent; web search/scout
+// modules stamp it (search-discovery:*, ai_scout). So own-crawl == no search/scout.
+function isOwnCrawl(item) {
+  const fv = item && typeof item.found_via === 'string' ? item.found_via : '';
+  return !/(search|scout)/i.test(fv);
+}
+
+// Normalized host (scheme/path/port/userinfo stripped, lowercased, no www.), or null.
+function hostFromUrl(url) {
+  if (typeof url !== 'string' || !url) return null;
+  let s = url.trim();
+  const scheme = s.indexOf('://');
+  if (scheme !== -1) s = s.slice(scheme + 3);
+  else if (s.startsWith('//')) s = s.slice(2);
+  s = s.split(/[/?#]/)[0];            // strip path/query/fragment
+  const at = s.indexOf('@');
+  if (at !== -1) s = s.slice(at + 1);  // strip userinfo
+  s = s.split(':')[0].toLowerCase();   // strip port
+  if (s.startsWith('www.')) s = s.slice(4);
+  if (!s || s.indexOf('.') === -1 || /[\s@]/.test(s)) return null;
+  return s;
+}
+
+// Dominant host among the entity's OWN-CRAWL pool items. Returns the clear
+// winner, or null when the own-crawl set is empty or has no strict top (a tie) —
+// so an ambiguous pool degrades loudly rather than naming a wrong domain.
+function deriveDominantOwnHost(items) {
+  const own = Array.isArray(items) ? items.filter(isOwnCrawl) : [];
+  const counts = new Map();
+  for (const item of own) {
+    const host = hostFromUrl(item && item.url);
+    if (host) counts.set(host, (counts.get(host) || 0) + 1);
+  }
+  let best = null, bestN = 0, tie = false;
+  for (const [host, n] of counts) {
+    if (n > bestN) { best = host; bestN = n; tie = false; }
+    else if (n === bestN) { tie = true; }
+  }
+  return { host: best && !tie ? best : null, ownCrawlCount: own.length, hostsSeen: counts.size, ambiguous: tie };
+}
+
 /**
  * Parse the LLM response, matching numbered lines back to URLs.
  * Returns a Map of index → relevance.
@@ -110,6 +174,7 @@ async function execute(input, options, tools) {
   const { entities } = input;
   const { ai_model, ai_provider, max_urls_per_prompt, metadata_fields: rawMetadataFields = [] } = options;
   const metadataFields = Array.isArray(rawMetadataFields) ? rawMetadataFields : [];
+  const domainSource = options.entity_domain_source === 'pool_dominant_host' ? 'pool_dominant_host' : 'none';
   const { logger, progress, ai } = tools;
 
   const results = [];
@@ -134,6 +199,21 @@ async function execute(input, options, tools) {
     try {
       logger.info(`${entity.name}: classifying ${items.length} URLs with ${ai_provider}/${ai_model}`);
 
+      // Resolve the entity's own domain shown to the model. Default: the seed
+      // website (absent at step 2 → "unknown"). With pool_dominant_host, derive it
+      // from the entity's own-crawl pool items; degrade loudly (keep unknown, warn)
+      // if the own-crawl set is empty or ambiguous — never name a wrong domain.
+      let resolvedWebsite = entity.website;
+      if (domainSource === 'pool_dominant_host') {
+        const d = deriveDominantOwnHost(items);
+        if (d.host) {
+          resolvedWebsite = entity.website || d.host;
+          logger.info(`${entity.name}: entity_domain_source=pool_dominant_host derived "${d.host}" from ${d.ownCrawlCount} own-crawl pool item(s)`);
+        } else {
+          logger.warn(`${entity.name}: entity_domain_source=pool_dominant_host could not derive a domain (${d.ownCrawlCount} own-crawl item(s), ${d.hostsSeen} distinct host(s), ambiguous=${d.ambiguous}) — Website stays "${entity.website || 'unknown'}", no silent wrong domain`);
+        }
+      }
+
       // Batch URLs if they exceed max_urls_per_prompt
       const batches = chunk(items, max_urls_per_prompt);
       const allClassifications = new Map();
@@ -145,7 +225,7 @@ async function execute(input, options, tools) {
           logger.info(`${entity.name}: batch ${b + 1}/${batches.length} (${batch.length} URLs)`);
         }
 
-        const prompt = buildPrompt(entity.name, entity.website, batch, options, metadataFields);
+        const prompt = buildPrompt(entity.name, resolvedWebsite, batch, options, metadataFields);
 
         const response = await ai.complete({
           prompt,

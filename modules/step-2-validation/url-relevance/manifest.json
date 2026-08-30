@@ -2,7 +2,7 @@
   "id": "url-relevance",
   "name": "URL Relevance Filter",
   "description": "LLM-based URL relevance classification. Sends URL slugs, link text, and source location to an AI model to classify each as KEEP, MAYBE, or DROP for the target content type. Runs after url-dedup and url-filter to minimize token usage.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "step": 2,
   "category": "filtering",
   "sort_order": 5,
@@ -72,6 +72,21 @@
       "default": []
     },
     {
+      "name": "include_hostname",
+      "type": "boolean",
+      "label": "Show URL hostname",
+      "description": "Show each URL's full host (e.g. casino.guru/news/...) instead of only the path. Lets the model tell the entity's own pages from third-party pages about other companies. Default off = today's path-only behavior.",
+      "default": false
+    },
+    {
+      "name": "entity_domain_source",
+      "type": "select",
+      "label": "Entity own-domain source",
+      "description": "How to tell the model the entity's own website domain. 'none' = show the seed website (usually 'unknown' at step 2). 'pool_dominant_host' = derive it from the dominant host among the entity's own-crawl pool items (sitemap/page-links/browser-crawler/seed, i.e. no search/scout found_via); degrades loudly to 'unknown' if the own-crawl set is empty or ambiguous.",
+      "default": "none",
+      "values": ["none", "pool_dominant_host"]
+    },
+    {
       "name": "prompt_context",
       "type": "textarea",
       "label": "Classification context",
@@ -89,6 +104,8 @@
     "confidence_threshold": "balanced",
     "max_urls_per_prompt": 200,
     "metadata_fields": [],
+    "include_hostname": false,
+    "entity_domain_source": "none",
     "prompt_context": "You are a URL relevance classifier for a company research content pipeline.\nClassify each URL based on its relevance for creating a comprehensive company profile."
   },
 
