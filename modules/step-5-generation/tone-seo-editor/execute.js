@@ -17,7 +17,9 @@
  */
 
 // Shared canonical marker grammar (W1.5) — same parser the Step 8 bundlers use.
-const { extractHeadingMarkers } = require('../../_shared/marker-parser.js');
+// headingMarkerRegex is the ONE canonical primitive the bracket-repair pass
+// shares with qa-structural Check 8 and the bundlers' strip.
+const { extractHeadingMarkers, headingMarkerRegex } = require('../../_shared/marker-parser.js');
 
 /**
  * Tone style instruction sets.
@@ -378,9 +380,89 @@ function validateMarkerPreservation(originalMd, revisedMd) {
   return dropped;
 }
 
+/**
+ * Deterministic mechanical repair (CALIBRATION_3, content-pipeline-specs @94eb952):
+ * remove residual bracket leaks that would survive the publish strip and
+ * force-FAIL qa-structural Check 8 — a stray `[#-]`/`[game pages]`-style
+ * citation-shaped marker the reader should never see. Repair, don't reject: a
+ * true, well-sourced draft should not be gated over a leaked bracket.
+ *
+ * Detection uses the SAME exclusion predicates as qa-structural's
+ * findResidualBrackets (qa-structural/execute.js:130-156, deployed 08df8b5):
+ * valid [#n]/[n] citations, [^n] footnote refs, [text](url) links, fenced +
+ * inline code — and the same shared heading-marker primitive
+ * (_shared/marker-parser.js).
+ * The FIRST heading marker is NOT a leak — markdown-output strips it at publish
+ * and the bundlers need it — so it is preserved verbatim and only the rest of
+ * each line is scanned. Same VERBATIM-mirror discipline qa-structural itself
+ * uses for markdown-output's strip. A leak is DELETED with one leading
+ * horizontal space (mirrors markdown-output stripCitations `\s*[#n]`), never
+ * merging lines. Returns { text, repairs:[{line,bracket}] }.
+ *
+ * Unlike Check 8 (which strips the ## [Meta] section before scanning), this
+ * scans the whole draft — a strict SUPERSET region, so it can only ever
+ * over-clean (a stray bracket in the ## [Meta] block, removed at publish
+ * anyway, always logged) and can NEVER leave a bracket Check 8 would flag.
+ * That avoids replicating removeMetaSection as a second lockstep point.
+ */
+function repairResidualBrackets(markdown) {
+  if (typeof markdown !== 'string' || markdown.length === 0) return { text: markdown, repairs: [] };
+  const lines = markdown.split('\n');
+  const repairs = [];
+  let inFence = false;
+  for (let ln = 0; ln < lines.length; ln++) {
+    const line = lines[ln];
+    if (/^\s*```/.test(line)) { inFence = !inFence; continue; }
+    if (inFence) continue;
+
+    // Preserve the first heading marker verbatim; scan only after it.
+    let headEnd = 0;
+    const hm = headingMarkerRegex().exec(line);
+    if (hm && hm.index === 0) headEnd = hm[0].length;
+    const head = line.slice(0, headEnd);
+    const rest = line.slice(headEnd);
+
+    let out = '';
+    let i = 0;
+    while (i < rest.length) {
+      const ch = rest[i];
+      if (ch === '`') {
+        // Inline code span: copy verbatim so bracketed code is never touched
+        // (mirrors findResidualBrackets masking `line.replace(/`[^`]*`/g,'')`).
+        const close = rest.indexOf('`', i + 1);
+        if (close !== -1) { out += rest.slice(i, close + 1); i = close + 1; continue; }
+        out += ch; i++; continue; // unpaired backtick: literal, keep scanning
+      }
+      if (ch === '[') {
+        const closeB = rest.indexOf(']', i + 1);
+        if (closeB !== -1) {
+          const content = rest.slice(i + 1, closeB);
+          const after = rest.slice(closeB + 1);
+          const excluded = /^#?\d+$/.test(content)   // [#n] / [n] inline citation
+            || /^\^\d+$/.test(content)                // [^n] footnote ref
+            || after.startsWith('(');                 // [text](url) markdown link
+          if (!excluded) {
+            out = out.replace(/[ \t]+$/, '');         // drop one leading h-space
+            repairs.push({ line: ln + 1, bracket: `[${content}]` });
+            i = closeB + 1; continue;
+          }
+        }
+        out += ch; i++; continue; // excluded, or unclosed '[': keep verbatim
+      }
+      out += ch; i++;
+    }
+    lines[ln] = head + out;
+  }
+  return { text: lines.join('\n'), repairs };
+}
+
 async function execute(input, options, tools) {
   const { entities } = input;
   const { ai_model, ai_provider, prompt: promptTemplate, temperature, max_tokens, tone_style, max_content_chars, reference_docs } = options;
+  // Coerce the string "true" too: UI presets are string-typed (mirrors
+  // qa-structural's taxonomy_leak_check coercion). Anything else (incl. "false")
+  // => OFF => byte-identical to pre-1.4.0 output.
+  const repairBracketLeaks = options.repair_bracket_leaks === true || options.repair_bracket_leaks === 'true';
   const { logger, progress, ai } = tools;
 
   const maxChars = max_content_chars || 50000;
@@ -476,6 +558,20 @@ async function execute(input, options, tools) {
       // Strip code fences if LLM wrapped the output despite instructions
       revisedMarkdown = revisedMarkdown.replace(/^```(?:markdown|md)?\s*\n?/, '').replace(/\n?```\s*$/, '');
 
+      // Deterministic bracket-leak repair (option-gated, default OFF = byte
+      // identical). Runs BEFORE the marker gate and before all downstream stats,
+      // so the graded/published .at(-1) draft is the repaired one. Preserves
+      // every heading marker, so the gate below is unaffected.
+      let bracketRepairs = [];
+      if (repairBracketLeaks) {
+        const rr = repairResidualBrackets(revisedMarkdown);
+        revisedMarkdown = rr.text;
+        bracketRepairs = rr.repairs;
+        if (bracketRepairs.length > 0) {
+          logger.info(`${entity.name}: repaired ${bracketRepairs.length} residual bracket leak(s) that would fail qa-structural Check 8: ${bracketRepairs.map(r => `${r.bracket}@L${r.line}`).join(', ')}`);
+        }
+      }
+
       // W1.5 marker-preservation gate: every heading bracket marker the Step 8
       // bundlers can parse in what we SENT the model (truncatedMarkdown) must
       // still be parseable in the revised output. Comparing against the sent
@@ -558,6 +654,11 @@ async function execute(input, options, tools) {
           tone_changes_count: toneChangesCount,
           keywords_placed: keywordsPlacedCount,
           word_count: wordCountRevised,
+          // Added ONLY when the repair pass runs, so default-off output is
+          // byte-identical. A repaired draft is never indistinguishable from a
+          // clean one (what/where/count logged) — a silent repair is the same
+          // failure class this project keeps hunting.
+          ...(repairBracketLeaks ? { bracket_repairs: bracketRepairs.length, bracket_repairs_detail: bracketRepairs } : {}),
         },
       });
 
@@ -609,4 +710,4 @@ async function execute(input, options, tools) {
 
 module.exports = execute;
 // Exported for test harness use only — not part of the public submodule interface.
-module.exports.__testing = { validateMarkerPreservation, buildPrompt, buildCachedPrompt };
+module.exports.__testing = { validateMarkerPreservation, buildPrompt, buildCachedPrompt, repairResidualBrackets };
