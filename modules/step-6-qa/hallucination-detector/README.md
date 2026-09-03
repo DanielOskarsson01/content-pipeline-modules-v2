@@ -54,6 +54,9 @@ This module uses data-shape routing. It finds its input by checking which fields
 | `claim_extraction` | select | `regex` | How claims are pulled from the draft. `regex` (default) keeps only enumerated numeric/date/company sentences in **prose** -- fast, free, but blind to facts in markdown **tables and lists**. `llm` runs a code-locked extraction pass over the FULL draft (prose + tables + lists), then verifies those claims unchanged. Adds one LLM call per entity | Set `llm` for formats that place facts in tables/lists (e.g. a Quick-Facts table), where the regex path finds too few claims and one partial dominates the score |
 | `severity_floor` | boolean | `false` | When `true`, a claim verified as **unsupported + high-severity** (a specific fabricated number, date, statistic, or financial claim) force-fails the check regardless of the numeric score. The score still reports the honest ratio; only `qa_pass` is forced false, through the same `hallucination:fail` routing key | Turn on when a single hard fabrication must never pass just because the ratio clears the threshold (closes the "1 fabrication in 10 claims = 0.9 = pass" hole) |
 | `source_selection` | select | `head` | How the source window is built. `head` (default) concatenates pages in pool order and truncates at `max_source_chars` -- byte-identical to prior behaviour. `claim_anchored` builds a focused per-batch window from the chunks whose terms overlap that batch's claims (deterministic, no extra LLM call) and emits honest-window meta. See [Source selection](#source-selection-head-vs-claim_anchored) | Set `claim_anchored` on fat entities (large source corpus) where the supporting page is often past the head window; keep `head` (and raise `max_source_chars`) to measure a raw window-raise |
+| `extraction_model` | select | `null` | **Unit A.** Model for the claim-EXTRACTION call only (`claim_extraction: "llm"`). `null`/empty (default) inherits `ai_model` -- byte-identical. Does **not** touch verification. See [Cost optimisation](#cost-optimisation-v140) | Leave inheriting sonnet. A cheaper extractor must first pass claim-count parity; the Screen-5 candidate `gpt-oss-120b` measured **-12% to -56% under-extraction** and is not safe |
+| `extraction_provider` | select | `null` | **Unit A.** Provider for the extraction call only. `null`/empty (default) inherits `ai_provider`. Set alongside `extraction_model` | Only with a validated cheaper extractor |
+| `cache_base_window` | boolean | `false` | **Unit B.** When `true`, the stable base (head) source window shared by an entity's verification batches is sent once as an Anthropic prompt `cache_prefix` (re-read at ~10% cost on later batches) instead of re-sent every batch. Same instructions/sources/claims, only reordered (sources before claims); verdict parity is the acceptance gate. Anthropic-only (non-anthropic verification providers fall back to the single prompt). See [Cost optimisation](#cost-optimisation-v140) | Set `true` in production with `source_selection: claim_anchored` -- acceptance-proven, ~$0.13/entity saved with no verdict change |
 
 The model options are no longer hardcoded: the manifest declares `values_from` and the skeleton resolves the actual provider/model lists from the shared LLM registry at load time. Adding a provider or model to the registry makes it available here with no manifest change.
 
@@ -65,6 +68,40 @@ The model options are no longer hardcoded: the manifest declares `values_from` a
 > supply the extraction or verification *prompt* (a `prompt` supplied by a
 > template is silently ignored). To change what counts as a claim or the verdict
 > criteria, edit the module code (a deliberate, reviewed change), not a preset.
+
+---
+
+## Cost optimisation (v1.4.0)
+
+The detector is the single largest per-entity LLM cost line (~37% of spend). v1.4.0 adds two **opt-in, default-off, byte-identical-when-off** levers. The verification model (the referee that grades every module) is never changed. Both were measured through the deployed harness on the frozen inputs of a real 3-entity run (ELK Studios / Pocket Rockets Gaming / Vermantia), 2026-09-03.
+
+### Unit A -- cheaper extraction model (`extraction_model` / `extraction_provider`)
+
+The claim-extraction call (`claim_extraction: "llm"`) is parsing-grade and could in principle run on a cheaper model than verification. The option ships as a **generic mechanism**; `null` default inherits the verification model (byte-identical).
+
+**Acceptance FAILED for the Screen-5 candidate `openai/gpt-oss-120b`.** Measured N=3 against the sonnet extractor's claim counts:
+
+| entity | sonnet claims | gpt-oss-120b claims (N=3) | vs sonnet | within +-15%? | table facts extracted? |
+|--------|---------------|---------------------------|-----------|---------------|------------------------|
+| ELK Studios | 48 | 42 / 47 / 37 | -13% / -2% / -23% | 2 of 3 (median -13%) | yes, every draw |
+| Pocket Rockets Gaming | 68 | 30 / 57 / 36 | -56% / -16% / -47% | 0 of 3 | yes, every draw |
+| Vermantia | 116 | 87 / 74 / 70 | -25% / -36% / -40% | 0 of 3 | yes, every draw |
+
+gpt-oss-120b **systematically under-extracts** (fewer claims checked) with high run-to-run variance. It still reads table/list facts (the point of `llm` mode), just at coarser granularity. **Do not route extraction to gpt-oss-120b in production** -- for a fact-checker, checking materially fewer claims is a quality regression, not a free saving. The ~$90/1,700 Unit A saving is deferred until a cheaper model passes the parity gate (haiku is banned on this long-document read). This contradicts MODEL_SCREEN Screen 5's scope-only projection, which had assumed parity without measuring it.
+
+### Unit B -- cache the base source window (`cache_base_window`)
+
+Across an entity's verification batches the base (head) source window is identical; today it is re-sent in full every batch. `cache_base_window: true` sends the stable block (instructions + base window) once as an Anthropic `cache_prefix`; only the per-batch supplement + claims vary. The model sees the same content, reordered (sources before claims). `selectedOrders` and the honest-window meta are unchanged.
+
+**Acceptance PASSED** (N=3 ELK/PRG, N=2 Vermantia):
+
+| entity | batches | base cached (tokens) | `cache_read` on batches >=2 | cold-draw cost reduction | qa_pass vs baseline |
+|--------|---------|----------------------|-----------------------------|--------------------------|---------------------|
+| ELK Studios | 2 | 37,642 | yes, every draw | ~27% | FAIL = FAIL (score 0.75--0.78 vs 0.76) |
+| Pocket Rockets Gaming | 3 | ~35k | yes, every draw | ~51% | PASS = PASS (score 0.92--0.97 vs 0.96) |
+| Vermantia | 5 | 29,719 | yes, every draw | ~65% | FAIL = FAIL (score 0.77--0.79 vs 0.79) |
+
+Verdict parity held on every draw: ELK and Vermantia still fail their genuine fabrications, PRG still passes, scores stay inside the run-to-run jitter band, and flagged claims match the deployed baseline. The cold-draw reduction scales with batch count (each extra batch is one more avoided base re-send); consecutive runs within the 5-minute cache TTL compound to 66--88%. Recommended: enable `cache_base_window: true` alongside `source_selection: claim_anchored`.
 
 ---
 

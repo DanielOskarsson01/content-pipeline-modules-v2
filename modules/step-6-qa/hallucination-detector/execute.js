@@ -56,6 +56,13 @@ CLAIMS:
 SOURCE MATERIAL:
 {{SOURCES}}`;
 
+// The stable instruction block of the verification prompt -- everything BEFORE the
+// CLAIMS/SOURCES sections. Reused verbatim by the cache-split path (COST_OPTIMISATION
+// Unit B) so the code-locked rules text is provably identical to the single-prompt
+// path; only the section ORDER changes there (sources before claims). Derived from
+// the one constant above so the two can never drift.
+const PROMPT_HEADER = MANIFEST_DEFAULT_PROMPT.split('\n\nCLAIMS:\n')[0];
+
 // ─── Code-locked claim-extraction prompt (B033, W2.3) ───
 //
 // Used only when claim_extraction:"llm". Like the verification prompt above it is
@@ -451,7 +458,14 @@ function selectAnchoredWindow(chunks, claims, maxChars, idf = buildIdf(chunks, c
   const selectedOrders = new Set(selected.map(s => s.order));
   const ordered = selected.slice().sort((a, b) => a.order - b.order);
   const text = ordered.map(c => c.text).join(SOURCE_SEP);
-  return { text, selectedOrders, shownChars: text.length };
+  // COST_OPTIMISATION Unit B: the base (head) window is identical for every batch of
+  // an entity; the supplement varies. Emit them separately (each in corpus order) so
+  // the caller can put the stable base in a cache_prefix and only re-send supplements.
+  // selectedOrders is the UNION and is UNCHANGED -- the honest-window meta
+  // (classifyClaimEvidence) depends only on it, so this addition is behavior-neutral.
+  const baseText = base.map(c => c.text).join(SOURCE_SEP);
+  const suppText = ordered.filter(c => !baseOrders.has(c.order)).map(c => c.text).join(SOURCE_SEP);
+  return { text, selectedOrders, shownChars: text.length, baseText, suppText };
 }
 
 // Per-claim evidence location: does the corpus carry the claim's DISCRIMINATING
@@ -567,6 +581,23 @@ async function execute(input, options, tools) {
     // per-flagged-claim evidence location) so a truncation artifact is never again
     // indistinguishable from a fabrication.
     source_selection = 'head',
+    // COST_OPTIMISATION Unit A: the claim-EXTRACTION call (claim_extraction:"llm")
+    // is parsing-grade and can run on a cheaper model than verification. Null/absent
+    // (default) inherits ai_model/ai_provider -- byte-identical to today. Set both to
+    // route extraction elsewhere (e.g. openrouter/gpt-oss-120b); VERIFICATION is
+    // untouched (it is the referee that grades every module).
+    extraction_model = null,
+    extraction_provider = null,
+    // COST_OPTIMISATION Unit B: reuse the stable base (head) window across an
+    // entity's verification batches via a cache_prefix, instead of re-sending it in
+    // every batch. Default false = byte-identical to today (single filled prompt, no
+    // cache_prefix). When true, the verification prompt is restructured so the
+    // instructions + base window sit in a cache_prefix and only the per-batch
+    // supplement + claims vary -- the model sees the SAME content, only reordered
+    // (sources before claims). ANTHROPIC-ONLY: non-anthropic verification providers
+    // ignore cache_prefix, so the split silently falls back to the single prompt for
+    // them (never drops the base window).
+    cache_base_window = false,
   } = otherOptions;
 
   const useLlmExtraction = claim_extraction === 'llm';
@@ -575,6 +606,16 @@ async function execute(input, options, tools) {
   const severityFloor = asBool(severity_floor);
   const allowEmptyContent = asBool(allow_empty_content);
   const claimAnchored = source_selection === 'claim_anchored';
+  const cacheBaseWindow = asBool(cache_base_window);
+  // Unit B cache-split is safe only for anthropic: ai.complete honors cache_prefix
+  // ONLY when the resolved provider === 'anthropic', and it resolves an UNDEFINED
+  // provider to 'anthropic' (destructuring default) but leaves an explicit null as
+  // null. So we mirror that exactly: undefined -> anthropic (cache honored), null or
+  // any other value -> NOT anthropic. A plain `?? 'anthropic'` would wrongly treat
+  // null as anthropic and enable the split -- the skeleton would then DROP the
+  // cache_prefix and the verifier would grade against a stripped source window.
+  const resolvedProvider = ai_provider === undefined ? 'anthropic' : ai_provider;
+  const useCacheSplit = cacheBaseWindow && resolvedProvider === 'anthropic';
 
   // Verification prompt is code-locked (W2.3) -- NOT template-overridable.
   // Any `prompt` a template supplies lands in otherOptions and is ignored.
@@ -668,8 +709,12 @@ async function execute(input, options, tools) {
     // B033: llm mode routes extraction through the code-locked LLM pass (reads
     // tables/lists), falling back to regex on empty/error. Default is regex --
     // byte-identical to the prior contract.
+    // Unit A: extraction can run on a cheaper model; null/absent inherits the
+    // verification model/provider (byte-identical). Verification stays on ai_model.
+    const extractionModel = extraction_model || ai_model;
+    const extractionProvider = extraction_provider || ai_provider;
     const claims = useLlmExtraction
-      ? await extractClaimsLlm(allMarkdown, ai, ai_model, ai_provider, logger, entity.name)
+      ? await extractClaimsLlm(allMarkdown, ai, extractionModel, extractionProvider, logger, entity.name)
       : extractClaims(allMarkdown);
 
     // --- H20: no source text_content -- cannot verify anything ---
@@ -797,28 +842,49 @@ async function execute(input, options, tools) {
 
       // Head mode reuses the shared window; claim_anchored builds a focused window
       // for THIS batch's claims and records where each claim's evidence sits.
-      let batchSourceText;
+      // baseText = the stable head window (identical every batch); suppText = the
+      // per-batch far chunks (claim_anchored only). Kept separate for Unit B caching.
+      let batchSourceText, baseSourceText, suppSourceText;
       if (claimAnchored) {
         const win = selectAnchoredWindow(chunks, batch, max_source_chars, idf);
         batchSourceText = win.text;
+        baseSourceText = win.baseText;
+        suppSourceText = win.suppText;
         maxShownChars = Math.max(maxShownChars, win.shownChars);
         for (const c of batch) {
           if (!(c in claimEvidence)) claimEvidence[c] = classifyClaimEvidence(c, chunks, win.selectedOrders, idf);
         }
       } else {
         batchSourceText = sourceText;
+        baseSourceText = sourceText; // head mode: the whole shared window IS the base
+        suppSourceText = '';
       }
 
-      const filledPrompt = verificationPrompt
-        .replace('{{CLAIMS}}', claimsText)
-        .replace('{{SOURCES}}', batchSourceText);
+      // Unit B: split the stable block (instructions + base window) into a
+      // cache_prefix and send only the per-batch tail (supplement + claims) as the
+      // varying prompt. The model concatenates them with no separator, so it sees the
+      // SAME instructions + SAME source chunks + SAME claims as the single-prompt path
+      // -- only the section ORDER differs (sources before claims; supplements after
+      // the base instead of interleaved by corpus order). Default (useCacheSplit
+      // false) keeps the exact single filled prompt below, byte-identical to today.
+      let completeArgs;
+      if (useCacheSplit) {
+        const cachePrefix = `${PROMPT_HEADER}\n\nSOURCE MATERIAL:\n${baseSourceText}`;
+        // SOURCE_SEP goes BEFORE the supplement (the base|supp seam), matching the
+        // single-prompt join `chunks.join(SOURCE_SEP)` -- so every page boundary is
+        // preserved and no spurious separator lands before CLAIMS. (Head mode:
+        // suppSourceText is '' so the tail is just the claims block.)
+        const tail = (suppSourceText ? SOURCE_SEP + suppSourceText : '') + `\n\nCLAIMS:\n${claimsText}`;
+        completeArgs = { prompt: tail, cache_prefix: cachePrefix, model: ai_model, provider: ai_provider };
+      } else {
+        const filledPrompt = verificationPrompt
+          .replace('{{CLAIMS}}', claimsText)
+          .replace('{{SOURCES}}', batchSourceText);
+        completeArgs = { prompt: filledPrompt, model: ai_model, provider: ai_provider };
+      }
 
       try {
-        const response = await ai.complete({
-          prompt: filledPrompt,
-          model: ai_model,
-          provider: ai_provider,
-        });
+        const response = await ai.complete(completeArgs);
 
         const verdicts = parseLlmResponse(response.text);
 
@@ -1054,6 +1120,8 @@ async function execute(input, options, tools) {
 module.exports = execute;
 // Exported for the W2.3 code-lock tests (behavior-equivalence + neutrality).
 module.exports.MANIFEST_DEFAULT_PROMPT = MANIFEST_DEFAULT_PROMPT;
+// Exported for the Unit B cache-split tests (prompt-restructure equivalence).
+module.exports.PROMPT_HEADER = PROMPT_HEADER;
 // Exported for the U1 claim-anchored retrieval tests.
 module.exports.asBool = asBool;
 module.exports.extractClaimTerms = extractClaimTerms;

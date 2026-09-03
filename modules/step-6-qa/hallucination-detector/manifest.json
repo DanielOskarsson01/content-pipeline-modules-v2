@@ -2,14 +2,14 @@
   "id": "hallucination-detector",
   "name": "Hallucination Detector",
   "description": "Compare generated content claims against original source material to flag statements that aren't supported by any source.",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "step": 6,
   "category": "qa",
   "cost": "medium",
   "data_operation_default": "add",
   "pool_precondition": "requires_items",
   "depends_on": ["content-writer", "page-scraper"],
-  "usage_notes": "Run after content-writer has produced content_markdown and page-scraper/browser-scraper has produced text_content. Grades only the LATEST content_markdown draft (.at(-1), matching the step-8 output modules). Uses LLM to verify each factual claim against source material. If no source text_content is available, the entity FAILS closed by default (unverifiable is not verified) -- set no_sources_behavior to soften. Substantial content that yields zero extractable claims also fails closed (padding-blind signature); the regex extractor cannot see qualitative claims (coverage gap tracked as UNIT_50 #51). SOURCE SELECTION (U1): by default (source_selection='head') the source window is the corpus HEAD truncated at max_source_chars -- on a fat entity (600k+ char corpus) the supporting page is often BEYOND the window, so its claim is flagged as a truncation artifact. Set source_selection='claim_anchored' to build a per-batch window from the source chunks whose terms overlap the batch's claims (deterministic, no extra LLM call); claim_anchored also emits honest-window meta (source_corpus_chars, source_chars_shown, evidence_in_window/beyond_window/absent) so a truncation-driven verdict is distinguishable from a real fabrication.",
+  "usage_notes": "Run after content-writer has produced content_markdown and page-scraper/browser-scraper has produced text_content. Grades only the LATEST content_markdown draft (.at(-1), matching the step-8 output modules). Uses LLM to verify each factual claim against source material. If no source text_content is available, the entity FAILS closed by default (unverifiable is not verified) -- set no_sources_behavior to soften. Substantial content that yields zero extractable claims also fails closed (padding-blind signature); the regex extractor cannot see qualitative claims (coverage gap tracked as UNIT_50 #51). SOURCE SELECTION (U1): by default (source_selection='head') the source window is the corpus HEAD truncated at max_source_chars -- on a fat entity (600k+ char corpus) the supporting page is often BEYOND the window, so its claim is flagged as a truncation artifact. Set source_selection='claim_anchored' to build a per-batch window from the source chunks whose terms overlap the batch's claims (deterministic, no extra LLM call); claim_anchored also emits honest-window meta (source_corpus_chars, source_chars_shown, evidence_in_window/beyond_window/absent) so a truncation-driven verdict is distinguishable from a real fabrication. COST (v1.4.0, MODEL_SCREEN Screen 5; acceptance measured on run 94baa6f6, 2026-09-03 -- detector is 36.7% of per-entity cost, the single largest line): (Unit A) claim EXTRACTION (claim_extraction='llm') is parsing-grade, so extraction_model/extraction_provider let it run on a cheaper model (default null = inherit verification model, byte-identical). The VERIFICATION model (ai_model) is the referee that grades every module -- always leave it on sonnet. NOTE (acceptance): the Screen-5 candidate openai/gpt-oss-120b FAILED the +-15% claim-count parity gate when measured N=3 on ELK/PRG/Vermantia -- it under-extracts by -12% to -56% (median -13% / -47% / -36%) with high variance, so it checks materially FEWER claims than sonnet. It DOES still read table/list claims (table facts present in every draw), just at coarser granularity. Do NOT route extraction to gpt-oss-120b in production on this evidence; the ~$90/1,700 Unit A saving is not safe until a cheaper model passes the parity gate (haiku is banned on this long-document read). The option ships as a generic mechanism; validate claim-count parity per candidate model before use. (Unit B) cache_base_window=true reuses the stable base (head) source window across an entity's verification batches via an Anthropic cache_prefix instead of re-sending it every batch. ACCEPTANCE PASSED (N=3 ELK/PRG, N=2 Vermantia): cache_read>0 on batches>=2 every draw; verification-cost reduction 27% (ELK, 2 batches) / 51% (PRG, 3) / 65% (Vermantia, 5) on the cold first draw, scaling with batch count; and verdict PARITY vs the deployed single-prompt baseline held (ELK/Vermantia still FAIL their genuine fabrications, PRG still PASSES; scores within the jitter band). ~$0.132/entity (~$224/1,700). Default false = byte-identical. Anthropic-only (non-anthropic providers ignore cache_prefix and fall back to the single prompt).",
 
   "requires_columns": ["text_content"],
 
@@ -103,6 +103,29 @@
       "description": "How the source window sent to the verifier is built. 'head' (default) concatenates pages in pool order and truncates at max_source_chars -- byte-identical to prior behaviour, but on a fat entity (600k+ char corpus) the supporting page is frequently BEYOND the window, so its claim is flagged 'unsupported' as a pure truncation artifact. 'claim_anchored' sends the full head window PLUS a supplement of the best IDF-ranked far chunks for claims the head misses -- so the window is up to ~2x max_source_chars (still far cheaper than a full-corpus raise) and can never regress an entity whose evidence is already in the head. It emits honest-window meta (source_corpus_chars, source_chars_shown, evidence_in_window/beyond_window/absent) that distinguishes a truncation artifact from a real fabrication. NOTE: because claim_anchored can roughly double the payload, set max_source_chars with ~2x headroom against the model's context limit. To measure a raw window-raise instead, keep 'head' and increase max_source_chars.",
       "values": ["head", "claim_anchored"],
       "default": "head"
+    },
+    {
+      "name": "extraction_model",
+      "type": "select",
+      "label": "Claim-extraction model (Unit A)",
+      "description": "Model for the claim-EXTRACTION call only (claim_extraction='llm'). Extraction is parsing-grade and can run cheaper than verification. Empty/null (default) inherits ai_model -- byte-identical to today. WARNING: the Screen-5 candidate openrouter/gpt-oss-120b FAILED the +-15% claim-count parity gate on measurement (N=3, 2026-09-03): it under-extracts -12% to -56% (fewer claims checked). Do NOT use it in production. Any cheaper extraction model must first be validated for claim-count parity vs the sonnet extractor. Has NO effect on verification -- ai_model still grades every claim.",
+      "default": null,
+      "values_from": "registry.models"
+    },
+    {
+      "name": "extraction_provider",
+      "type": "select",
+      "label": "Claim-extraction provider (Unit A)",
+      "description": "Provider for the claim-EXTRACTION call only. Empty/null (default) inherits ai_provider. Set alongside extraction_model (e.g. 'openrouter' with 'gpt-oss-120b'). Verification provider (ai_provider) is unchanged.",
+      "default": null,
+      "values_from": "registry.providers"
+    },
+    {
+      "name": "cache_base_window",
+      "type": "boolean",
+      "label": "Cache base source window across batches (Unit B)",
+      "description": "When true, the stable base (head) source window shared by all of an entity's verification batches is sent once as an Anthropic prompt cache_prefix and re-read at ~10% input cost on later batches, instead of being re-sent in full every batch (measured redundancy 24-60% per entity). The verifier sees the SAME instructions, sources and claims -- only the section order changes (sources before claims), and verdict parity to the single-prompt path is the acceptance gate. Default false = byte-identical single prompt. Anthropic-only: non-anthropic verification providers ignore cache_prefix, so the split falls back to the single prompt for them (never drops the base window). Best paired with source_selection='claim_anchored', which is where the base is the fixed head window.",
+      "default": false
     }
   ],
 
@@ -117,7 +140,10 @@
     "flag_zero_claims_over_chars": 500,
     "claim_extraction": "regex",
     "severity_floor": false,
-    "source_selection": "head"
+    "source_selection": "head",
+    "extraction_model": null,
+    "extraction_provider": null,
+    "cache_base_window": false
   },
 
   "item_key": "entity_name",
