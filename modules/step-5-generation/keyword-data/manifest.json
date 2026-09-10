@@ -1,0 +1,129 @@
+{
+  "id": "keyword-data",
+  "name": "Keyword Data Fetcher",
+  "description": "Fetches real search-market metrics (volume, difficulty, CPC, related terms) for an entity's candidate head terms from a configurable keyword-metrics provider, BEFORE seo-planner runs. Candidate terms come from analysis_json when present, from the entity's seed fields when not. Emits a keyword_data enriched field (terms, market, fetched_at, empty gsc_terms placeholder for skeleton GSC hydration). Loud failure on auth/quota/cost-cap — never a silent empty.",
+  "version": "1.0.0",
+  "step": 5,
+  "category": "enrichment",
+  "cost": "medium",
+  "data_operation_default": "add",
+  "pool_precondition": "empty_ok",
+  "item_key": "entity_name",
+  "requires_columns": ["entity_name", "analysis_json"],
+  "options": [
+    {
+      "key": "provider",
+      "label": "Keyword metrics provider",
+      "type": "json",
+      "default": {
+        "id": "dataforseo_labs",
+        "base_url": "https://api.dataforseo.com",
+        "auth": { "type": "basic_env", "login_env": "DATAFORSEO_LOGIN", "password_env": "DATAFORSEO_PASSWORD" },
+        "endpoints": {
+          "overview": "/v3/dataforseo_labs/google/keyword_overview/live",
+          "related": "/v3/dataforseo_labs/google/related_keywords/live"
+        }
+      },
+      "description": "Provider config: base_url, auth (basic_env with login_env/password_env naming env vars), endpoints.overview (bulk volume/difficulty/CPC) and endpoints.related (related terms per seed). All provider knowledge lives here, not in code."
+    },
+    {
+      "key": "markets",
+      "label": "Markets (location names)",
+      "type": "json",
+      "default": ["United Kingdom"],
+      "description": "Search markets as provider location_name strings. First entry is the primary market: it fills keyword_data.terms and is the only market related terms are fetched for. Additional markets land in keyword_data.other_markets."
+    },
+    {
+      "key": "language_code",
+      "label": "Language code",
+      "type": "string",
+      "default": "en",
+      "description": "Provider language_code sent with every request."
+    },
+    {
+      "key": "max_terms",
+      "label": "Max candidate terms",
+      "type": "number",
+      "default": 12,
+      "description": "Cap on candidate head terms sent to the overview endpoint (one bulk call per market). Keeps cost to cents per entity."
+    },
+    {
+      "key": "related_terms_for",
+      "label": "Fetch related terms for top N",
+      "type": "number",
+      "default": 2,
+      "description": "Fetch related/suggested terms for the top-N terms by measured volume (primary market only). Each fetch is a separate billed call (~$0.013 observed). 0 disables."
+    },
+    {
+      "key": "related_limit",
+      "label": "Related terms per seed",
+      "type": "number",
+      "default": 10,
+      "description": "Max related terms returned per seed term."
+    },
+    {
+      "key": "cost_cap_usd",
+      "label": "Cost cap per entity (USD)",
+      "type": "number",
+      "default": 0.15,
+      "description": "Hard per-entity spend cap, checked against provider-reported per-call cost before each call. Tripping it stops further calls and marks the entity item status=error (loud), preserving data fetched so far. 0 means spend nothing (all calls blocked), not unlimited."
+    },
+    {
+      "key": "empty_is_error",
+      "label": "Empty result is an error",
+      "type": "boolean",
+      "default": false,
+      "description": "When true, an entity yielding zero candidate terms (or zero metrics rows) becomes a loud error item instead of a success item with empty terms."
+    }
+  ],
+  "options_defaults": {
+    "provider": {
+      "id": "dataforseo_labs",
+      "base_url": "https://api.dataforseo.com",
+      "auth": { "type": "basic_env", "login_env": "DATAFORSEO_LOGIN", "password_env": "DATAFORSEO_PASSWORD" },
+      "endpoints": {
+        "overview": "/v3/dataforseo_labs/google/keyword_overview/live",
+        "related": "/v3/dataforseo_labs/google/related_keywords/live"
+      }
+    },
+    "markets": ["United Kingdom"],
+    "language_code": "en",
+    "max_terms": 12,
+    "related_terms_for": 2,
+    "related_limit": 10,
+    "cost_cap_usd": 0.15,
+    "empty_is_error": false
+  },
+  "output_schema": {
+    "display_type": "table",
+    "selectable": false,
+    "entity_name": "string",
+    "status": "string",
+    "derivation": "string",
+    "terms_count": "number",
+    "top_term": "string",
+    "market": "string",
+    "cost_usd": "number",
+    "error": "string",
+    "flagged_when": {
+      "status": ["error"]
+    },
+    "downloadable_fields": [
+      { "field": "keyword_data", "extension": "json", "label": "Keyword Data" }
+    ],
+    "detail_schema": {
+      "header_fields": [
+        "entity_name",
+        { "field": "status", "display": "badge" },
+        "derivation",
+        "terms_count",
+        "market",
+        "cost_usd"
+      ],
+      "sections": [
+        { "field": "top_term", "label": "Top Term", "display": "text" },
+        { "field": "error", "label": "Error", "display": "text" }
+      ]
+    }
+  }
+}
