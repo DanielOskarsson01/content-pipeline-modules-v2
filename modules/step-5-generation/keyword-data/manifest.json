@@ -2,7 +2,7 @@
   "id": "keyword-data",
   "name": "Keyword Data Fetcher",
   "description": "Fetches real search-market metrics (volume, difficulty, CPC, related terms) for an entity's candidate head terms from a configurable keyword-metrics provider, BEFORE seo-planner runs. Candidate terms come from analysis_json when present, from the entity's seed fields when not. Emits a keyword_data enriched field (terms, market, fetched_at, empty gsc_terms placeholder for skeleton GSC hydration). Loud failure on auth/quota/cost-cap — never a silent empty.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "step": 5,
   "category": "enrichment",
   "cost": "medium",

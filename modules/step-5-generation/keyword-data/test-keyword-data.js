@@ -97,6 +97,29 @@ const BASE_OPTS = { max_terms: 3, related_terms_for: 1, related_limit: 5, cost_c
     ok(Array.isArray(tools.calls[0].body) && tools.calls[0].body[0].keywords.length === 3, 'happy: task body is array with keywords');
   }
 
+  // 1b) grouped-taxonomy analysis_json (the production content-analyzer shape:
+  //     categories.{primary}[] / tags.{existing}[] objects with slug entries)
+  {
+    const grouped = {
+      name: 'ELK Studios',
+      items: [{
+        entity_name: 'ELK Studios',
+        analysis_json: JSON.stringify({
+          categories: { primary: [{ slug: 'game-providers', why: 'x' }], secondary: [{ slug: 'slot-studios' }] },
+          tags: { existing: [{ slug: 'slots' }, { slug: 'studio' }], new: [] },
+          key_facts: { founded: '2013' },
+        }),
+      }],
+    };
+    const tools = makeTools(() => dfsTask(0.013, OVERVIEW_ITEMS));
+    const out = await execute({ entities: [grouped] }, { ...BASE_OPTS, max_terms: 12, related_terms_for: 0, provider }, tools);
+    const item = out.results[0].items[0];
+    ok(item.derivation === 'analysis_json', 'grouped: analysis_json derivation');
+    const sent = tools.calls[0].body[0].keywords;
+    ok(sent.includes('game-providers') && sent.includes('slot-studios') && sent.includes('slots') && sent.includes('studio'), 'grouped: slugs harvested from grouped objects');
+    ok(sent[0] === 'ELK Studios' && sent.length === 5, 'grouped: name + 4 slugs, key_facts not harvested');
+  }
+
   // 2) seed-fields fallback
   {
     const tools = makeTools(() => dfsTask(0.011, [{ keyword: 'Pocket Rockets Gaming', keyword_info: { search_volume: 30 }, keyword_properties: { keyword_difficulty: 5 } }]));

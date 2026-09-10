@@ -83,9 +83,23 @@ function harvestTerms(obj, out) {
     if (t) out.push(t);
   }
   for (const f of ARRAY_FIELDS) {
-    if (Array.isArray(obj[f])) for (const v of obj[f]) {
-      const t = coerceTerm(v);
-      if (t) out.push(t);
+    const v = obj[f];
+    if (Array.isArray(v)) {
+      for (const e of v) {
+        const t = coerceTerm(e);
+        if (t) out.push(t);
+      }
+    } else if (v && typeof v === 'object') {
+      // Grouped taxonomies: a conventional field holding an object of arrays
+      // (e.g. categories.{primary,secondary}[], tags.{existing,new}[]). Group
+      // names are not interpreted — every array-valued property is harvested.
+      for (const group of Object.values(v)) {
+        if (!Array.isArray(group)) continue;
+        for (const e of group) {
+          const t = coerceTerm(e);
+          if (t) out.push(t);
+        }
+      }
     }
   }
 }

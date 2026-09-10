@@ -32,7 +32,7 @@ One item per entity carrying the enriched field:
 
 ## Candidate term derivation
 
-1. **`analysis_json` present** (latest pool item carrying the field — field shape, not `source_submodule`): harvests generic conventional fields only — strings `primary_category, category, industry, vertical, sector`; arrays `categories, tags, keywords, topics` (array entries may be strings or objects with `name|slug|term|title`).
+1. **`analysis_json` present** (latest pool item carrying the field — field shape, not `source_submodule`): harvests generic conventional fields only — strings `primary_category, category, industry, vertical, sector`; arrays `categories, tags, keywords, topics`. Entries may be strings or objects (`name|slug|term|title`), and a conventional field holding an **object of grouped arrays** (e.g. `categories.{primary,…}[]`, `tags.{existing,…}[]`) has every array-valued group harvested — group names are never interpreted (v1.0.1, found by the live harness against production analyzer output).
 2. **Fallback — seed fields**: the same harvest applied to the entity record itself (Step 0 seed: `category`, `categories`, `tags`, …).
 3. The entity name is always prepended (brand head term). Case-insensitive dedup, capped at `max_terms`.
 
@@ -75,7 +75,7 @@ Errors are surfaced via `flagged_when: {status: ["error"]}` and the summary's `e
 ## Tests
 
 ```
-node modules/step-5-generation/keyword-data/test-keyword-data.js   # 50 assertions, fully mocked
+node modules/step-5-generation/keyword-data/test-keyword-data.js   # 61 assertions, fully mocked
 node modules/test-manifests-loadable.js                            # repo-wide loader contract
 ```
 
