@@ -251,7 +251,7 @@ async function main() {
     );
     assert(res.results[0].items.length === 1, 'second query still ran after first failed');
     assert(res.results[0].meta.errors === 1, 'error counted in meta');
-    assert(tools.logs.some((l) => l.level === 'error' && /socket hangup/.test(l.message)), 'error logged');
+    assert(tools.logs.some((l) => l.level === 'error' && /search request failed/.test(l.message)), 'error logged');
   }
 
   // ── 8. No providers → loud no-op ─────────────────────────────────

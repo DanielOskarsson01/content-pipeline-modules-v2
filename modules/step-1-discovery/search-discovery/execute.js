@@ -40,6 +40,65 @@ function toNum(val, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function integerOption(value, fallback, min, max, name) {
+  const n = value == null ? fallback : Number(value);
+  if (!Number.isInteger(n) || n < min || n > max) {
+    throw new Error(`search-discovery: ${name} must be an integer from ${min} to ${max}`);
+  }
+  return n;
+}
+
+function paginationConfig(provider, resultType, pageSize) {
+  const p = provider.pagination;
+  if (p == null) return null;
+  if (typeof p !== 'object' || Array.isArray(p) || typeof p.param !== 'string' || !p.param.trim()) {
+    throw new Error(`search-discovery: provider ${provider.id} needs pagination.param`);
+  }
+  const reserved = [provider.query_param, provider.num_param, provider.date_param?.name,
+    provider.site_filter?.name, provider.auth?.type === 'query_param' ? provider.auth.key : null];
+  if (reserved.includes(p.param)) throw new Error(`search-discovery: provider ${provider.id} pagination.param conflicts with a request parameter`);
+  const start = integerOption(p.start, 1, 0, 1000000, 'pagination.start');
+  if (p.step === 'page_size' && !provider.num_param) {
+    throw new Error(`search-discovery: provider ${provider.id} page_size pagination requires num_param`);
+  }
+  const step = p.step === 'page_size'
+    ? integerOption(provider.extra_params?.[provider.num_param], pageSize, 1, 1000000, 'pagination effective page size')
+    : integerOption(p.step, 1, 1, 1000000, 'pagination.step');
+  if (p.result_types != null && (!Array.isArray(p.result_types) || p.result_types.some(t => !['web', 'news', 'images'].includes(t)))) {
+    throw new Error(`search-discovery: provider ${provider.id} pagination.result_types must list supported verticals`);
+  }
+  if (p.result_types && !p.result_types.includes(resultType)) return null;
+  return { param: p.param, start, step };
+}
+
+function accountLimitRules(provider) {
+  const rules = provider.account_limit_errors || [];
+  if (!Array.isArray(rules) || rules.some(r => !r || !Number.isInteger(r.status) || r.status < 400 || r.status > 599 ||
+    typeof r.message_path !== 'string' || !r.message_path.trim() || typeof r.contains !== 'string' || !r.contains.trim())) {
+    throw new Error(`search-discovery: provider ${provider.id} account_limit_errors needs status, message_path and contains`);
+  }
+  return rules;
+}
+
+function isAccountLimit(provider, response) {
+  if (!provider.account_limit_errors?.length) return false;
+  let body;
+  try { body = typeof response.body === 'string' ? JSON.parse(response.body) : response.body; }
+  catch { return false; }
+  return provider.account_limit_errors.some(rule => {
+    const message = getNestedValue(body, rule.message_path);
+    return response.status === rule.status && typeof message === 'string' && message.toLowerCase().includes(rule.contains.toLowerCase());
+  });
+}
+
+function retryDelay(headers, attempt) {
+  const pair = Object.entries(headers || {}).find(([key]) => key.toLowerCase() === 'retry-after');
+  const value = pair?.[1];
+  const seconds = value == null || value === '' ? NaN : Number(value);
+  const delay = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - Date.now();
+  return Math.max(1000 * 2 ** attempt, Number.isFinite(delay) ? delay : 0);
+}
+
 function parseLines(val) {
   return String(val ?? '')
     .split('\n')
@@ -189,9 +248,9 @@ function buildQueries(entity, templates, mode, sites, maxQueries, logger) {
 
   if (queries.length > maxQueries) {
     logger.warn(`${entity.name}: ${queries.length} query combinations capped to max_queries_per_entity=${maxQueries}`);
-    return queries.slice(0, maxQueries);
+    return { queries: queries.slice(0, maxQueries), planned: queries.length, skipped, truncated: queries.length - maxQueries };
   }
-  return queries;
+  return { queries, planned: queries.length, skipped, truncated: 0 };
 }
 
 // ── Provider plumbing ────────────────────────────────────────────────
@@ -234,8 +293,8 @@ function buildParams(provider, q, cfg) {
 function extractRawResults(data, provider, resultType) {
   const rp = provider.results_path;
   const path = rp && typeof rp === 'object' ? rp[resultType] : rp;
-  if (!path) return Array.isArray(data) ? data : [];
-  return getNestedValue(data, path) || [];
+  if (!path) return data;
+  return getNestedValue(data, path);
 }
 
 function mapResult(rawItem, provider, ctx) {
@@ -264,8 +323,13 @@ async function execute(input, options, tools) {
     mode: options.search_mode === 'site_restricted' ? 'site_restricted' : 'open',
     resultType: ['web', 'news', 'images'].includes(options.result_type) ? options.result_type : 'web',
     dateRange: options.date_range || 'any',
-    maxResultsPerQuery: toNum(options.max_results_per_query, 10),
-    maxQueriesPerEntity: toNum(options.max_queries_per_entity, 20),
+    maxResultsPerQuery: integerOption(options.max_results_per_query, 10, 1, 100, 'max_results_per_query'),
+    maxQueriesPerEntity: integerOption(options.max_queries_per_entity, 20, 1, 500, 'max_queries_per_entity'),
+    maxPages: integerOption(options.max_pages_per_query, 1, 1, 100, 'max_pages_per_query'),
+    maxRequests: integerOption(options.max_search_requests_per_entity, 0, 0, 10000, 'max_search_requests_per_entity'),
+    emptyPages: integerOption(options.empty_pages_to_stop, 2, 1, 10, 'empty_pages_to_stop'),
+    duplicatePages: integerOption(options.duplicate_pages_to_stop, 3, 1, 10, 'duplicate_pages_to_stop'),
+    retries: integerOption(options.max_rate_limit_retries, 2, 0, 5, 'max_rate_limit_retries'),
     verifyLiveness: options.verify_liveness === true || options.verify_liveness === 'true',
   };
 
@@ -288,9 +352,10 @@ async function execute(input, options, tools) {
   // Resolve auth up-front; drop providers with missing env vars (loud)
   const providers = [];
   for (const p of providersConfig) {
+    accountLimitRules(p);
     const auth = providerAuth(p, logger);
     if (auth === null) continue;
-    providers.push({ config: p, auth });
+    providers.push({ config: p, auth, pagination: p.kind === 'lookup' ? null : paginationConfig(p, cfg.resultType, cfg.maxResultsPerQuery) });
   }
 
   if (providers.length === 0) {
@@ -312,6 +377,7 @@ async function execute(input, options, tools) {
 
   const rateLimiter = createRateLimiter(toNum(options.requests_per_minute, 30));
   const results = [];
+  const disabledProviders = new Map();
 
   for (let ei = 0; ei < entities.length; ei++) {
     const entity = entities[ei];
@@ -321,9 +387,14 @@ async function execute(input, options, tools) {
     const errors = [];
     let apiCalls = 0;
 
-    const queries = buildQueries(entity, templates, cfg.mode, sites, cfg.maxQueriesPerEntity, logger);
+    const queryPlan = buildQueries(entity, templates, cfg.mode, sites, cfg.maxQueriesPerEntity, logger);
+    const { queries } = queryPlan;
+    const jobs = [];
+    let searchRequests = 0;
+    const providerSkips = [];
 
-    for (const { config: provider, auth } of providers) {
+
+    for (const { config: provider, auth, pagination } of providers) {
       if (provider.kind === 'lookup') {
         // Deterministic URL template, HEAD-verified — no query involved.
         const { rendered, missing } = renderTemplate(provider.url_template || '', {
@@ -338,8 +409,8 @@ async function execute(input, options, tools) {
         }
         try {
           await rateLimiter();
-          const res = await http.head(rendered, { timeout: 10000, headers: auth.headers });
           apiCalls++;
+          const res = await http.head(rendered, { timeout: 10000, headers: auth.headers });
           if (res.status < 400) {
             const item = {
               url: rendered,
@@ -351,6 +422,7 @@ async function execute(input, options, tools) {
               pub_date: null,
               query_used: null,
               found_via: 'search-discovery:lookup',
+              entity_name: entity.name,
             };
             const key = normalizeUrl(rendered);
             if (!seen.has(key)) {
@@ -371,6 +443,7 @@ async function execute(input, options, tools) {
       const endpoints = provider.endpoints || {};
       const endpoint = endpoints[cfg.resultType];
       if (!endpoint) {
+        providerSkips.push({ provider: provider.id, reason: 'missing_endpoint' });
         logger.warn(`Provider "${provider.id}" skipped: no endpoint for result_type "${cfg.resultType}"`);
         continue;
       }
@@ -391,55 +464,142 @@ async function execute(input, options, tools) {
           }
         }
 
+        jobs.push({ provider, auth, pagination, endpoint, finalQuery, siteFilterParam,
+          seen: new Set(), empty: 0, duplicates: 0,
+          ledger: { provider: provider.id, query: finalQuery, site: q.site,
+            pagination_configured: !!pagination, pages: [], stop_reason: null } });
+      }
+    }
+
+    // Breadth first: every query/provider gets page 1 before any gets page 2.
+    // Otherwise one deep query could consume the whole thin-entity rescue budget.
+    for (let page = 1; page <= cfg.maxPages; page++) {
+      for (const job of jobs) {
+        const { provider, auth, pagination, endpoint, finalQuery, siteFilterParam, ledger } = job;
+        if (ledger.stop_reason) continue;
+        if (disabledProviders.has(provider.id)) {
+          ledger.stop_reason = disabledProviders.get(provider.id);
+          continue;
+        }
+        const pageValue = pagination ? pagination.start + (page - 1) * pagination.step : null;
+        const entry = { page, page_value: pageValue, attempts: 0, statuses: [], raw_results: 0, new_urls: 0, new_query_urls: 0 };
+        ledger.pages.push(entry);
         try {
-          await rateLimiter();
           const params = buildParams(provider, { finalQuery, siteFilterParam }, cfg);
+          if (pagination) params[pagination.param] = pageValue;
           Object.assign(params, auth.queryParams);
-
           let res;
-          if ((provider.method || 'GET').toUpperCase() === 'POST') {
-            res = await http.post(endpoint, params, { timeout: 20000, headers: auth.headers });
-          } else {
-            const qs = new URLSearchParams();
-            for (const [k, v] of Object.entries(params)) qs.set(k, Array.isArray(v) ? v.join(',') : String(v));
-            res = await http.get(`${endpoint}?${qs.toString()}`, { timeout: 20000, headers: auth.headers });
+          for (let attempt = 0; attempt <= cfg.retries; attempt++) {
+            if (cfg.maxRequests && searchRequests >= cfg.maxRequests) {
+              ledger.stop_reason = 'request_limit';
+              break;
+            }
+            await rateLimiter();
+            searchRequests++;
+            apiCalls++;
+            entry.attempts++;
+            if ((provider.method || 'GET').toUpperCase() === 'POST') {
+              res = await http.post(endpoint, params, { timeout: 20000, headers: auth.headers });
+            } else {
+              const url = new URL(endpoint);
+              for (const [k, v] of Object.entries(params)) url.searchParams.set(k, Array.isArray(v) ? v.join(',') : String(v));
+              res = await http.get(url.toString(), { timeout: 20000, headers: auth.headers });
+            }
+            entry.statuses.push(res.status);
+            if (res.status !== 429 || attempt === cfg.retries) break;
+            if (cfg.maxRequests && searchRequests >= cfg.maxRequests) {
+              ledger.stop_reason = 'request_limit';
+              break;
+            }
+            const delay = retryDelay(res.headers, attempt);
+            // Do not ignore long server cooldowns or occupy the worker indefinitely.
+            if (delay > 60000) {
+              ledger.stop_reason = 'provider_cooldown';
+              disabledProviders.set(provider.id, ledger.stop_reason);
+              break;
+            }
+            await new Promise(resolve => setTimeout(resolve, delay));
           }
-          apiCalls++;
-
-          if (res.status === 401 || res.status === 403) {
-            // Auth failure is provider-wide, not query-specific — stop hammering it.
-            logger.warn(`${provider.id}: HTTP ${res.status} (auth) — skipping remaining queries for this provider`);
-            errors.push(`${provider.id}: HTTP ${res.status} (auth) — provider skipped`);
-            break;
+          if (ledger.stop_reason) {
+            if (res?.status === 429) errors.push(`${provider.id}: HTTP 429 (${ledger.stop_reason})`);
+            continue;
           }
           if (res.status !== 200) {
-            logger.warn(`${provider.id} "${finalQuery}": HTTP ${res.status}`);
+            const accountLimit = res.status === 402 || isAccountLimit(provider, res);
+            ledger.stop_reason = accountLimit ? 'provider_account_limit'
+              : [401, 403].includes(res.status) ? 'provider_auth_error'
+              : res.status === 429 ? 'provider_rate_limit'
+              : 'provider_http_error';
+            if (accountLimit || [401, 403, 429].includes(res.status)) disabledProviders.set(provider.id, ledger.stop_reason);
+            logger.warn(`${provider.id} page ${page}: HTTP ${res.status} — ${ledger.stop_reason}`);
             errors.push(`${provider.id}: HTTP ${res.status}`);
             continue;
           }
-
-          const data = typeof res.body === 'string' ? JSON.parse(res.body) : res.body;
+          let data;
+          try { data = typeof res.body === 'string' ? JSON.parse(res.body) : res.body; }
+          catch { ledger.stop_reason = 'invalid_response'; errors.push(`${provider.id}: invalid JSON response`); continue; }
           const rawItems = extractRawResults(data, provider, cfg.resultType);
-
-          const newItems = [];
+          if (!Array.isArray(rawItems)) {
+            ledger.stop_reason = 'invalid_response';
+            errors.push(`${provider.id}: results_path did not resolve to an array`);
+            continue;
+          }
+          entry.raw_results = rawItems.length;
+          let validResults = 0;
           for (const rawItem of rawItems) {
             const mapped = mapResult(rawItem, provider, { resultType: cfg.resultType, query: finalQuery, mode: cfg.mode });
             if (!mapped) continue;
+            validResults++;
             const key = normalizeUrl(mapped.url);
-            if (seen.has(key)) continue;
+            if (!job.seen.has(key)) { job.seen.add(key); entry.new_query_urls++; }
+            const provenance = { provider: provider.id, query: finalQuery, site: ledger.site, page, page_value: pageValue };
+            if (seen.has(key)) {
+              const existing = seen.get(key);
+              // Lookup HEAD checks establish liveness only. A real search result
+              // enriches that placeholder with its full metadata and attribution.
+              // Mutate the shared object so the partial-results buffer stays current.
+              if (existing.found_via === 'search-discovery:lookup') Object.assign(existing, mapped);
+              existing.search_provenance ||= [];
+              if (!existing.search_provenance.some(p => p.provider === provenance.provider && p.query === provenance.query && p.site === provenance.site && p.page === page)) {
+                existing.search_provenance.push(provenance);
+              }
+              // Preserve full snippets when a later result supplies richer evidence.
+              for (const field of ['title', 'snippet']) {
+                if (typeof mapped[field] === 'string' && mapped[field].length > (existing[field] || '').length) existing[field] = mapped[field];
+              }
+              continue;
+            }
+            mapped.entity_name = entity.name;
+            mapped.search_provenance = [provenance];
             seen.set(key, mapped);
-            newItems.push(mapped);
+            entry.new_urls++;
+            // Rule 10: every completed page is recoverable before the next request.
+            if (tools._partialItems) tools._partialItems.push(mapped);
           }
-
-          // Rule 10: partial results survive a timeout — push after EVERY query
-          if (tools._partialItems && newItems.length > 0) tools._partialItems.push(...newItems);
-
-          logger.info(`${provider.id} "${finalQuery}": ${rawItems.length} raw, ${newItems.length} new (${seen.size} unique total)`);
+          if (rawItems.length && !validResults) {
+            ledger.stop_reason = 'invalid_response';
+            errors.push(`${provider.id}: results contained no mapped URLs`);
+            continue;
+          }
+          job.empty = rawItems.length === 0 ? job.empty + 1 : 0;
+          job.duplicates = rawItems.length > 0 && entry.new_query_urls === 0 ? job.duplicates + 1 : 0;
+          if (!pagination && cfg.maxPages > 1) ledger.stop_reason = 'pagination_not_configured';
+          else if (job.empty >= cfg.emptyPages) ledger.stop_reason = 'empty_pages';
+          else if (job.duplicates >= cfg.duplicatePages) ledger.stop_reason = 'duplicate_pages';
+          else if (page >= cfg.maxPages) ledger.stop_reason = 'page_limit';
+          // Short nonempty pages are never taken as proof of exhaustion.
+          logger.info(`${provider.id} "${finalQuery}" page ${page}: ${entry.raw_results} raw, ${entry.new_urls} new (${seen.size} unique total)`);
         } catch (err) {
-          logger.error(`${provider.id} "${finalQuery}": ${err.message}`);
-          errors.push(`${provider.id}: ${err.message}`);
+          ledger.stop_reason = 'request_error';
+          // Transport errors can embed URLs with query-param credentials. Do not log them.
+          errors.push(`${provider.id}: search request failed`);
+          logger.error(`${provider.id} page ${page}: search request failed`);
         }
       }
+      if (jobs.every(job => job.ledger.stop_reason)) break;
+    }
+    for (const { ledger } of jobs) {
+      logger.info(`${entity.name}: ${ledger.provider} "${ledger.query}" stopped: ${ledger.stop_reason}`);
     }
 
     let items = Array.from(seen.values());
@@ -473,7 +633,16 @@ async function execute(input, options, tools) {
         total_found: items.length,
         providers_used: providers.length,
         api_calls: apiCalls,
-        queries_run: queries.length,
+        queries_run: jobs.filter(j => j.ledger.pages.some(p => p.attempts > 0)).length,
+        queries_planned_per_provider: queryPlan.planned,
+        queries_selected_per_provider: queries.length,
+        queries_truncated_per_provider: queryPlan.truncated,
+        templates_skipped: queryPlan.skipped,
+        search_requests: searchRequests,
+        search_limits: { max_pages_per_query: cfg.maxPages, max_search_requests_per_entity: cfg.maxRequests,
+          max_results_per_page: cfg.maxResultsPerQuery, max_queries_per_entity: cfg.maxQueriesPerEntity },
+        search_routes: jobs.map(j => j.ledger),
+        providers_skipped: providerSkips,
         errors: errors.length,
       },
     });
