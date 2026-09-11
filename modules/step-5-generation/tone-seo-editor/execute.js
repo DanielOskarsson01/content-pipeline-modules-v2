@@ -456,6 +456,52 @@ function repairResidualBrackets(markdown) {
   return { text: lines.join('\n'), repairs };
 }
 
+/**
+ * Deterministic <think>-leak strip (content-pipeline-specs Unit 4c §3b,
+ * STEP5_ANALYZER_BAR.md): reasoning models run here with thinking API-DISABLED
+ * (execute() sends thinking:{type:'disabled'}), so a reasoning model writes its
+ * chain-of-thought as ordinary completion text. response.text flows straight to
+ * published content_markdown with no strip. Both observed 4b leaks were ONE
+ * closed <think>...</think> block at position 0 (9,038 and 994 words) — seal it.
+ *
+ * MATCHING PRECISION: anchored to position 0 after optional leading whitespace,
+ * bare <think>/</think> tags only (case-insensitive). What it does NOT touch, by
+ * design:
+ *   - a <think> appearing mid-prose (never at position 0) — a legitimate inline
+ *     mention of the characters is left verbatim;
+ *   - <thinking>, <think id="…">, or any tag that is not the bare <think>.
+ * The only false-positive surface is a draft whose intended body prose OPENS with
+ * a literal "<think>…</think>" — which no real article does.
+ *
+ * LOUD-FAIL (throw — never emit a half-stripped draft; the caller's try/catch
+ * turns the throw into a visible error item with empty content_markdown):
+ *   - unclosed: an opening <think> at position 0 with no </think> (a truncated
+ *     reasoning dump);
+ *   - empty body: strip leaves nothing but whitespace (the draft was ALL
+ *     thinking — a generation failure, not a clean draft).
+ *
+ * ponytail: strips ONLY the first block anchored at position 0 (exactly the two
+ * observed shapes). A hypothetical 2nd block later in the body is left untouched
+ * to protect the inline-mention precision above; widen to a multi-block scan only
+ * if a real multi-block leak is ever observed. Returns { text, blocks, chars }.
+ */
+function stripThinkBlocks(markdown) {
+  if (typeof markdown !== 'string' || markdown.length === 0) return { text: markdown, blocks: 0, chars: 0 };
+  const open = /^\s*<think>/i.exec(markdown);
+  if (!open) return { text: markdown, blocks: 0, chars: 0 };
+  const close = /<\/think>/i.exec(markdown);
+  if (!close) {
+    throw new Error('Unclosed <think> reasoning block at start of draft (opening <think> with no </think>) — a truncated reasoning dump. Refusing to publish a half-stripped draft.');
+  }
+  const blockEnd = close.index + close[0].length;
+  const block = markdown.slice(0, blockEnd);
+  const rest = markdown.slice(blockEnd).replace(/^\s+/, '');
+  if (rest.length === 0) {
+    throw new Error('Draft is empty after stripping the leading <think> block — the entire draft was reasoning (all-thinking), a generation failure, not a clean draft.');
+  }
+  return { text: rest, blocks: 1, chars: block.length };
+}
+
 async function execute(input, options, tools) {
   const { entities } = input;
   const { ai_model, ai_provider, prompt: promptTemplate, temperature, max_tokens, tone_style, max_content_chars, reference_docs } = options;
@@ -463,6 +509,12 @@ async function execute(input, options, tools) {
   // qa-structural's taxonomy_leak_check coercion). Anything else (incl. "false")
   // => OFF => byte-identical to pre-1.4.0 output.
   const repairBracketLeaks = options.repair_bracket_leaks === true || options.repair_bracket_leaks === 'true';
+  // Default TRUE (seals the <think> leak). Accept the "true" string form too (UI
+  // presets are string-typed). Only an explicit false / "false" disables it, in
+  // which case a leaked <think> block flows through unchanged (pre-feature behavior).
+  const stripThink = options.strip_think_blocks === undefined
+    ? true
+    : (options.strip_think_blocks === true || options.strip_think_blocks === 'true');
   const { logger, progress, ai } = tools;
 
   const maxChars = max_content_chars || 50000;
@@ -557,6 +609,23 @@ async function execute(input, options, tools) {
 
       // Strip code fences if LLM wrapped the output despite instructions
       revisedMarkdown = revisedMarkdown.replace(/^```(?:markdown|md)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+
+      // Deterministic <think>-leak strip (option-gated, default ON; no-op
+      // byte-identical on a clean draft — no <think> block means nothing is
+      // removed). Placed AFTER the fence-strip and BEFORE bracket-repair, the
+      // marker gate, and all downstream stats, so the graded/published .at(-1)
+      // draft is the stripped one. LOUD-FAILs (throws) on an unclosed block or
+      // an all-thinking draft — the surrounding try/catch turns that into a
+      // visible error item with empty content_markdown (never a half-strip).
+      let thinkStrip = { blocks: 0, chars: 0 };
+      if (stripThink) {
+        const ts = stripThinkBlocks(revisedMarkdown);
+        revisedMarkdown = ts.text;
+        thinkStrip = { blocks: ts.blocks, chars: ts.chars };
+        if (ts.blocks > 0) {
+          logger.info(`${entity.name}: stripped ${ts.blocks} leaked <think> reasoning block(s) (${ts.chars} chars) before publish — thinking is API-disabled so the model dumped chain-of-thought as body text`);
+        }
+      }
 
       // Deterministic bracket-leak repair (option-gated, default OFF = byte
       // identical). Runs BEFORE the marker gate and before all downstream stats,
@@ -659,6 +728,11 @@ async function execute(input, options, tools) {
           // clean one (what/where/count logged) — a silent repair is the same
           // failure class this project keeps hunting.
           ...(repairBracketLeaks ? { bracket_repairs: bracketRepairs.length, bracket_repairs_detail: bracketRepairs } : {}),
+          // Added ONLY when a block was actually stripped, so a clean draft's
+          // output (and its meta) stays byte-identical to pre-1.5.0 even with the
+          // option ON by default. A stripped draft is never indistinguishable
+          // from a clean one — a silent strip is the failure class this hunts.
+          ...(thinkStrip.blocks > 0 ? { think_blocks_stripped: thinkStrip.blocks, think_chars_stripped: thinkStrip.chars } : {}),
         },
       });
 
@@ -710,4 +784,4 @@ async function execute(input, options, tools) {
 
 module.exports = execute;
 // Exported for test harness use only — not part of the public submodule interface.
-module.exports.__testing = { validateMarkerPreservation, buildPrompt, buildCachedPrompt, repairResidualBrackets };
+module.exports.__testing = { validateMarkerPreservation, buildPrompt, buildCachedPrompt, repairResidualBrackets, stripThinkBlocks };
