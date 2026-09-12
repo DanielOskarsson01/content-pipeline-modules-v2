@@ -400,15 +400,17 @@ function resolveReferenceDoc(referenceDocs, docName) {
 
 /**
  * Extract the set of slug-shaped tokens present in a vocabulary doc. Generic
- * and format-agnostic: any maximal `[a-z0-9]+(-[a-z0-9]+)*` run (length >= 2,
- * containing a letter), lowercased. Deliberately lenient — it must NEVER
+ * and format-agnostic: any maximal `[a-z0-9&]+(-[a-z0-9&]+)*` run (length >= 2,
+ * containing a letter), lowercased. `&` is a slug char so a legit tag like `m&a`
+ * tokenizes whole, not split into `m`+`a` (both dropped by the length>=2 filter).
+ * Deliberately lenient — it must NEVER
  * false-fail a valid slug that appears in the doc; it still catches grossly-
  * invented multi-word slugs (which won't appear as a token in the doc at all).
  */
 function extractVocabSlugs(docContent) {
   const set = new Set();
   if (typeof docContent !== 'string' || docContent.length === 0) return set;
-  const matches = docContent.toLowerCase().match(/[a-z0-9]+(?:-[a-z0-9]+)*/g);
+  const matches = docContent.toLowerCase().match(/[a-z0-9&]+(?:-[a-z0-9&]+)*/g);
   if (matches) {
     for (const tok of matches) {
       if (tok.length >= 2 && /[a-z]/.test(tok)) set.add(tok);

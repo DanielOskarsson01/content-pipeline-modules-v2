@@ -134,6 +134,20 @@ const base = { ...MANIFEST.options_defaults };
   }
 
   // ----------------------------------------------------------------------
+  // 4b. m&a tokenizer: a legit '&' slug must NOT false-fail the gate
+  // ----------------------------------------------------------------------
+  console.log('\n=== Fidelity gate: m&a slug in vocab → pass (tokenizer fix) ===');
+  {
+    const refDocsMna = { 'master_tags.md': '## Tags\n- `m&a` — Mergers & Acquisitions\n- `api` — api' };
+    const analysisMna = { categories: { primary: [], secondary: [] }, tags: { existing: [{ slug: 'm&a' }], suggested_new: [] }, key_facts: {} };
+    const tools = makeTools(analysisMna);
+    const opts = { ...base, vocabulary_checks: 'tags.existing[].slug=master_tags.md', reference_docs: refDocsMna };
+    const result = await execute({ entities: [entity] }, opts, tools);
+    assert(result.results[0].items[0].status === 'analyzed', 'm&a: entity analyzed (m&a is in vocab, no false-fail)');
+    assert(!result.results[0].items[0].error, 'm&a: no out-of-vocabulary error');
+  }
+
+  // ----------------------------------------------------------------------
   // Direct helper checks
   // ----------------------------------------------------------------------
   console.log('\n=== Helpers ===');
@@ -141,6 +155,8 @@ const base = { ...MANIFEST.options_defaults };
   const set = extractVocabSlugs(refDocsGood['master_categories.md']);
   assert(set.has('casino-platforms'), 'extractVocabSlugs: finds hyphenated slug');
   assert(!set.has('totally-made-up-category'), 'extractVocabSlugs: absent slug not in set');
+  const maSet = extractVocabSlugs('## Tags\n- `m&a` — Mergers & Acquisitions');
+  assert(maSet.has('m&a'), 'extractVocabSlugs: m&a tokenizes whole (not split on & → m,a dropped)');
   assert(JSON.stringify(walkSlugPath(analysisInVocab, 'categories.primary[].slug')) === JSON.stringify(['casino-platforms']), 'walkSlugPath: extracts assigned slug');
   assert(parseVocabularyChecks(VOCAB_CHECKS).length === 3, 'parseVocabularyChecks: 3 entries');
   assert(parseVocabularyChecks('').length === 0, 'parseVocabularyChecks: empty → []');
