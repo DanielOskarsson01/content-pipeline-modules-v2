@@ -54,7 +54,7 @@
       "name": "include_qa_flags",
       "type": "boolean",
       "label": "Include QA flags detail",
-      "description": "Include qa.flags in the qa block -- the specific items each failed check objects to (for hallucination: the flagged claims with severity/verdict/evidence). Present only when a check has flagged detail, so a clean bundle is byte-identical with this on or off. Set false to keep the qa summary without per-item detail. Requires include_qa. Default true.",
+      "description": "Include qa.flags in the qa block -- the specific items each check flagged, regardless of that check's pass/fail (for hallucination: the flagged claims with severity/verdict/evidence). Present only when a check has flagged detail, so a clean bundle is byte-identical with this on or off. Set false to keep the qa summary without per-item detail. Requires include_qa. Default true.",
       "default": true
     },
     {

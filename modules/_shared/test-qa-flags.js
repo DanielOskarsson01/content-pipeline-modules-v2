@@ -47,10 +47,20 @@ const CONTENT = { entity_name: 'ELK Studios', source_submodule: 'content-writer'
     check('no cited_source key when the claim has no supporting quote', qa.flags[0].claims.every(c => !('cited_source' in c)));
   }
 
-  // ── byte-identity: no flags on a clean pass, and no flags on a detail-less failure ──
+  // ── UNIT B interplay: a check that PASSES but still carries flagged claims
+  //    (the evidence_absent case — over-claims regraded, draft passes) must STILL
+  //    surface those claims in the flag payload. ──
+  {
+    const passWithClaims = { entity_name: 'ELK Studios', source_submodule: 'hallucination-detector', qa_pass: true, flagged_claims: ELK.hallucination.flagged_claims };
+    const qa = collectQaVerdict([CONTENT, passWithClaims]);
+    check('passing check WITH flagged claims still surfaces flags (UNIT B acceptance)', Array.isArray(qa.flags) && qa.flags[0].claims.length === 3);
+    check('...and the verdict for a lone passing check is qa_passed / not flagged', qa.verdict === 'qa_passed' && qa.flagged === false);
+  }
+
+  // ── byte-identity: no flags when nothing is flagged, and no flags on a detail-less failure ──
   {
     const clean = collectQaVerdict([CONTENT, HALLUC_PASS]);
-    check('clean pass → no flags key (byte-identical qa object)', clean && !('flags' in clean));
+    check('clean pass with no flagged detail → no flags key (byte-identical qa object)', clean && !('flags' in clean));
     // a failure with no per-item detail (e.g. a meta checker with only a violations string)
     const detailless = collectQaVerdict([CONTENT, { entity_name: 'ELK Studios', source_submodule: 'meta-compliance-checker', qa_pass: false, violations: 'Description too short' }]);
     check('detail-less failure → no flags key (only checks that carry detail contribute)', detailless && !('flags' in detailless));

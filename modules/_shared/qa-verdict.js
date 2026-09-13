@@ -17,10 +17,11 @@
  * Returns null when the pool carries no QA shapes — callers omit the block,
  * so bundles from QA-less pipelines are byte-identical to before.
  *
- * UNIT D — reviewable detail: `qa.flags` surfaces WHICH items each failed check
- * objects to, so a reviewer checks two or three sentences instead of re-reading
- * the whole profile. It is present ONLY when at least one failed check carries
- * detail (so a clean or detail-less pool stays byte-identical). The shape is
+ * UNIT D — reviewable detail: `qa.flags` surfaces WHICH items each check flagged
+ * (regardless of the check's own pass/fail), so a reviewer checks two or three
+ * sentences instead of re-reading the whole profile. It is present ONLY when at
+ * least one check carries flagged detail (so a pool with no flagged detail stays
+ * byte-identical). The shape is
  * generic — an array of `{ check, <detail> }` — so a new check adds its own
  * detail extractor here without any consumer schema change. Today only
  * hallucination-detector populates it (per-claim {claim, severity, verdict,
@@ -64,13 +65,17 @@ function collectQaVerdict(items) {
   // publishing; delivery itself is unaffected.
   qa.flagged = router ? router.decision !== 'approve' : failed.length > 0;
 
-  // UNIT D: reviewable per-check detail. Built from the failed CHECKER items
-  // (independent of the router — the detail lives on the checker output, e.g.
-  // hallucination-detector's flagged_claims). Only checks that carry detail
-  // contribute an entry; if none do, `flags` is omitted entirely so clean /
-  // detail-less pools are byte-identical to before.
+  // UNIT D: reviewable per-check detail. Built from ANY checker item that
+  // carries flagged detail (independent of the router AND of the check's own
+  // pass/fail — the detail lives on the checker output, e.g. hallucination-
+  // detector's flagged_claims). A check can clear its overall ratio yet still
+  // hold specific unsupported claims worth a reviewer's eye — that is exactly
+  // the evidence-absent case: the draft PASSES (a grounded over-claim is not a
+  // fabrication) but its over-claims are still surfaced. Only checks that carry
+  // detail contribute an entry; if none do, `flags` is omitted entirely so a
+  // pool with no flagged detail is byte-identical to before.
   const flags = [];
-  for (const it of failed) {
+  for (const it of checkItems) {
     const entry = { check: it.source_submodule || 'unknown-check' };
     // hallucination-detector detail: the specific unsupported claims. Carry the
     // reviewer-relevant fields; drop `cited_source` when absent (unsupported

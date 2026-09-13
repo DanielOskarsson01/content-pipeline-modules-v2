@@ -55,7 +55,7 @@
       "name": "include_qa_flags",
       "type": "boolean",
       "label": "Include QA flags in frontmatter",
-      "description": "Add a structured qa_flags block to the YAML frontmatter naming the specific items each failed QA check objects to (for hallucination: the flagged claims with severity/verdict/evidence) so a reviewer fixes the named sentences instead of re-reading the profile. Present ONLY on a draft that has flagged detail -- a clean draft's frontmatter is byte-identical with this on or off. Default true.",
+      "description": "Add a structured qa_flags block to the YAML frontmatter naming the specific items each QA check flagged, regardless of whether that check passed its overall ratio (for hallucination: the flagged claims with severity/verdict/evidence) so a reviewer fixes the named sentences instead of re-reading the profile. Present ONLY on a draft that has flagged detail -- a clean draft's frontmatter is byte-identical with this on or off. Default true.",
       "default": true
     }
   ],

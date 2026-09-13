@@ -5,7 +5,7 @@
 **Module ID:** `json-output` | **Step:** 8 (Bundling) | **Category:** data | **Cost:** cheap
 **Version:** 1.2.0 | **Data Operation:** add (+)
 
-> **v1.2.0 (UNIT D + tag-leak fix):** (1) the `qa` block now carries `qa.flags` — the specific items each failed check objects to (for hallucination: the flagged claims with severity/verdict/evidence) — gated by the new `include_qa_flags` option (default `true`). Present only when a check has flagged detail, so a clean bundle is byte-identical. (2) **`tags` now publish `tags.existing` only** — `tags.suggested_new` (proposed, unapproved labels) no longer leak into published tags (they still reach `taxonomy_suggestions` via the skeleton hook).
+> **v1.2.0 (UNIT D + tag-leak fix):** (1) the `qa` block now carries `qa.flags` — the specific items each check flagged, regardless of whether that check passed its overall ratio (for hallucination: the flagged claims with severity/verdict/evidence) — gated by the new `include_qa_flags` option (default `true`). Present only when a check has flagged detail, so a clean bundle is byte-identical. (2) **`tags` now publish `tags.existing` only** — `tags.suggested_new` (proposed, unapproved labels) no longer leak into published tags (they still reach `taxonomy_suggestions` via the skeleton hook).
 >
 > *(Data Operation corrected to `add` to match the manifest and the Step-8 contract — the header previously read `transform` in error; behaviour was always `add`.)*
 
@@ -56,7 +56,7 @@ The module supports two output formats: `strapi` (CMS-optimized with flat field 
 | `include_analysis` | true | Disable if analysis data is not relevant to the consumer | Includes categories, tags, key_facts, source_citations from analysis_json |
 | `include_seo_plan` | true | Disable if SEO data is not needed | Includes target_keywords, meta title/description, FAQs from seo_plan_json |
 | `include_qa` | true | Disable to omit the QA verdict from the bundle | Attaches the `qa` block (router decision, failed checks, flagged). Additive — never blocks delivery |
-| `include_qa_flags` | true | Disable for a QA summary without per-item detail | Includes `qa.flags` — the specific flagged items per failed check. Requires `include_qa`. Present only when a check has flagged detail, so a clean bundle is byte-identical |
+| `include_qa_flags` | true | Disable for a QA summary without per-item detail | Includes `qa.flags` — the specific flagged items per check (regardless of that check's pass/fail). Requires `include_qa`. Present only when a check has flagged detail, so a clean bundle is byte-identical |
 | `flatten_key_facts` | false | Enable to hoist key_facts fields (founded, headquarters, employees, etc.) to the top level | Only applies in `strapi` format. Moves key_facts subfields to root level instead of nesting under `key_facts` |
 
 ## Recipes
