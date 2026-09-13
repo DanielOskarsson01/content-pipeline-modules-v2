@@ -3,7 +3,9 @@
 > Compare generated content claims against original source material to flag statements that aren't supported by any source.
 
 **Module ID:** `hallucination-detector` | **Step:** 6 (QA) | **Category:** qa | **Cost:** medium
-**Version:** 1.3.0 | **Data Operation:** add (+)
+**Version:** 1.5.0 | **Data Operation:** add (+)
+
+> **v1.5.0 (UNIT B):** new `severity_model` option (`current` default | `evidence_absent`). `evidence_absent` reserves HIGH severity — and therefore the `severity_floor` force-fail — for claims whose SUBJECT is absent from the corpus entirely; a grounded fact carrying only an over-claimed qualifier (a superlative/absolute/over-extension whose evidence is `in_window`/`beyond_window`) is regraded to MEDIUM. Only severity is regraded — the supported/unsupported verdict and the score never change. Needs `source_selection: claim_anchored` to classify evidence. Default `current` is byte-identical. See [Severity model](#severity-model-severity_model).
 
 ---
 
@@ -53,6 +55,7 @@ This module uses data-shape routing. It finds its input by checking which fields
 | `allow_empty_content` | boolean | `false` | When `false`, an entity with no `content_markdown` **fails closed** (`qa_pass: false`) -- content was expected but is absent, and a QA gate must not certify content it never read. When `true`, such an entity skips with a pass (nothing to verify) | Set `true` only for pipelines that legitimately produce entities with no content to check |
 | `claim_extraction` | select | `regex` | How claims are pulled from the draft. `regex` (default) keeps only enumerated numeric/date/company sentences in **prose** -- fast, free, but blind to facts in markdown **tables and lists**. `llm` runs a code-locked extraction pass over the FULL draft (prose + tables + lists), then verifies those claims unchanged. Adds one LLM call per entity | Set `llm` for formats that place facts in tables/lists (e.g. a Quick-Facts table), where the regex path finds too few claims and one partial dominates the score |
 | `severity_floor` | boolean | `false` | When `true`, a claim verified as **unsupported + high-severity** (a specific fabricated number, date, statistic, or financial claim) force-fails the check regardless of the numeric score. The score still reports the honest ratio; only `qa_pass` is forced false, through the same `hallucination:fail` routing key | Turn on when a single hard fabrication must never pass just because the ratio clears the threshold (closes the "1 fabrication in 10 claims = 0.9 = pass" hole) |
+| `severity_model` | select | `current` | Which severity gates `severity_floor`. `current` (default, byte-identical) uses the LLM's raw high/medium/low. `evidence_absent` regrades a high unsupported claim to medium when its subject IS in the corpus (evidence `in_window`/`beyond_window`) — a grounded over-claim, not a fabrication — so the floor reserves its force-fail for claims with no source anywhere. Verdict and score are never changed; requires `source_selection: claim_anchored`. See [Severity model](#severity-model-severity_model) | Turn on with `severity_floor` when the floor is firing on grounded facts with one over-claimed word (superlatives, absolutes) rather than genuine fabrications — publish them flagged-for-review instead of force-failing |
 | `source_selection` | select | `head` | How the source window is built. `head` (default) concatenates pages in pool order and truncates at `max_source_chars` -- byte-identical to prior behaviour. `claim_anchored` builds a focused per-batch window from the chunks whose terms overlap that batch's claims (deterministic, no extra LLM call) and emits honest-window meta. See [Source selection](#source-selection-head-vs-claim_anchored) | Set `claim_anchored` on fat entities (large source corpus) where the supporting page is often past the head window; keep `head` (and raise `max_source_chars`) to measure a raw window-raise |
 | `extraction_model` | select | `null` | **Unit A.** Model for the claim-EXTRACTION call only (`claim_extraction: "llm"`). `null`/empty (default) inherits `ai_model` -- byte-identical. Does **not** touch verification. See [Cost optimisation](#cost-optimisation-v140) | Leave inheriting sonnet. A cheaper extractor must first pass claim-count parity; the Screen-5 candidate `gpt-oss-120b` measured **-12% to -56% under-extraction** and is not safe |
 | `extraction_provider` | select | `null` | **Unit A.** Provider for the extraction call only. `null`/empty (default) inherits `ai_provider`. Set alongside `extraction_model` | Only with a validated cheaper extractor |
@@ -154,6 +157,19 @@ Each unsupported claim is rated by severity:
 ### Severity floor (`severity_floor: true`)
 
 By default the verdict is purely `hallucination_score >= pass_threshold`. With the floor on, **any high-severity unsupported claim force-fails the check** even if the ratio clears the threshold -- e.g. 9 supported + 1 high-severity fabrication = 0.9 would pass at threshold 0.9, but force-fails with the floor. The score field is unchanged (it still reports the honest 0.9); only `qa_pass` flips to false, and it routes through the same `hallucination:fail` key (no new fail key). `meta.severity_floor_tripped: true` marks the entities where the floor fired.
+
+### Severity model (`severity_model`)
+
+`severity_floor` force-fails on any HIGH unsupported claim. But "high severity" from the LLM fires on any *specific* unsupported claim — including a **grounded fact carrying one over-claimed qualifier** (a superlative, absolute, or scope over-extension), which is a review-flag, not a publish-blocking fabrication. `severity_model: evidence_absent` narrows HIGH to the case the floor was built for:
+
+- **evidence `absent`** (the claim's discriminating subject appears in NO source chunk) → stays HIGH → still force-fails. This is the likely-fabrication case.
+- **evidence `in_window` / `beyond_window`** (the subject IS in the corpus, only the qualifier is unsourced) → regraded to MEDIUM → the floor does not force-fail it. The claim still ships in the flagged output for a reviewer.
+
+Only `severity` is regraded — the supported/unsupported **verdict is never touched** (this is a re-grade, not a re-verification), and the score is severity-independent so it never moves. The regraded severity is what appears in `flagged_claims`, `flagged_claims_text`, and the summary tally, so the report matches the decision. `meta.severity_model: evidence_absent` marks entities scored under this model.
+
+Requires `source_selection: claim_anchored` (that mode produces the per-claim evidence classification). In `head` mode there is nothing to classify against, so no HIGH is regraded and a warning is logged (behaves as `current`).
+
+**Evidence (run 36c75581, company-profile-v3).** The two claims that tripped the floor — ELK's *"…access to ELK's full slot suite via SOFTSWISS"* and Vermantia's *"largest retail deployment on record"* — are both grounded (`evidence: in_window`); the corpus supports the relationship, only the word "full"/superlative "on record" is unsourced. Under `evidence_absent` both regrade to MEDIUM, so ELK (0.914) and Vermantia (0.928) pass while still carrying their claims in the published `qa_flags` for review. A genuinely source-absent high claim (e.g. an invented installation count) still stays HIGH and fails. Pocket Rockets (0.867) is unaffected — it fails on the ratio, not the floor.
 
 ### Special cases
 

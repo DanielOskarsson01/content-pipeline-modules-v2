@@ -2,7 +2,7 @@
   "id": "hallucination-detector",
   "name": "Hallucination Detector",
   "description": "Compare generated content claims against original source material to flag statements that aren't supported by any source.",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "step": 6,
   "category": "qa",
   "cost": "medium",
@@ -97,6 +97,14 @@
       "default": false
     },
     {
+      "name": "severity_model",
+      "type": "select",
+      "label": "Severity model (for the floor)",
+      "description": "Which severity gates severity_floor. 'current' (default, byte-identical) uses the LLM's raw high/medium/low. 'evidence_absent' reserves HIGH for claims whose SUBJECT is absent from the corpus entirely: a high unsupported claim whose evidence IS present (evidence_in_window or beyond_window) is a grounded fact with an over-claimed qualifier (superlative/absolute/over-extension), not a fabrication, so it is regraded to MEDIUM and the floor does not force-fail it -- while a claim with no source anywhere STAYS high and still force-fails. Only severity is regraded; the supported/unsupported verdict and the score are never changed. Requires source_selection='claim_anchored' to classify evidence (in 'head' mode there is nothing to classify against, so nothing is regraded -- a warning is logged). Use when the floor is firing on grounded facts that carry one over-claimed qualifier rather than on genuine fabrications: those pass but still ship their claims in the published qa_flags for review.",
+      "values": ["current", "evidence_absent"],
+      "default": "current"
+    },
+    {
       "name": "source_selection",
       "type": "select",
       "label": "Source selection strategy",
@@ -140,6 +148,7 @@
     "flag_zero_claims_over_chars": 500,
     "claim_extraction": "regex",
     "severity_floor": false,
+    "severity_model": "current",
     "source_selection": "head",
     "extraction_model": null,
     "extraction_provider": null,

@@ -540,6 +540,38 @@ function parseLlmResponse(responseText) {
 }
 
 
+// ─── QA-pass decision incl. the evidence-absent severity model (UNIT B) ───
+//
+// Pure: given the score, the unsupported verdicts, the per-claim evidence map and
+// the two floor knobs, decide pass + whether the floor tripped + the (possibly
+// regraded) unsupported list used for the flagged output/summary.
+//
+//   severity_model 'current'         -> severity untouched; the SAME verdict
+//                                       objects flow through (byte-identical).
+//   severity_model 'evidence_absent' -> a HIGH unsupported claim whose subject is
+//                                       present in the corpus (evidence
+//                                       in_window|beyond_window) is regraded to
+//                                       MEDIUM; a claim absent everywhere STAYS
+//                                       HIGH. Only `severity` changes — `verdict`
+//                                       is never touched (this is a re-grade, not
+//                                       a re-verification).
+// The floor force-fails only on a HIGH that survives the regrade; otherwise the
+// honest ratio decides. The score is severity-independent, so re-grading can
+// never change it.
+function decideHallucinationPass({ hallucinationScore, unsupportedClaims, claimEvidence, passThreshold, severityFloor, severityModel }) {
+  const regraded = unsupportedClaims.map(v => {
+    if (severityModel === 'evidence_absent' && (v.severity || 'medium') === 'high') {
+      const ev = claimEvidence && claimEvidence[v.claim];
+      if (ev && ev !== 'absent') return { ...v, severity: 'medium' }; // grounded subject -> not a fabrication
+    }
+    return v; // unchanged reference -> byte-identical output under 'current'
+  });
+  const highSevUnsupported = regraded.filter(v => (v.severity || 'medium') === 'high');
+  const floorTripped = severityFloor && highSevUnsupported.length > 0;
+  const qaPass = floorTripped ? false : (hallucinationScore >= passThreshold);
+  return { qaPass, floorTripped, highSevUnsupported, regraded };
+}
+
 // ─── Main execute function ───
 
 async function execute(input, options, tools) {
@@ -572,6 +604,17 @@ async function execute(input, options, tools) {
     // hole (STEP6 sec 0.4). Emits through the same qa_pass:false -> hallucination:fail
     // routing key -- no new fail key.
     severity_floor = false,
+    // UNIT B: which severity model gates the floor. "current" (default,
+    // byte-identical) = the LLM's raw high/medium/low. "evidence_absent" =
+    // reserve HIGH for claims whose SUBJECT is absent from the corpus entirely:
+    // a high unsupported claim whose evidence IS present (in_window/beyond_window)
+    // is a grounded fact with an over-claimed qualifier (superlative/absolute/
+    // over-extension), not a fabrication, so it is regraded to MEDIUM and the
+    // floor does not force-fail it. Needs the per-claim evidence classification,
+    // which exists only in source_selection:"claim_anchored"; in head mode there
+    // is nothing to classify against, so no HIGH can be regraded (behaves as
+    // "current") — a warning is logged so the mismatch is visible.
+    severity_model = 'current',
     // U1: source selection strategy. "head" (default) = combineSourceText, the
     // corpus-head truncation, byte-identical to today (window-raise-only is this
     // mode with a bigger max_source_chars -- no code change). "claim_anchored" =
@@ -616,6 +659,16 @@ async function execute(input, options, tools) {
   // cache_prefix and the verifier would grade against a stripped source window.
   const resolvedProvider = ai_provider === undefined ? 'anthropic' : ai_provider;
   const useCacheSplit = cacheBaseWindow && resolvedProvider === 'anthropic';
+
+  // UNIT B: normalize + validate the severity model. Unknown value -> 'current'
+  // (safe, byte-identical) with a warning, never a silent behavior change.
+  const severityModel = severity_model === 'evidence_absent' ? 'evidence_absent' : 'current';
+  if (severity_model && severity_model !== severityModel) {
+    logger.warn(`Unknown severity_model="${severity_model}" -- using "current" (no severity re-grading).`);
+  }
+  if (severityModel === 'evidence_absent' && !claimAnchored) {
+    logger.warn('severity_model=evidence_absent needs source_selection=claim_anchored to classify evidence; with source_selection=head no HIGH claim can be regraded (behaves as "current").');
+  }
 
   // Verification prompt is code-locked (W2.3) -- NOT template-overridable.
   // Any `prompt` a template supplies lands in otherOptions and is ignored.
@@ -960,21 +1013,27 @@ async function execute(input, options, tools) {
     // fabrication force-fails the check regardless of the numeric ratio. The SCORE
     // still reports the honest ratio (never masked); only qa_pass is forced false,
     // and it emits through the same hallucination:fail key -- no new fail key.
-    const highSevUnsupported = unsupportedClaims.filter(v => (v.severity || 'medium') === 'high');
-    const severityFloorTripped = severityFloor && highSevUnsupported.length > 0;
-    const qaPassed = severityFloorTripped ? false : (hallucinationScore >= pass_threshold);
+    // UNIT B: severity_model may regrade a grounded-but-over-claimed HIGH to MEDIUM
+    // before the floor is applied; `regraded` is the list used for all flagged
+    // output/summary so the report matches the decision. Under 'current' it is the
+    // same verdict objects -> byte-identical.
+    const { qaPass: qaPassed, floorTripped: severityFloorTripped, highSevUnsupported, regraded: unsupportedRegraded } =
+      decideHallucinationPass({
+        hallucinationScore, unsupportedClaims, claimEvidence,
+        passThreshold: pass_threshold, severityFloor, severityModel,
+      });
 
     // --- Build flagged claims output ---
     // Head mode emits {claim, severity} exactly as before (byte-identical). Claim-
     // anchored adds the evidence location so a truncation artifact is visible.
-    const flaggedClaims = unsupportedClaims.map(v => (
+    const flaggedClaims = unsupportedRegraded.map(v => (
       claimAnchored
         ? { claim: v.claim, severity: v.severity, evidence: claimEvidence[v.claim] || 'unknown' }
         : { claim: v.claim, severity: v.severity }
     ));
 
-    const flaggedClaimsText = unsupportedClaims.length > 0
-      ? unsupportedClaims
+    const flaggedClaimsText = unsupportedRegraded.length > 0
+      ? unsupportedRegraded
           .map((v, idx) => {
             const tag = claimAnchored ? ` {${claimEvidence[v.claim] || 'unknown'}}` : '';
             return `${idx + 1}. [${(v.severity || 'medium').toUpperCase()}]${tag} ${v.claim}`;
@@ -998,9 +1057,11 @@ async function execute(input, options, tools) {
     ];
 
     if (unsupportedClaims.length > 0) {
-      const highSeverity = unsupportedClaims.filter(v => v.severity === 'high').length;
-      const mediumSeverity = unsupportedClaims.filter(v => v.severity === 'medium').length;
-      const lowSeverity = unsupportedClaims.filter(v => v.severity === 'low').length;
+      // Severity tally from the regraded list so it matches the floor decision
+      // (byte-identical under severity_model:'current').
+      const highSeverity = unsupportedRegraded.filter(v => v.severity === 'high').length;
+      const mediumSeverity = unsupportedRegraded.filter(v => v.severity === 'medium').length;
+      const lowSeverity = unsupportedRegraded.filter(v => v.severity === 'low').length;
       const severityParts = [];
       if (highSeverity > 0) severityParts.push(`${highSeverity} high`);
       if (mediumSeverity > 0) severityParts.push(`${mediumSeverity} medium`);
@@ -1067,6 +1128,9 @@ async function execute(input, options, tools) {
         batches_sent: batches.length,
         // Only present when the floor actually fired -- keeps default output byte-identical.
         ...(severityFloorTripped ? { severity_floor_tripped: true } : {}),
+        // UNIT B: self-document the non-default severity model (default 'current'
+        // omits this key -> byte-identical).
+        ...(severityModel === 'evidence_absent' ? { severity_model: 'evidence_absent' } : {}),
         // U1 honest-window instrumentation -- claim_anchored only, so head output
         // stays byte-identical. Distinguishes truncation artifacts from fabrications.
         ...(claimAnchored ? {
@@ -1128,3 +1192,5 @@ module.exports.extractClaimTerms = extractClaimTerms;
 module.exports.chunkSources = chunkSources;
 module.exports.selectAnchoredWindow = selectAnchoredWindow;
 module.exports.classifyClaimEvidence = classifyClaimEvidence;
+// Exported for the UNIT B evidence-absent severity-model tests.
+module.exports.decideHallucinationPass = decideHallucinationPass;
