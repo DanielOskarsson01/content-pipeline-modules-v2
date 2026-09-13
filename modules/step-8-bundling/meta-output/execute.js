@@ -222,13 +222,14 @@ function assembleKeywords(analysisJson, seoItems) {
         for (const c of analysisJson.categories.secondary) keywords.add(c.slug || String(c));
       }
     }
-    // Tags: { existing: [{slug}], suggested_new: [{label}] }
+    // Tags: EXISTING (approved-taxonomy) tags only. `suggested_new` are proposed,
+    // unapproved multi-word labels — they must not become published target
+    // keywords (SEVERITY_FLOOR.md Defect 1: ELK leaked "bonus buy", "betting
+    // strategies" into meta keywords). Proposals reach taxonomy_suggestions via
+    // the skeleton hook; SEO keywords is not their channel.
     if (analysisJson.tags) {
       if (Array.isArray(analysisJson.tags.existing)) {
         for (const t of analysisJson.tags.existing) keywords.add(t.slug || String(t));
-      }
-      if (Array.isArray(analysisJson.tags.suggested_new)) {
-        for (const t of analysisJson.tags.suggested_new) keywords.add(t.label || t.slug || String(t));
       }
     }
   }

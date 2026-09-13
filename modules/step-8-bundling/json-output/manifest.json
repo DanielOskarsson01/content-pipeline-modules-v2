@@ -2,7 +2,7 @@
   "id": "json-output",
   "name": "JSON Output",
   "description": "Assemble structured JSON per entity from all pipeline data (content-analyzer analysis, seo-planner keywords/meta, content-writer markdown). Supports Strapi-ready or flat format. Toggle inclusion of markdown, analysis, SEO plan, and key facts flattening independently.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "step": 8,
   "category": "data",
   "cost": "cheap",
@@ -51,6 +51,13 @@
       "default": true
     },
     {
+      "name": "include_qa_flags",
+      "type": "boolean",
+      "label": "Include QA flags detail",
+      "description": "Include qa.flags in the qa block -- the specific items each failed check objects to (for hallucination: the flagged claims with severity/verdict/evidence). Present only when a check has flagged detail, so a clean bundle is byte-identical with this on or off. Set false to keep the qa summary without per-item detail. Requires include_qa. Default true.",
+      "default": true
+    },
+    {
       "name": "flatten_key_facts",
       "type": "boolean",
       "label": "Flatten key facts",
@@ -65,6 +72,7 @@
     "include_analysis": true,
     "include_seo_plan": true,
     "include_qa": true,
+    "include_qa_flags": true,
     "flatten_key_facts": false
   },
 

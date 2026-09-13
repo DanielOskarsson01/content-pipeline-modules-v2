@@ -3,7 +3,9 @@
 > Transform pipeline content into clean, publishable Markdown with optional YAML frontmatter.
 
 **Module ID:** `markdown-output` | **Step:** 8 (Bundling) | **Category:** formatting | **Cost:** cheap
-**Version:** 1.3.0 | **Data Operation:** add (+)
+**Version:** 1.4.0 | **Data Operation:** add (+)
+
+> **v1.4.0 (UNIT D + tag-leak fix):** (1) new `include_qa_flags` option (default `true`) — a flagged draft now carries a structured `qa_flags` block in its YAML frontmatter naming the SPECIFIC claims each failed check objects to (for hallucination: `{claim, severity, verdict, evidence}`), so a reviewer fixes the named sentences instead of re-reading the profile. Present only on a draft that has flagged detail → a clean draft's frontmatter is byte-identical. (2) **frontmatter `tags` now publish `tags.existing` only** — `tags.suggested_new` (proposed, unapproved labels) no longer leak into published tags; they still reach `taxonomy_suggestions` via the skeleton hook.
 
 > **v1.0.1 (W1.5):** the heading-marker regex is now sourced from the shared `modules/_shared/marker-parser.js` (single source of truth, also used by tone-seo-editor's marker-preservation gate). Strip behavior is byte-identical to v1.0.0 -- verified by an old-vs-new output diff.
 >
@@ -59,6 +61,7 @@ When an entity carries several `content_markdown` items (re-runs, or the tone-se
 | `include_frontmatter` | `true` (boolean) | Disable if your CMS does not support YAML frontmatter or you want raw Markdown only | Adds `---` delimited YAML block with title, categories, and tags from analysis data, plus QA verdict fields when the pool carries QA shapes |
 | `include_meta_section` | `false` (boolean) | Enable to keep the `## [Meta]` section for debugging or if meta-output is not being used | The Meta section contains structured metadata that is typically handled by meta-output instead |
 | `frontmatter_entity_fields` | `[]` (json) | Set to a JSON array of entity field names (e.g. `["company_id"]`) when a delivery consumer needs entity identifiers stamped into the artifact | Each named field present on the entity is emitted into frontmatter directly after `title`; absent/null fields are skipped silently. Default `[]` keeps output byte-identical to v1.2.0 |
+| `include_qa_flags` | `true` (boolean) | Leave on so a reviewer sees WHICH claims a failed QA check objects to; turn off for a summary-only frontmatter (`qa_verdict`/`qa_flagged`/`qa_failed_checks` without per-item detail) | When on, a flagged draft gains a structured `qa_flags` block in frontmatter. Present only when a check carries flagged detail, so a clean draft is byte-identical with this on or off |
 
 ## Recipes
 

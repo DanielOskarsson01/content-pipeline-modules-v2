@@ -39,11 +39,13 @@ function buildStrapiFormat(entityName, data, opts) {
         ...(Array.isArray(a.categories.secondary) ? a.categories.secondary.map(c => c.slug) : []),
       ];
     }
-    // Tags: { existing: [{slug}], suggested_new: [{label}] }
+    // Tags: publish EXISTING (approved-taxonomy) tags only. `suggested_new` are
+    // proposed, unapproved labels that reach taxonomy_suggestions via the
+    // skeleton hook — they must not ship as published tags (SEVERITY_FLOOR.md
+    // Defect 1).
     if (a.tags) {
       const tags = [];
       if (Array.isArray(a.tags.existing)) tags.push(...a.tags.existing.map(t => t.slug || t));
-      if (Array.isArray(a.tags.suggested_new)) tags.push(...a.tags.suggested_new.map(t => t.label || t.slug || t));
       obj.tags = tags;
     }
     if (a.key_facts) {
@@ -116,6 +118,7 @@ async function execute(input, options, tools) {
     include_analysis = true,
     include_seo_plan = true,
     include_qa = true,
+    include_qa_flags = true,
     flatten_key_facts = false,
   } = options;
   const { logger, progress } = tools;
@@ -164,7 +167,13 @@ async function execute(input, options, tools) {
       // there is a decision to make. Additive metadata — never blocks delivery;
       // omitted entirely when the pool carries no QA shapes.
       const qaVerdict = include_qa ? collectQaVerdict(entity.items) : null;
-      if (qaVerdict) jsonObj.qa = qaVerdict;
+      if (qaVerdict) {
+        // UNIT D: qa.flags (the specific flagged items) rides in the qa block by
+        // default (full detail — json-output is the machine-readable bundle).
+        // include_qa_flags=false drops it for consumers that want the summary only.
+        if (!include_qa_flags && qaVerdict.flags) delete qaVerdict.flags;
+        jsonObj.qa = qaVerdict;
+      }
 
       const jsonString = JSON.stringify(jsonObj, null, 2);
       const sizeKb = Math.round(Buffer.byteLength(jsonString, 'utf8') / 1024 * 10) / 10;

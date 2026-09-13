@@ -14,7 +14,10 @@
  * private helpers, so this also proves operation order composes correctly.
  */
 const assert = require('assert');
+const yaml = require('js-yaml');
 const execute = require('./execute.js');
+const { ELK } = require('../../_shared/__fixtures__/run-36c75581.js');
+const { loadHeadExecute, cleanupHead } = require('../../_shared/__fixtures__/head-ab.js');
 
 let checks = 0;
 const noopTools = { logger: { info() {}, warn() {}, error() {} }, progress: { update() {} } };
@@ -79,6 +82,31 @@ function check(name, cond) {
   const H = await markdownFor(finalMeta, { ...META_OPTS, include_meta_section: false });
   check('H: final [Meta] removed cleanly', !H.includes('meta_title') && !H.includes('[Meta]'));
   check('H: nothing else touched', H.includes('# ELK Studios') && H.includes('Intro paragraph'));
+
+  // ── TASK 3: suggested_new tag leak (SEVERITY_FLOOR.md Defect 1), real ELK data ─
+  {
+    const entity = { name: 'ELK Studios', items: [{ content_markdown: '# ELK Studios\n\nBody.', analysis_json: ELK.analysis }] };
+    const md = (await execute({ entities: [entity] }, {}, noopTools)).results[0].items[0].final_markdown;
+    const fm = yaml.load(md.match(/^---\n([\s\S]*?)\n---/)[1]);
+    check('LEAK: existing tags published', fm.tags.includes('slots') && fm.tags.includes('game-provider'));
+    check('LEAK: suggested_new labels NOT published (bonus buy)', !fm.tags.includes('bonus buy'));
+    check('LEAK: suggested_new labels NOT published (betting strategies)', !fm.tags.includes('betting strategies'));
+    check('LEAK: tags are exactly the existing slugs', JSON.stringify(fm.tags) === JSON.stringify(ELK.analysis.tags.existing.map(t => t.slug)));
+  }
+
+  // ── TASK 4: byte-identity vs prod HEAD on a clean draft (no suggested_new, no QA) ─
+  {
+    const head = loadHeadExecute('modules/step-8-bundling/markdown-output/execute.js');
+    const cleanEntity = () => ({ name: 'CleanCo', items: [{
+      content_markdown: '## [Overview] CleanCo\n\nCleanCo is a studio.',
+      analysis_json: { categories: { primary: [{ slug: 'game-providers' }] }, tags: { existing: [{ slug: 'slots' }, { slug: 'mobile' }] } },
+    }] });
+    const cur = await execute({ entities: [cleanEntity()] }, {}, noopTools);
+    const old = await head({ entities: [cleanEntity()] }, {}, noopTools);
+    assert.deepStrictEqual(cur, old, 'clean-draft output must byte-match prod HEAD');
+    check('byte-identity: clean draft matches prod HEAD', true);
+    cleanupHead();
+  }
 
   console.log(`markdown-output publish fixes: ${checks}/${checks} assertions passed.`);
 })().catch((e) => { console.error('FAIL:', e.message); process.exit(1); });

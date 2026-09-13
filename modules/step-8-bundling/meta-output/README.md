@@ -3,9 +3,12 @@
 > Generate validated SEO metadata (title, description, keywords, Open Graph, Twitter Card) from pipeline data.
 
 **Module ID:** `meta-output` | **Step:** 8 (Bundling) | **Category:** seo | **Cost:** cheap
-**Version:** 1.1.0 | **Data Operation:** add (+)
+**Version:** 1.1.1 | **Data Operation:** add (+)
 
 ## Changelog
+
+### v1.1.1 (2026-09-13) — tag-leak fix (SEVERITY_FLOOR.md Defect 1)
+- SEO `keywords` are now assembled from `analysis_json.tags.existing` **only**. `tags.suggested_new` are proposed, unapproved multi-word labels — they were becoming published target keywords (run 36c75581: ELK shipped "bonus buy", "betting strategies" in its keyword list). Proposals still reach `taxonomy_suggestions` via the skeleton hook; SEO keywords is not their channel. Categories and SEO-plan keywords are unchanged; on a draft with no `suggested_new` the output is byte-identical.
 
 ### v1.1.0 (2026-08-27) — B032-1: hydration contract declared
 - `requires_columns` is now `["seo_plan_json", "analysis_json"]` (was `[]`). The prod step-8 pool is **stripped** — these columns live in `submodule_run_item_data` and are rehydrated per-module ONLY via this manifest declaration (§7b). With `[]`, the module hard-errored every entity ("No items with seo_plan_json found") the moment it was scheduled against a stripped pool (STEP78 Run A); with the declaration it resolves the planner-candidate meta correctly (Run B: 56/160ch, status ok). June 2026 run `5512e8b5` succeeded with `[]` only because it predates pool stripping.
@@ -63,7 +66,7 @@ Unlike markdown-output and html-output which focus on content formatting, meta-o
 | `max_title_length` | 60 | Raise to 70-80 if targeting Bing (more generous); lower to 50 for strict compliance | Characters above this trigger a "Title too long" warning. Google typically displays 50-60 characters |
 | `min_description_length` | 150 | Lower to 100 for short-form content; raise to 155 for strict SERP optimization | Characters below this trigger a "Description too short" warning. Google shows 150-160 characters |
 | `max_description_length` | 160 | Raise to 300 for knowledge panel descriptions; lower to 155 for strict SERP | Characters above this trigger a "Description too long" warning |
-| `include_keywords_array` | true | Disable if keywords are not used by your CMS or publishing platform | Assembles keywords from categories, tags (existing + suggested), and SEO target keywords (primary, secondary, long-tail) |
+| `include_keywords_array` | true | Disable if keywords are not used by your CMS or publishing platform | Assembles keywords from categories, **existing** tags (approved taxonomy only — `suggested_new` is excluded), and SEO target keywords (primary, secondary, long-tail) |
 | `include_og_tags` | true | Disable if pages will not be shared on social media | Generates og:title, og:description, og:type (always "article") |
 | `include_twitter_tags` | false | Enable if pages will be shared on Twitter/X | Generates twitter:card (summary), twitter:title, twitter:description |
 

@@ -98,7 +98,7 @@ function parseFieldList(raw, warn) {
  * skipped silently when absent/null, so default [] output is byte-identical
  * to the pre-option version.
  */
-function buildFrontmatter(entity, entityFields, analysisItems, qaVerdict) {
+function buildFrontmatter(entity, entityFields, analysisItems, qaVerdict, includeQaFlags) {
   const fm = { title: entity.name };
 
   for (const f of entityFields) {
@@ -112,6 +112,13 @@ function buildFrontmatter(entity, entityFields, analysisItems, qaVerdict) {
     fm.qa_flagged = qaVerdict.flagged;
     if (qaVerdict.failed_checks && qaVerdict.failed_checks.length > 0) {
       fm.qa_failed_checks = qaVerdict.failed_checks;
+    }
+    // UNIT D: the specific flagged items (a structured, parseable block — not
+    // prose in the body) so a reviewer fixes the named sentences instead of
+    // re-reading the profile. Present ONLY on a draft that has flagged detail,
+    // so a clean draft's frontmatter is byte-identical to before.
+    if (includeQaFlags && qaVerdict.flags && qaVerdict.flags.length > 0) {
+      fm.qa_flags = qaVerdict.flags;
     }
   }
 
@@ -129,14 +136,15 @@ function buildFrontmatter(entity, entityFields, analysisItems, qaVerdict) {
         }
         if (cats.length > 0) fm.categories = cats;
       }
-      // Tags: { existing: [{slug, why}], suggested_new: [{label, why, evidence}] }
+      // Tags: publish EXISTING (approved-taxonomy) tags only. `suggested_new`
+      // entries are proposed, unapproved labels (free-text, not slugs) that
+      // reach taxonomy_suggestions via the skeleton hook — they must not ship as
+      // published tags. (SEVERITY_FLOOR.md Defect 1: ELK leaked "bonus buy",
+      // "betting strategies" into frontmatter.)
       if (analysis.tags) {
         const tagSlugs = [];
         if (Array.isArray(analysis.tags.existing)) {
           tagSlugs.push(...analysis.tags.existing.map(t => t.slug || t.name || String(t)));
-        }
-        if (Array.isArray(analysis.tags.suggested_new)) {
-          tagSlugs.push(...analysis.tags.suggested_new.map(t => t.label || t.slug || String(t)));
         }
         if (tagSlugs.length > 0) fm.tags = tagSlugs;
       }
@@ -164,6 +172,7 @@ async function execute(input, options, tools) {
     include_frontmatter = true,
     include_meta_section = false,
     frontmatter_entity_fields = [],
+    include_qa_flags = true,
   } = options;
   const { logger, progress } = tools;
   const entityFields = parseFieldList(frontmatter_entity_fields, (msg) => logger.warn(`markdown-output: ${msg}`));
@@ -228,7 +237,7 @@ async function execute(input, options, tools) {
       let finalMarkdown = content.trim();
       const hasFrontmatter = include_frontmatter;
       if (include_frontmatter) {
-        finalMarkdown = buildFrontmatter(entity, entityFields, analysisItems, qaVerdict) + finalMarkdown;
+        finalMarkdown = buildFrontmatter(entity, entityFields, analysisItems, qaVerdict, include_qa_flags) + finalMarkdown;
       }
 
       const wordCount = countWords(finalMarkdown);

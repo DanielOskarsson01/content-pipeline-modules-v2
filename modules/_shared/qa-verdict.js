@@ -16,6 +16,15 @@
  *
  * Returns null when the pool carries no QA shapes — callers omit the block,
  * so bundles from QA-less pipelines are byte-identical to before.
+ *
+ * UNIT D — reviewable detail: `qa.flags` surfaces WHICH items each failed check
+ * objects to, so a reviewer checks two or three sentences instead of re-reading
+ * the whole profile. It is present ONLY when at least one failed check carries
+ * detail (so a clean or detail-less pool stays byte-identical). The shape is
+ * generic — an array of `{ check, <detail> }` — so a new check adds its own
+ * detail extractor here without any consumer schema change. Today only
+ * hallucination-detector populates it (per-claim {claim, severity, verdict,
+ * evidence, cited_source?}); a structural/meta check would add its own branch.
  */
 function collectQaVerdict(items) {
   const list = items || [];
@@ -54,6 +63,32 @@ function collectQaVerdict(items) {
   // router in the pool — any checker failed. A human should look before
   // publishing; delivery itself is unaffected.
   qa.flagged = router ? router.decision !== 'approve' : failed.length > 0;
+
+  // UNIT D: reviewable per-check detail. Built from the failed CHECKER items
+  // (independent of the router — the detail lives on the checker output, e.g.
+  // hallucination-detector's flagged_claims). Only checks that carry detail
+  // contribute an entry; if none do, `flags` is omitted entirely so clean /
+  // detail-less pools are byte-identical to before.
+  const flags = [];
+  for (const it of failed) {
+    const entry = { check: it.source_submodule || 'unknown-check' };
+    // hallucination-detector detail: the specific unsupported claims. Carry the
+    // reviewer-relevant fields; drop `cited_source` when absent (unsupported
+    // claims have no supporting quote) to keep the payload lean.
+    if (Array.isArray(it.flagged_claims) && it.flagged_claims.length) {
+      entry.claims = it.flagged_claims.map(c => {
+        const d = { claim: c.claim, severity: c.severity, verdict: 'unsupported' };
+        if (c.evidence) d.evidence = c.evidence;   // detector's stated reason (evidence location)
+        if (c.quote) d.cited_source = c.quote;
+        return d;
+      });
+    }
+    // (future: structural failing sections, meta failing fields — add a branch
+    //  populating entry.<detail>; consumers iterate `flags` generically.)
+    if (Object.keys(entry).length > 1) flags.push(entry); // has detail beyond the name
+  }
+  if (flags.length) qa.flags = flags;
+
   return qa;
 }
 
