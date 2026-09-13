@@ -1,0 +1,10 @@
+[
+  {
+    "timestamp": "2026-08-11T23:50:56.254Z",
+    "input": {
+      "url": "https://www.linkedin.com/company/loewen-play"
+    },
+    "error": "4XX page - dead page.",
+    "error_code": "dead_page"
+  }
+]

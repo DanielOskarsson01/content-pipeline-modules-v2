@@ -1,0 +1,1847 @@
+{
+  "meta": {
+    "target": "https://www.linkedin.com/in/yaroslavsoloshenko",
+    "requested_limit": 10,
+    "status": "ready",
+    "elapsed": 75,
+    "records_reported": 10,
+    "records_returned": 10,
+    "limit_bind": "requested 10, observed 10",
+    "authored_by_target": 0,
+    "foreign_authors": 10,
+    "authors": [
+      {
+        "user_id": "igamingexpress",
+        "user_name": "iGaming Express",
+        "account_type": "Organization",
+        "use_url": "https://www.linkedin.com/company/igamingexpress?trk=public_post_feed-actor-image",
+        "is_target": false
+      },
+      {
+        "user_id": "yelyzaveta-kundel",
+        "user_name": "Yelyzaveta Kundel",
+        "account_type": "Person",
+        "use_url": "https://cz.linkedin.com/in/yelyzaveta-kundel?trk=public_post_feed-actor-image",
+        "is_target": false
+      },
+      {
+        "user_id": "playson",
+        "user_name": "Playson",
+        "account_type": "Organization",
+        "use_url": "https://mt.linkedin.com/company/playson?trk=public_post_feed-actor-image",
+        "is_target": false
+      },
+      {
+        "user_id": "nare-sujyan",
+        "user_name": "Nare Sujyan",
+        "account_type": "Person",
+        "use_url": "https://ae.linkedin.com/in/nare-sujyan",
+        "is_target": false
+      },
+      {
+        "user_id": "hermannalex",
+        "user_name": "Alex Hermann",
+        "account_type": "Person",
+        "use_url": "https://ua.linkedin.com/in/hermannalex",
+        "is_target": false
+      },
+      {
+        "user_id": "eduardverdaguergamell",
+        "user_name": "Eduard Verdaguer Gamell",
+        "account_type": "Person",
+        "use_url": "https://es.linkedin.com/in/eduardverdaguergamell/en?trk=public_post_feed-actor-image",
+        "is_target": false
+      },
+      {
+        "user_id": "casino-guru-news",
+        "user_name": "Casino Guru News",
+        "account_type": "Organization",
+        "use_url": "https://uk.linkedin.com/company/casino-guru-news",
+        "is_target": false
+      },
+      {
+        "user_id": "nare-sujyan",
+        "user_name": "Nare Sujyan",
+        "account_type": "Person",
+        "use_url": "https://ae.linkedin.com/in/nare-sujyan?trk=public_post_feed-actor-image",
+        "is_target": false
+      },
+      {
+        "user_id": "neverendingtech",
+        "user_name": "NeverEnding",
+        "account_type": "Organization",
+        "use_url": "https://cy.linkedin.com/company/neverendingtech?trk=public_post_feed-actor-image",
+        "is_target": false
+      },
+      {
+        "user_id": "nare-sujyan",
+        "user_name": "Nare Sujyan",
+        "account_type": "Person",
+        "use_url": "https://ae.linkedin.com/in/nare-sujyan?trk=public_post_feed-actor-image",
+        "is_target": false
+      }
+    ]
+  },
+  "progress": {
+    "status": "ready",
+    "snapshot_id": "sd_msp49o0m1r3802dx7r",
+    "dataset_id": "gd_lyy3tktm25m4avu764",
+    "records": 10,
+    "errors": 0,
+    "collection_duration": 68843,
+    "avg_duration_per_input": 68843
+  },
+  "records": [
+    {
+      "url": "https://www.linkedin.com/posts/igamingexpress_did-you-know-in-pi%C3%B1atas-festival-each-of-activity-7490689338335318019-hMq2",
+      "id": "7490689338335318019",
+      "user_id": "igamingexpress",
+      "use_url": "https://www.linkedin.com/company/igamingexpress?trk=public_post_feed-actor-image",
+      "title": "Did you know? In Piñatas Festival, each of the three piñatas unlocks a different bonus power: Grow, Multi, or Extra. The piñatas floating above the reels aren't just decoration. Grow expands the… | iGaming Express",
+      "headline": "Did you know?",
+      "post_text": "Did you know? In Piñatas Festival, each of the three piñatas unlocks a different bonus power: Grow, Multi, or Extra.\n\nThe piñatas floating above the reels aren't just decoration. Grow expands the grid from 5x3 to 5x5, Multi applies random multipliers to coin values, and Extra adds a fourth respin to the Hold & Win round. Multiple modifiers can trigger at once, stacking the bonus in the player's favor.\n\nThe formula clearly works. ELA Games reported that Piñatas Festival outperformed studio averages across key metrics in its first month, with turnover up 280% and GGR up 465% versus benchmarks. A street party theme with serious commercial results behind it.",
+      "date_posted": "2026-08-05T08:45:08.519Z",
+      "hashtags": null,
+      "embedded_links": [
+        "https://cy.linkedin.com/company/ela-games?trk=public_post-text"
+      ],
+      "images": [
+        "https://media.licdn.com/dms/image/v2/D4E22AQF8MYapxnEhxQ/feedshare-image-high-res/B4EZ_RGQqhKUAU-/0/1785919507414?e=2147483647&v=beta&t=19hCeRbUaAoovuSiCnK1qIG6eJjolGRCLizrUyJuKfs"
+      ],
+      "videos": null,
+      "num_likes": 5,
+      "num_comments": 0,
+      "more_articles_by_user": null,
+      "more_relevant_posts": null,
+      "top_visible_comments": null,
+      "user_followers": 18368,
+      "user_posts": 0,
+      "user_articles": 0,
+      "post_type": "post",
+      "account_type": "Organization",
+      "post_text_html": "Did you know? In Piñatas Festival, each of the three piñatas unlocks a different bonus power: Grow, Multi, or Extra.<br/><br/>The piñatas floating above the reels aren&apos;t just decoration. Grow expands the grid from 5x3 to 5x5, Multi applies random multipliers to coin values, and Extra adds a fourth respin to the Hold &amp; Win round. Multiple modifiers can trigger at once, stacking the bonus in the player&apos;s favor.<br/><br/>The formula clearly works. <a class=\"link\" href=\"https://cy.linkedin.com/company/ela-games?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>ELA Games</a> reported that Piñatas Festival outperformed studio averages across key metrics in its first month, with turnover up 280% and GGR up 465% versus benchmarks. A street party theme with serious commercial results behind it.",
+      "repost": {
+        "repost_hangtags": null,
+        "repost_attachments": null,
+        "tagged_users": null,
+        "tagged_companies": null
+      },
+      "tagged_companies": [
+        {
+          "name": "ELA Games",
+          "link": "https://cy.linkedin.com/company/ela-games?trk=public_post-text"
+        }
+      ],
+      "tagged_people": [],
+      "user_title": null,
+      "author_profile_pic": "https://media.licdn.com/dms/image/v2/C4D0BAQGJwVqhSTvQfQ/company-logo_100_100/company-logo_100_100/0/1675336901543?e=2147483647&v=beta&t=dLX5gu9tKE5YbR_OqHssUaH96xtPggrWSy8TMBZDUYs",
+      "num_connections": 500,
+      "video_duration": null,
+      "external_link_data": null,
+      "video_thumbnail": null,
+      "document_cover_image": null,
+      "document_page_count": null,
+      "user_profile_pic": "https://media.licdn.com/dms/image/v2/C4D0BAQGJwVqhSTvQfQ/company-logo_100_100/company-logo_100_100/0/1675336901543?e=2147483647&v=beta&t=dLX5gu9tKE5YbR_OqHssUaH96xtPggrWSy8TMBZDUYs",
+      "user_name": "iGaming Express",
+      "original_post_text": "Did you know? In Piñatas Festival, each of the three piñatas unlocks a different bonus power: Grow, Multi, or Extra.\n\nThe piñatas floating above the reels aren&apos;t just decoration. Grow expands the grid from 5x3 to 5x5, Multi applies random multipliers to coin values, and Extra adds a fourth respin to the Hold &amp; Win round. Multiple modifiers can trigger at once, stacking the bonus in the player&apos;s favor.\n\nThe formula clearly works. <a class=\"link\" href=\"https://cy.linkedin.com/company/ela-games?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>ELA Games</a> reported that Piñatas Festival outperformed studio averages across key metrics in its first month, with turnover up 280% and GGR up 465% versus benchmarks. A street party theme with serious commercial results behind it.",
+      "timestamp": "2026-08-11T20:32:34.400Z",
+      "input": {
+        "num_connections": 500,
+        "url": "https://www.linkedin.com/posts/igamingexpress_did-you-know-in-pi%C3%B1atas-festival-each-of-activity-7490689338335318019-hMq2"
+      },
+      "discovery_input": {
+        "url": "https://www.linkedin.com/in/yaroslavsoloshenko"
+      }
+    },
+    {
+      "url": "https://www.linkedin.com/posts/yelyzaveta-kundel_getting-back-to-the-topic-from-my-previous-activity-7492533712128090112-YYM3",
+      "id": "7492533712128090112",
+      "user_id": "yelyzaveta-kundel",
+      "use_url": "https://cz.linkedin.com/in/yelyzaveta-kundel?trk=public_post_feed-actor-image",
+      "title": "Getting back to the topic from my previous post, today I want to focus on another side of great game providers: being proactive, flexible, and open to negotiations. Those suppliers who keep moving… | Yelyzaveta Kundel",
+      "headline": "Getting back to the topic from my previous post, today I want to focus on another side of great game providers: being proactive, flexible, and open to negotiations.",
+      "post_text": "Getting back to the topic from my previous post, today I want to focus on another side of great game providers: being proactive, flexible, and open to negotiations.\n\nThose suppliers who keep moving forward, aiming higher, pushing themselves further — while their competitors are still trying to catch up. 🚀\n\nHere are two of my favourite examples among the newer providers on our website. Relatively young compared to the industry giants, but already very promising and successful.\n\nMeet Penguin King and TaDa Gaming | Game Provider 👋 (nope, i do not want those two to compete, i hope they both will keep moving towards TOP10 within our market)\n\nIf you’ve never heard of them before, I’m surprised and have a couple of questions for you. 😉\n\nGreat Account Management, flexibility, reliable software, fair commercial conditions and appropriate discounts, and simply amazing collaboration.\nThat’s exactly what I mean by a provider that’s ready to grow with you, not just be here silently.\n\nBy the way i have never been paid to love those guys, but i am truly proud and happy to work closely with Elena Pavliuchenko and Bryam Jacquet, guys you are absolutely amazing and 70% of your companies success in here just because of you.\n\nRuta Suopyte and Allen TaDa nothing can be done without TOP AM as you guys. Keep it going and we will see you in Blask TOP10 worldwide pretty soon!\n\nHere you go with some of my favourite games:\nPirate Queen 2 by TaDa Gaming 🏴☠️ \n5 Pyramids of Gold: Hold & Win by Penguin King 🥇",
+      "date_posted": "2026-08-10T10:54:01.492Z",
+      "hashtags": null,
+      "embedded_links": [
+        "https://www.linkedin.com/company/penguin-king?trk=public_post-text",
+        "https://mt.linkedin.com/company/tada-gaming-ltd?trk=public_post-text",
+        "https://mt.linkedin.com/in/elena-pavliuchenko-993461142?trk=public_post-text",
+        "https://mt.linkedin.com/in/bryam-jacquet-89b8601a9?trk=public_post-text",
+        "https://nl.linkedin.com/in/ruta-suopyte-039571220?trk=public_post-text",
+        "https://tw.linkedin.com/in/allen-tada-918bb8300?trk=public_post-text"
+      ],
+      "images": [
+        "https://media.licdn.com/dms/image/v2/D4D22AQH2tUsgeY31CQ/feedshare-shrink_800/B4DZ_rTs7XHEAc-/0/1786359239482?e=2147483647&v=beta&t=EHXwGjNdL8bCtROVLUN9dkgDc6TRJ2r2gO5DPuiYTpc",
+        "https://media.licdn.com/dms/image/v2/D4D22AQH99CnzmIry9w/feedshare-shrink_800/B4DZ_rTtCTIoAc-/0/1786359239425?e=2147483647&v=beta&t=8o8XbQl5R4TKLVHRdgu-SRY8vztrZueni9hiHTf7d28"
+      ],
+      "videos": null,
+      "num_likes": 35,
+      "num_comments": 2,
+      "more_articles_by_user": null,
+      "more_relevant_posts": null,
+      "top_visible_comments": [
+        {
+          "use_url": "https://mt.linkedin.com/in/james-davies-gamesinc?trk=public_post_comment_actor-name",
+          "user_id": "james-davies-gamesinc",
+          "user_name": "James Davies",
+          "comment_date": "2026-08-10T12:01:15.197Z",
+          "comment": "Ahhhhh remember the good old days Yelyzaveta :)",
+          "tagged_users": [
+            "https://cz.linkedin.com/in/yelyzaveta-kundel?trk=public_post_comment-text"
+          ],
+          "num_reactions": 0,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492550630612422656",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492533708877643776?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492533708877643776%2C7492550630612422656%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492550630612422656%2Curn%3Ali%3AugcPost%3A7492533708877643776%29"
+        }
+      ],
+      "user_followers": 1041,
+      "user_posts": 92,
+      "user_articles": 0,
+      "post_type": "post",
+      "account_type": "Person",
+      "post_text_html": "Getting back to the topic from my previous post, today I want to focus on another side of great game providers: being proactive, flexible, and open to negotiations.<br/><br/>Those suppliers who keep moving forward, aiming higher, pushing themselves further — while their competitors are still trying to catch up. 🚀<br/><br/>Here are two of my favourite examples among the newer providers on our website. Relatively young compared to the industry giants, but already very promising and successful.<br/><br/>Meet <a class=\"link\" href=\"https://www.linkedin.com/company/penguin-king?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Penguin King</a> and <a class=\"link\" href=\"https://mt.linkedin.com/company/tada-gaming-ltd?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>TaDa Gaming | Game Provider</a> 👋 (nope, i do not want those two to compete, i hope they both will keep moving towards TOP10 within our market)<br/><br/>If you’ve never heard of them before, I’m surprised and have a couple of questions for you. 😉<br/><br/>Great Account Management, flexibility, reliable software, fair commercial conditions and appropriate discounts, and simply amazing collaboration.<br/>That’s exactly what I mean by a provider that’s ready to grow with you, not just be here silently.<br/><br/>By the way i have never been paid to love those guys, but i am truly proud and happy to work closely with <a class=\"link\" href=\"https://mt.linkedin.com/in/elena-pavliuchenko-993461142?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Elena Pavliuchenko</a> and <a class=\"link\" href=\"https://mt.linkedin.com/in/bryam-jacquet-89b8601a9?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Bryam Jacquet</a>, guys you are absolutely amazing and 70% of your companies success in here just because of you.<br/><br/><a class=\"link\" href=\"https://nl.linkedin.com/in/ruta-suopyte-039571220?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Ruta Suopyte</a> and <a class=\"link\" href=\"https://tw.linkedin.com/in/allen-tada-918bb8300?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Allen TaDa</a> nothing can be done without TOP AM as you guys. Keep it going and we will see you in Blask TOP10 worldwide pretty soon!<br/><br/>Here you go with some of my favourite games:<br/>Pirate Queen 2 by TaDa Gaming 🏴☠️ <br/>5 Pyramids of Gold: Hold &amp; Win by Penguin King 🥇 ",
+      "repost": {
+        "repost_hangtags": null,
+        "repost_attachments": null,
+        "tagged_users": null,
+        "tagged_companies": null
+      },
+      "tagged_companies": [
+        {
+          "name": "Penguin King",
+          "link": "https://www.linkedin.com/company/penguin-king?trk=public_post-text"
+        },
+        {
+          "name": "TaDa Gaming | Game Provider",
+          "link": "https://mt.linkedin.com/company/tada-gaming-ltd?trk=public_post-text"
+        }
+      ],
+      "tagged_people": [
+        {
+          "name": "Elena Pavliuchenko",
+          "link": "https://mt.linkedin.com/in/elena-pavliuchenko-993461142?trk=public_post-text"
+        },
+        {
+          "name": "Bryam Jacquet",
+          "link": "https://mt.linkedin.com/in/bryam-jacquet-89b8601a9?trk=public_post-text"
+        },
+        {
+          "name": "Ruta Suopyte",
+          "link": "https://nl.linkedin.com/in/ruta-suopyte-039571220?trk=public_post-text"
+        },
+        {
+          "name": "Allen TaDa",
+          "link": "https://tw.linkedin.com/in/allen-tada-918bb8300?trk=public_post-text"
+        }
+      ],
+      "user_title": "Relationships and Business Development, B2B, B2C, iGaming",
+      "author_profile_pic": "https://media.licdn.com/dms/image/v2/D4D03AQE2Ba0LblTnBQ/profile-displayphoto-scale_400_400/B4DZtv70cfH4Ao-/0/1767109513347?e=2147483647&v=beta&t=M4GPDFbRyjcjrQ4Qe4Wp7Y2AxLlkZb5VYzjtaXtE1H8",
+      "num_connections": 500,
+      "video_duration": null,
+      "external_link_data": null,
+      "video_thumbnail": null,
+      "document_cover_image": null,
+      "document_page_count": null,
+      "user_profile_pic": "https://media.licdn.com/dms/image/v2/D4D03AQE2Ba0LblTnBQ/profile-displayphoto-scale_200_200/B4DZtv70cfH4Ag-/0/1767109513347?e=2147483647&v=beta&t=ftFepX8bt13TkQaRiXMWFi28mufJrrJ_8qlnxv_5vrU",
+      "user_name": "Yelyzaveta Kundel",
+      "original_post_text": "Getting back to the topic from my previous post, today I want to focus on another side of great game providers: being proactive, flexible, and open to negotiations.\n\nThose suppliers who keep moving forward, aiming higher, pushing themselves further — while their competitors are still trying to catch up. 🚀\n\nHere are two of my favourite examples among the newer providers on our website. Relatively young compared to the industry giants, but already very promising and successful.\n\nMeet <a class=\"link\" href=\"https://www.linkedin.com/company/penguin-king?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Penguin King</a> and <a class=\"link\" href=\"https://mt.linkedin.com/company/tada-gaming-ltd?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>TaDa Gaming | Game Provider</a> 👋 (nope, i do not want those two to compete, i hope they both will keep moving towards TOP10 within our market)\n\nIf you’ve never heard of them before, I’m surprised and have a couple of questions for you. 😉\n\nGreat Account Management, flexibility, reliable software, fair commercial conditions and appropriate discounts, and simply amazing collaboration.\nThat’s exactly what I mean by a provider that’s ready to grow with you, not just be here silently.\n\nBy the way i have never been paid to love those guys, but i am truly proud and happy to work closely with <a class=\"link\" href=\"https://mt.linkedin.com/in/elena-pavliuchenko-993461142?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Elena Pavliuchenko</a> and <a class=\"link\" href=\"https://mt.linkedin.com/in/bryam-jacquet-89b8601a9?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Bryam Jacquet</a>, guys you are absolutely amazing and 70% of your companies success in here just because of you.\n\n<a class=\"link\" href=\"https://nl.linkedin.com/in/ruta-suopyte-039571220?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Ruta Suopyte</a> and <a class=\"link\" href=\"https://tw.linkedin.com/in/allen-tada-918bb8300?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Allen TaDa</a> nothing can be done without TOP AM as you guys. Keep it going and we will see you in Blask TOP10 worldwide pretty soon!\n\nHere you go with some of my favourite games:\nPirate Queen 2 by TaDa Gaming 🏴☠️ \n5 Pyramids of Gold: Hold &amp; Win by Penguin King 🥇 ",
+      "timestamp": "2026-08-11T20:32:34.495Z",
+      "input": {
+        "num_connections": 500,
+        "url": "https://www.linkedin.com/posts/yelyzaveta-kundel_getting-back-to-the-topic-from-my-previous-activity-7492533712128090112-YYM3"
+      },
+      "discovery_input": {
+        "url": "https://www.linkedin.com/in/yaroslavsoloshenko"
+      }
+    },
+    {
+      "url": "https://www.linkedin.com/posts/playson_playson-getmore-igaming-activity-7492518678094061568-XHqn",
+      "id": "7492518678094061568",
+      "user_id": "playson",
+      "use_url": "https://mt.linkedin.com/company/playson?trk=public_post_feed-actor-image",
+      "title": "#playson #getmore #igaming #igamingcareer #careergrowth | Playson | 19 comments",
+      "headline": "Denys Koshel steps up as Playson’s first VP of Commercial Partnerships 🚀",
+      "post_text": "Denys Koshel steps up as Playson’s first VP of Commercial Partnerships 🚀 \n\nThe newly created role brings account management and emerging markets leadership into one strategic function — delivering stronger, more unified commercial support across our global operator network.\n\nFor partners, that means more consistent, data-led and responsive support across markets, with clearer communication, faster decision-making, stronger campaign coordination and more targeted commercial recommendations.\n\nWith nearly 11 years at Playson, Denys brings experience across account strategy, market development, analytics and operational execution, alongside a strong understanding of both the commercial and technical sides of our business.\n\nAs our partners navigate increasingly competitive and complex markets, Denys will help them make better decisions, launch stronger initiatives and get more value from Playson’s portfolio.\n\nRead more here 👉  https://lnkd.in/eHDYbPyY\n\nCongratulations, Denys — here’s to MORE success 💥 \n\n#Playson #GetMORE #iGaming #iGamingCareer #CareerGrowth",
+      "date_posted": "2026-08-10T09:54:17.095Z",
+      "hashtags": [
+        "#Playson",
+        "#GetMORE",
+        "#iGaming",
+        "#iGamingCareer",
+        "#CareerGrowth"
+      ],
+      "embedded_links": [
+        "https://ua.linkedin.com/in/denys-koshel-a871b9139?trk=public_post-text",
+        "https://lnkd.in/eHDYbPyY",
+        "https://www.linkedin.com/feed/hashtag/playson",
+        "https://www.linkedin.com/feed/hashtag/getmore",
+        "https://www.linkedin.com/feed/hashtag/igaming",
+        "https://www.linkedin.com/feed/hashtag/igamingcareer",
+        "https://www.linkedin.com/feed/hashtag/careergrowth"
+      ],
+      "images": [
+        "https://media.licdn.com/dms/image/v2/D4E22AQFBvNNAZg1z6Q/feedshare-shrink_1280/B4EZ_rGCQ.JQAM-/0/1786355656037?e=2147483647&v=beta&t=hVo17FwmxHGRoynCYYu_bK3O8ZtvrLUg6nETV-bhN7U"
+      ],
+      "videos": null,
+      "num_likes": 126,
+      "num_comments": 19,
+      "more_articles_by_user": null,
+      "more_relevant_posts": null,
+      "top_visible_comments": [
+        {
+          "use_url": "https://sk.linkedin.com/in/muratovyuriy?trk=public_post_comment_actor-name",
+          "user_id": "muratovyuriy",
+          "user_name": "Yuriy Muratov",
+          "comment_date": "2026-08-10T13:09:23.152Z",
+          "comment": "Wow! Bravo Denys! You are a Rockstar, so its a very well deserved promotion!! 🎉🥂",
+          "tagged_users": null,
+          "num_reactions": 6,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492567776738349056",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492518678094061568?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492518678094061568%2C7492567776738349056%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492567776738349056%2Curn%3Ali%3AugcPost%3A7492518678094061568%29"
+        },
+        {
+          "use_url": "https://www.linkedin.com/company/e-play-io?trk=public_post_comment_actor-name",
+          "user_id": "e-play-io",
+          "user_name": "E-PLAY I iGaming Market Watch",
+          "comment_date": "2026-08-10T10:06:52.903Z",
+          "comment": "Internal promotions like this say a lot about company culture. Investing in people who already understand the business is always a smart move.\n✅ Recorded in our iGaming Job Market Database.\nhttps://e-play.com/gaming-job-market/denys-koshel-x-playson-x-vp-of-commercial-partnerships/\nWe track industry moves daily — feel free to tag us or send updates if your team has more news. 🚀",
+          "tagged_users": null,
+          "num_reactions": 2,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492521848065196032",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492518678094061568?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492518678094061568%2C7492521848065196032%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492521848065196032%2Curn%3Ali%3AugcPost%3A7492518678094061568%29"
+        },
+        {
+          "use_url": "https://mt.linkedin.com/in/maryna-tkachenko-5a1a57247?trk=public_post_comment_actor-name",
+          "user_id": "maryna-tkachenko-5a1a57247",
+          "user_name": "Maryna Tkachenko",
+          "comment_date": "2026-08-10T11:22:13.626Z",
+          "comment": "Congratulations 🤩🥳🍻",
+          "tagged_users": null,
+          "num_reactions": 2,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492540809351979008",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492518678094061568?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492518678094061568%2C7492540809351979008%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492540809351979008%2Curn%3Ali%3AugcPost%3A7492518678094061568%29"
+        },
+        {
+          "use_url": "https://mt.linkedin.com/in/danielgalea93?trk=public_post_comment_actor-name",
+          "user_id": "danielgalea93",
+          "user_name": "Daniel Galea",
+          "comment_date": "2026-08-10T14:44:41.661Z",
+          "comment": "Congratulations Denys 💪🏻💪🏻",
+          "tagged_users": null,
+          "num_reactions": 2,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492591761903529984",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492518678094061568?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492518678094061568%2C7492591761903529984%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492591761903529984%2Curn%3Ali%3AugcPost%3A7492518678094061568%29"
+        },
+        {
+          "use_url": "https://mt.linkedin.com/in/conor-jenner?trk=public_post_comment_actor-name",
+          "user_id": "conor-jenner",
+          "user_name": "Conor Jenner",
+          "comment_date": "2026-08-10T14:06:33.488Z",
+          "comment": "🚀🚀🚀",
+          "tagged_users": null,
+          "num_reactions": 2,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492582164610555905",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492518678094061568?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492518678094061568%2C7492582164610555905%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492582164610555905%2Curn%3Ali%3AugcPost%3A7492518678094061568%29"
+        },
+        {
+          "use_url": "https://ua.linkedin.com/in/andrew-avramenko?trk=public_post_comment_actor-name",
+          "user_id": "andrew-avramenko",
+          "user_name": "Andrew Avramenko",
+          "comment_date": "2026-08-10T11:17:58.239Z",
+          "comment": "💪🏻💪🏻💪🏻",
+          "tagged_users": null,
+          "num_reactions": 2,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492539738181197825",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492518678094061568?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492518678094061568%2C7492539738181197825%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492539738181197825%2Curn%3Ali%3AugcPost%3A7492518678094061568%29"
+        },
+        {
+          "use_url": "https://ua.linkedin.com/in/vsevolodlapin?trk=public_post_comment_actor-name",
+          "user_id": "vsevolodlapin",
+          "user_name": "Vsevolod Lapin",
+          "comment_date": "2026-08-10T13:36:59.665Z",
+          "comment": "Congratulations, Denys, very much deserved 🙌🚀",
+          "tagged_users": null,
+          "num_reactions": 3,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492574724657553408",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492518678094061568?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492518678094061568%2C7492574724657553408%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492574724657553408%2Curn%3Ali%3AugcPost%3A7492518678094061568%29"
+        },
+        {
+          "use_url": "https://cy.linkedin.com/in/anton-ivannikov-28b7a242?trk=public_post_comment_actor-name",
+          "user_id": "anton-ivannikov-28b7a242",
+          "user_name": "Anton Ivannikov",
+          "comment_date": "2026-08-10T16:02:32.773Z",
+          "comment": "Congratulations Denys!!! 👏👏👏",
+          "tagged_users": null,
+          "num_reactions": 2,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492611353967284225",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492518678094061568?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492518678094061568%2C7492611353967284225%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492611353967284225%2Curn%3Ali%3AugcPost%3A7492518678094061568%29"
+        },
+        {
+          "use_url": "https://am.linkedin.com/in/marina-badeyan-63a193108?trk=public_post_comment_actor-name",
+          "user_id": "marina-badeyan-63a193108",
+          "user_name": "Marina Badeyan",
+          "comment_date": "2026-08-10T19:01:11.685Z",
+          "comment": "Congrats Denys! Very well deserved! 🥂",
+          "tagged_users": null,
+          "num_reactions": 2,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492656312342835200",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492518678094061568?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492518678094061568%2C7492656312342835200%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492656312342835200%2Curn%3Ali%3AugcPost%3A7492518678094061568%29"
+        },
+        {
+          "use_url": "https://mt.linkedin.com/in/isabel-damiani-outeiral-6986b079?trk=public_post_comment_actor-name",
+          "user_id": "isabel-damiani-outeiral-6986b079",
+          "user_name": "Isabel Damiani Outeiral",
+          "comment_date": "2026-08-10T15:45:02.439Z",
+          "comment": "Congratulations Denys 🎉🎉🎉",
+          "tagged_users": null,
+          "num_reactions": 2,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492606948547244032",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492518678094061568?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492518678094061568%2C7492606948547244032%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492606948547244032%2Curn%3Ali%3AugcPost%3A7492518678094061568%29"
+        }
+      ],
+      "user_followers": 31556,
+      "user_posts": 0,
+      "user_articles": 0,
+      "post_type": "post",
+      "account_type": "Organization",
+      "post_text_html": "<a class=\"link\" href=\"https://ua.linkedin.com/in/denys-koshel-a871b9139?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Denys Koshel</a> steps up as Playson’s first VP of Commercial Partnerships 🚀 <br/><br/>The newly created role brings account management and emerging markets leadership into one strategic function — delivering stronger, more unified commercial support across our global operator network.<br/><br/>For partners, that means more consistent, data-led and responsive support across markets, with clearer communication, faster decision-making, stronger campaign coordination and more targeted commercial recommendations.<br/><br/>With nearly 11 years at Playson, Denys brings experience across account strategy, market development, analytics and operational execution, alongside a strong understanding of both the commercial and technical sides of our business.<br/><br/>As our partners navigate increasingly competitive and complex markets, Denys will help them make better decisions, launch stronger initiatives and get more value from Playson’s portfolio.<br/><br/>Read more here 👉  <a class=\"link\" href=\"https://www.linkedin.com/redir/redirect?url=https%3A%2F%2Flnkd%2Ein%2FeHDYbPyY&amp;urlhash=gTv2&amp;trk=public_post-text\" target=\"_self\" rel=\"nofollow\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>https://lnkd.in/eHDYbPyY</a><br/><br/>Congratulations, Denys — here’s to MORE success 💥 <br/><br/><a class=\"link\" href=\"https://www.linkedin.com/signup/cold-join?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2Fhashtag%2Fplayson&amp;trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>#Playson</a> <a class=\"link\" href=\"https://www.linkedin.com/signup/cold-join?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2Fhashtag%2Fgetmore&amp;trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>#GetMORE</a> <a class=\"link\" href=\"https://www.linkedin.com/signup/cold-join?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2Fhashtag%2Figaming&amp;trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>#iGaming</a> <a class=\"link\" href=\"https://www.linkedin.com/signup/cold-join?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2Fhashtag%2Figamingcareer&amp;trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>#iGamingCareer</a> <a class=\"link\" href=\"https://www.linkedin.com/signup/cold-join?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2Fhashtag%2Fcareergrowth&amp;trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>#CareerGrowth</a>",
+      "repost": {
+        "repost_hangtags": null,
+        "repost_attachments": null,
+        "tagged_users": null,
+        "tagged_companies": null
+      },
+      "tagged_companies": [],
+      "tagged_people": [
+        {
+          "name": "Denys Koshel",
+          "link": "https://ua.linkedin.com/in/denys-koshel-a871b9139?trk=public_post-text"
+        }
+      ],
+      "user_title": null,
+      "author_profile_pic": "https://media.licdn.com/dms/image/v2/D4D0BAQGRyNncgWwv5w/company-logo_100_100/B4DZc11qUWHwAU-/0/1748954949775/playson_logo?e=2147483647&v=beta&t=MznLjqPv7we7bMO8X-oOPqMgevGLKSt4Y0yfc9rcnlk",
+      "num_connections": 500,
+      "video_duration": null,
+      "external_link_data": null,
+      "video_thumbnail": null,
+      "document_cover_image": null,
+      "document_page_count": null,
+      "user_profile_pic": "https://media.licdn.com/dms/image/v2/D4D0BAQGRyNncgWwv5w/company-logo_100_100/B4DZc11qUWHwAU-/0/1748954949775/playson_logo?e=2147483647&v=beta&t=MznLjqPv7we7bMO8X-oOPqMgevGLKSt4Y0yfc9rcnlk",
+      "user_name": "Playson",
+      "original_post_text": "<a class=\"link\" href=\"https://ua.linkedin.com/in/denys-koshel-a871b9139?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Denys Koshel</a> steps up as Playson’s first VP of Commercial Partnerships 🚀 \n\nThe newly created role brings account management and emerging markets leadership into one strategic function — delivering stronger, more unified commercial support across our global operator network.\n\nFor partners, that means more consistent, data-led and responsive support across markets, with clearer communication, faster decision-making, stronger campaign coordination and more targeted commercial recommendations.\n\nWith nearly 11 years at Playson, Denys brings experience across account strategy, market development, analytics and operational execution, alongside a strong understanding of both the commercial and technical sides of our business.\n\nAs our partners navigate increasingly competitive and complex markets, Denys will help them make better decisions, launch stronger initiatives and get more value from Playson’s portfolio.\n\nRead more here 👉  <a class=\"link\" href=\"https://www.linkedin.com/redir/redirect?url=https%3A%2F%2Flnkd%2Ein%2FeHDYbPyY&amp;urlhash=gTv2&amp;trk=public_post-text\" target=\"_self\" rel=\"nofollow\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>https://lnkd.in/eHDYbPyY</a>\n\nCongratulations, Denys — here’s to MORE success 💥 \n\n<a class=\"link\" href=\"https://www.linkedin.com/signup/cold-join?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2Fhashtag%2Fplayson&amp;trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>#Playson</a> <a class=\"link\" href=\"https://www.linkedin.com/signup/cold-join?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2Fhashtag%2Fgetmore&amp;trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>#GetMORE</a> <a class=\"link\" href=\"https://www.linkedin.com/signup/cold-join?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2Fhashtag%2Figaming&amp;trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>#iGaming</a> <a class=\"link\" href=\"https://www.linkedin.com/signup/cold-join?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2Fhashtag%2Figamingcareer&amp;trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>#iGamingCareer</a> <a class=\"link\" href=\"https://www.linkedin.com/signup/cold-join?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2Fhashtag%2Fcareergrowth&amp;trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>#CareerGrowth</a>",
+      "timestamp": "2026-08-11T20:32:34.672Z",
+      "input": {
+        "num_connections": 500,
+        "url": "https://www.linkedin.com/posts/playson_playson-getmore-igaming-activity-7492518678094061568-XHqn"
+      },
+      "discovery_input": {
+        "url": "https://www.linkedin.com/in/yaroslavsoloshenko"
+      }
+    },
+    {
+      "url": "https://ru.linkedin.com/posts/nare-sujyan_%D0%B4%D0%BD%D0%B5%D0%B2%D0%BD%D0%B8%D0%BA%D0%B8-%D0%BA%D0%B0%D0%B7%D0%B8%D0%BD%D0%BE-%D0%BC%D0%B5%D0%BD%D0%B5%D0%B4%D0%B6%D0%B5%D1%80%D0%B0-%D0%B4%D0%B5%D0%BD%D1%8C-330-%D0%BF%D1%80%D0%BE%D1%84%D0%B0%D0%B9%D0%BB%D0%B5%D1%80%D1%8B-activity-7491825574710022144-b_mR",
+      "id": "7491825574710022144",
+      "user_id": "nare-sujyan",
+      "use_url": "https://ae.linkedin.com/in/nare-sujyan",
+      "title": "Дневники казино менеджера. День 3/30 - Профайлеры в мире гемблинга Так как в день 2 я говорила про то какие разные бывают игроки и что они хотят(по мне), сегодня я хочу говорить про людей которые… | Nare Sujyan",
+      "headline": "Дневники казино менеджера.",
+      "post_text": "Дневники казино менеджера. День 3/30  - Профайлеры в мире гемблинга \n\nТак как в день 2 я говорила про то какие разные бывают игроки и что они хотят(по мне), сегодня я хочу говорить про людей которые стоят за ширмой б2с проекта. Те самые “профайлеры в мире гемблинга” которые и пытаются собрать этот портрет игрока и дальше работать с ним.\n\nЭтот легион в себя включает - аффилиат менеджеров, арбитражников, ЦРМ команду, продактов, аналитиков, вип отдел, саппорт, казино менеджеров(как ваша покорная слуга), спорт специалистов(ну если это не только казино конечно), технарей, контент менеджеров, сео специалистов, раф специалистов, платежная команда, куа.\nАж вспотела по 100 раз пока это все писала…(и то наверно многих забыла)\n\nНу в принципе в зависимости от размера проекта, или софта на котором сидит проект, или самого типа проекта(может это классически вайт лейбл) этот скоуп конечно меняется. Но честно, имхо, если у вас нету хотя бы части такой команды, то какой б2с бренд у вас в итоге выйдет я немного слабо представляю. \n\nИ даже при том что есть платформы которые предоставляют managed services, вот хоть убейте, я не могу верить что без полной ин хаус команды можно сделать очень классный проект. Можно наверно на время делегировать и црм, и аквизишн, и контент, и саппорт но в долгосрок по мне это невыгодно ни как. \n\nКонечно жду вашего мнения, опыта и интересную дискуссию в комментах.",
+      "date_posted": "2026-08-08T12:00:08.351Z",
+      "hashtags": null,
+      "embedded_links": null,
+      "images": null,
+      "videos": [
+        "https://dms.licdn.com/playlist/vid/v2/D4D05AQHDMO8h9t6Bcw/mp4-640p-30fp-crf28/B4DZ_hPo2iGwBk-/0/1786190402454?e=2147483647&v=beta&t=KTvdSBNIunJDY0EdRebIhArJW2CkLC7ZwXiCCG1Y6b4"
+      ],
+      "num_likes": 18,
+      "num_comments": 0,
+      "more_articles_by_user": null,
+      "more_relevant_posts": null,
+      "top_visible_comments": null,
+      "user_followers": 2907,
+      "user_posts": 158,
+      "user_articles": 0,
+      "post_type": "post",
+      "account_type": "Person",
+      "post_text_html": "Дневники казино менеджера. День 3/30  - Профайлеры в мире гемблинга <br/><br/>Так как в день 2 я говорила про то какие разные бывают игроки и что они хотят(по мне), сегодня я хочу говорить про людей которые стоят за ширмой б2с проекта. Те самые “профайлеры в мире гемблинга” которые и пытаются собрать этот портрет игрока и дальше работать с ним.<br/><br/>Этот легион в себя включает - аффилиат менеджеров, арбитражников, ЦРМ команду, продактов, аналитиков, вип отдел, саппорт, казино менеджеров(как ваша покорная слуга), спорт специалистов(ну если это не только казино конечно), технарей, контент менеджеров, сео специалистов, раф специалистов, платежная команда, куа.<br/>Аж вспотела по 100 раз пока это все писала…(и то наверно многих забыла)<br/><br/>Ну в принципе в зависимости от размера проекта, или софта на котором сидит проект, или самого типа проекта(может это классически вайт лейбл) этот скоуп конечно меняется. Но честно, имхо, если у вас нету хотя бы части такой команды, то какой б2с бренд у вас в итоге выйдет я немного слабо представляю. <br/><br/>И даже при том что есть платформы которые предоставляют managed services, вот хоть убейте, я не могу верить что без полной ин хаус команды можно сделать очень классный проект. Можно наверно на время делегировать и црм, и аквизишн, и контент, и саппорт но в долгосрок по мне это невыгодно ни как. <br/><br/>Конечно жду вашего мнения, опыта и интересную дискуссию в комментах.",
+      "repost": {
+        "repost_hangtags": null,
+        "repost_attachments": null,
+        "tagged_users": null,
+        "tagged_companies": null
+      },
+      "tagged_companies": [],
+      "tagged_people": [],
+      "user_title": null,
+      "author_profile_pic": "https://media.licdn.com/dms/image/v2/D4D03AQGmCDGRHTAg2A/profile-displayphoto-scale_400_400/B4DZxOG6NwIUAg-/0/1770836961450?e=2147483647&v=beta&t=bQO8y1bZXVP-JrQj7rl3acDbdk3nKkWjqzEaeM7u9ZM",
+      "num_connections": 500,
+      "video_duration": 4,
+      "external_link_data": null,
+      "video_thumbnail": "https://media.licdn.com/dms/image/v2/D4D05AQHDMO8h9t6Bcw/videocover-high/B4DZ_hPo2iGwBM-/0/1786190402177?e=2147483647&v=beta&t=0AekeNRx7XdYF9b0WuSGsWBQhYzANR12lNwY0pGi7jo",
+      "document_cover_image": null,
+      "document_page_count": null,
+      "user_profile_pic": "https://media.licdn.com/dms/image/v2/D4D03AQGmCDGRHTAg2A/profile-displayphoto-scale_200_200/B4DZxOG6NwIUAY-/0/1770836961450?e=2147483647&v=beta&t=YfMC3JZQDecsmJIhLU9yShgZQfG4orVjkdZtmHF8E0g",
+      "user_name": "Nare Sujyan",
+      "original_post_text": "Дневники казино менеджера. День 3/30  - Профайлеры в мире гемблинга \n\nТак как в день 2 я говорила про то какие разные бывают игроки и что они хотят(по мне), сегодня я хочу говорить про людей которые стоят за ширмой б2с проекта. Те самые “профайлеры в мире гемблинга” которые и пытаются собрать этот портрет игрока и дальше работать с ним.\n\nЭтот легион в себя включает - аффилиат менеджеров, арбитражников, ЦРМ команду, продактов, аналитиков, вип отдел, саппорт, казино менеджеров(как ваша покорная слуга), спорт специалистов(ну если это не только казино конечно), технарей, контент менеджеров, сео специалистов, раф специалистов, платежная команда, куа.\nАж вспотела по 100 раз пока это все писала…(и то наверно многих забыла)\n\nНу в принципе в зависимости от размера проекта, или софта на котором сидит проект, или самого типа проекта(может это классически вайт лейбл) этот скоуп конечно меняется. Но честно, имхо, если у вас нету хотя бы части такой команды, то какой б2с бренд у вас в итоге выйдет я немного слабо представляю. \n\nИ даже при том что есть платформы которые предоставляют managed services, вот хоть убейте, я не могу верить что без полной ин хаус команды можно сделать очень классный проект. Можно наверно на время делегировать и црм, и аквизишн, и контент, и саппорт но в долгосрок по мне это невыгодно ни как. \n\nКонечно жду вашего мнения, опыта и интересную дискуссию в комментах.",
+      "timestamp": "2026-08-11T20:32:34.682Z",
+      "input": {
+        "num_connections": 500,
+        "url": "https://www.linkedin.com/posts/nare-sujyan_%D0%B4%D0%BD%D0%B5%D0%B2%D0%BD%D0%B8%D0%BA%D0%B8-%D0%BA%D0%B0%D0%B7%D0%B8%D0%BD%D0%BE-%D0%BC%D0%B5%D0%BD%D0%B5%D0%B4%D0%B6%D0%B5%D1%80%D0%B0-%D0%B4%D0%B5%D0%BD%D1%8C-330-%D0%BF%D1%80%D0%BE%D1%84%D0%B0%D0%B9%D0%BB%D0%B5%D1%80%D1%8B-activity-7491825574710022144-b_mR"
+      },
+      "discovery_input": {
+        "url": "https://www.linkedin.com/in/yaroslavsoloshenko"
+      }
+    },
+    {
+      "url": "https://www.linkedin.com/posts/hermannalex_today-is-my-birthday-im-38-now-im-grateful-activity-7492832499530858496-tDo3",
+      "id": "7492832499530858496",
+      "user_id": "hermannalex",
+      "use_url": "https://ua.linkedin.com/in/hermannalex",
+      "title": "Today is my birthday, I’m 38 now. I’m grateful for everyone who has been supporting me all this time, thank you, I appreciate you 🫂 I’m on my week off so gonna be spending a day with the family… | Alex Hermann | 58 comments",
+      "headline": "Today is my birthday, I’m 38 now.",
+      "post_text": "Today is my birthday, I’m 38 now.\nI’m grateful for everyone who has been supporting me all this time, thank you, I appreciate you 🫂\nI’m on my week off so gonna be spending a day with the family. \nBut a birthday post is basically free likes and reach and who am to skip one of these, let’s see how a video performs, never tried that on my birthday.",
+      "date_posted": "2026-08-11T06:41:17.933Z",
+      "hashtags": null,
+      "embedded_links": null,
+      "images": null,
+      "videos": [
+        "https://dms.licdn.com/playlist/vid/v2/D5605AQFyZi7IMNqS5g/mp4-640p-30fp-crf28/B56Z_vjbM0JQBo-/0/1786430471753?e=2147483647&v=beta&t=yhMTdQ2KAS8yjNmcYdSO284FFyln_2Nv0xAiCQ3ScOk"
+      ],
+      "num_likes": 112,
+      "num_comments": 58,
+      "more_articles_by_user": null,
+      "more_relevant_posts": null,
+      "top_visible_comments": [
+        {
+          "use_url": "https://mt.linkedin.com/in/carldegiorgio?trk=public_post_comment_actor-name",
+          "user_id": "carldegiorgio",
+          "user_name": "Carl DeGiorgio",
+          "comment_date": "2026-08-11T08:44:09.934Z",
+          "comment": "Happy bday : )",
+          "tagged_users": null,
+          "num_reactions": 2,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492863419730169856",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492832463027781632?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492832463027781632%2C7492863419730169856%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492863419730169856%2Curn%3Ali%3AugcPost%3A7492832463027781632%29"
+        },
+        {
+          "use_url": "https://es.linkedin.com/in/karinaferraioli?trk=public_post_comment_actor-name",
+          "user_id": "karinaferraioli",
+          "user_name": "🌟 Karina Ferraioli",
+          "comment_date": "2026-08-11T06:45:17.024Z",
+          "comment": "Happy Birthday!  🎉",
+          "tagged_users": null,
+          "num_reactions": 2,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492833502137126914",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492832463027781632?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492832463027781632%2C7492833502137126914%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492833502137126914%2Curn%3Ali%3AugcPost%3A7492832463027781632%29"
+        },
+        {
+          "use_url": "https://www.linkedin.com/in/dlampert?trk=public_post_comment_actor-name",
+          "user_id": "dlampert",
+          "user_name": "Dmitriy Lampert",
+          "comment_date": "2026-08-11T06:49:36.819Z",
+          "comment": "Can’t skip free likes!!\nHBD man! 🎉🎂",
+          "tagged_users": null,
+          "num_reactions": 1,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492834591796498432",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492832463027781632?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492832463027781632%2C7492834591796498432%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492834591796498432%2Curn%3Ali%3AugcPost%3A7492832463027781632%29"
+        },
+        {
+          "use_url": "https://ua.linkedin.com/in/yu-kucherenko?trk=public_post_comment_actor-name",
+          "user_id": "yu-kucherenko",
+          "user_name": "Yuliia Kucherenko",
+          "comment_date": "2026-08-11T06:48:37.624Z",
+          "comment": "Happy Birthday 🥳🫂",
+          "tagged_users": null,
+          "num_reactions": 1,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492834343514513410",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492832463027781632?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492832463027781632%2C7492834343514513410%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492834343514513410%2Curn%3Ali%3AugcPost%3A7492832463027781632%29"
+        },
+        {
+          "use_url": "https://cy.linkedin.com/in/andrew-mreana-628249132?trk=public_post_comment_actor-name",
+          "user_id": "andrew-mreana-628249132",
+          "user_name": "Andrew Mreana",
+          "comment_date": "2026-08-11T06:46:37.269Z",
+          "comment": "happy bday big guy",
+          "tagged_users": null,
+          "num_reactions": 1,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492833838709116930",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492832463027781632?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492832463027781632%2C7492833838709116930%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492833838709116930%2Curn%3Ali%3AugcPost%3A7492832463027781632%29"
+        },
+        {
+          "use_url": "https://ua.linkedin.com/in/yurii-borysov?trk=public_post_comment_actor-name",
+          "user_id": "yurii-borysov",
+          "user_name": "Yurii Borysov",
+          "comment_date": "2026-08-11T06:54:04.584Z",
+          "comment": "Happy Birthday Alex! Many happy returns!",
+          "tagged_users": [
+            "https://ua.linkedin.com/in/hermannalex?trk=public_post_comment-text"
+          ],
+          "num_reactions": 1,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492835714884345857",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492832463027781632?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492832463027781632%2C7492835714884345857%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492835714884345857%2Curn%3Ali%3AugcPost%3A7492832463027781632%29"
+        },
+        {
+          "use_url": "https://de.linkedin.com/in/stefanie-kalamorz-051b511a1?trk=public_post_comment_actor-name",
+          "user_id": "stefanie-kalamorz-051b511a1",
+          "user_name": "Stefanie Kalamorz",
+          "comment_date": "2026-08-11T06:56:44.134Z",
+          "comment": "Happy birthday 🎂 🎉",
+          "tagged_users": null,
+          "num_reactions": 1,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492836384085319680",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492832463027781632?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492832463027781632%2C7492836384085319680%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492836384085319680%2Curn%3Ali%3AugcPost%3A7492832463027781632%29"
+        },
+        {
+          "use_url": "https://lv.linkedin.com/in/ieva-drazniece?trk=public_post_comment_actor-name",
+          "user_id": "ieva-drazniece",
+          "user_name": "Ieva Drazniece",
+          "comment_date": "2026-08-11T07:24:33.555Z",
+          "comment": "Happy birthday Alex Btw, you've used two magnets, kids and animals to make us pause anyhow  🤩",
+          "tagged_users": [
+            "https://ua.linkedin.com/in/hermannalex?trk=public_post_comment-text"
+          ],
+          "num_reactions": 1,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492843386144624640",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492832463027781632?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492832463027781632%2C7492843386144624640%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492843386144624640%2Curn%3Ali%3AugcPost%3A7492832463027781632%29"
+        },
+        {
+          "use_url": "https://pt.linkedin.com/in/onlinejenn?trk=public_post_comment_actor-name",
+          "user_id": "onlinejenn",
+          "user_name": "Jenny Gonzalez",
+          "comment_date": "2026-08-11T08:42:40.955Z",
+          "comment": "Happiest of birthdays celebrate exactly the way you want",
+          "tagged_users": null,
+          "num_reactions": 0,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492863046525104128",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492832463027781632?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492832463027781632%2C7492863046525104128%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492863046525104128%2Curn%3Ali%3AugcPost%3A7492832463027781632%29"
+        }
+      ],
+      "user_followers": 23429,
+      "user_posts": 1002,
+      "user_articles": 5,
+      "post_type": "post",
+      "account_type": "Person",
+      "post_text_html": "Today is my birthday, I’m 38 now.<br/>I’m grateful for everyone who has been supporting me all this time, thank you, I appreciate you 🫂<br/>I’m on my week off so gonna be spending a day with the family. <br/>But a birthday post is basically free likes and reach and who am to skip one of these, let’s see how a video performs, never tried that on my birthday.",
+      "repost": {
+        "repost_hangtags": null,
+        "repost_attachments": null,
+        "tagged_users": null,
+        "tagged_companies": null
+      },
+      "tagged_companies": [],
+      "tagged_people": [],
+      "user_title": null,
+      "author_profile_pic": "https://media.licdn.com/dms/image/v2/D4D03AQG3Yy6U3c_QOg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1675092369442?e=2147483647&v=beta&t=GOGazbnnTsyoyAHPbQw8ZnbJoOHKl_9q0U7h_A7628E",
+      "num_connections": 500,
+      "video_duration": 4,
+      "external_link_data": null,
+      "video_thumbnail": "https://media.licdn.com/dms/image/v2/D5605AQFyZi7IMNqS5g/videocover-high/B56Z_vjbM0JQBQ-/0/1786430470872?e=2147483647&v=beta&t=-nQo7Ps2MCXqh0zybx5Qx-sybv3WmoElhKe67MS9DuE",
+      "document_cover_image": null,
+      "document_page_count": null,
+      "user_profile_pic": "https://media.licdn.com/dms/image/v2/D4D03AQG3Yy6U3c_QOg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1675092369442?e=2147483647&v=beta&t=uYYC6mCIbpqzduAGYIUhi_vc5O5f8NZLyv_ieDRs5_M",
+      "user_name": "Alex Hermann",
+      "original_post_text": "Today is my birthday, I’m 38 now.\nI’m grateful for everyone who has been supporting me all this time, thank you, I appreciate you 🫂\nI’m on my week off so gonna be spending a day with the family. \nBut a birthday post is basically free likes and reach and who am to skip one of these, let’s see how a video performs, never tried that on my birthday.",
+      "timestamp": "2026-08-11T20:32:35.266Z",
+      "input": {
+        "num_connections": 500,
+        "url": "https://www.linkedin.com/posts/hermannalex_today-is-my-birthday-im-38-now-im-grateful-activity-7492832499530858496-tDo3"
+      },
+      "discovery_input": {
+        "url": "https://www.linkedin.com/in/yaroslavsoloshenko"
+      }
+    },
+    {
+      "url": "https://www.linkedin.com/posts/eduardverdaguergamell_last-week-was-my-last-week-at-alea-i-joined-activity-7492939977647976448-90Ef",
+      "id": "7492939977647976448",
+      "user_id": "eduardverdaguergamell",
+      "use_url": "https://es.linkedin.com/in/eduardverdaguergamell/en?trk=public_post_feed-actor-image",
+      "title": "Last week was my last week at Alea. I joined more than six years ago, and it is incredible to see how much everything has changed since then. It has been amazing to experience first-hand the journey… | Eduard Verdaguer Gamell | 42 comments",
+      "headline": "Last week was my last week at Alea.",
+      "post_text": "Last week was my last week at Alea.\n\nI joined more than six years ago, and it is incredible to see how much everything has changed since then. It has been amazing to experience first-hand the journey from a startup to an established company and industry leader.\n\nWe have worked incredibly hard, but every effort, every challenge, and every hour invested has been worth it.\n\nPrimero de todo, me toca dar las gracias a Sara. Gracias por confiar en aquel Edu de 22 años y, sobre todo, gracias por creer en mí. Durante mis primeros seis meses me enseñaste una de las lecciones más importantes que me llevo: un buen mánager protege a su equipo, pase lo que pase.\n\nI then had the opportunity to build the Games department from scratch and form a team with Arnau and Jan.\n\nGràcies, nois, per haver confiat en mi, un manager inexpert. Gràcies per haver sigut dos dels meus pilars a Alea, per la confiança, el respecte i l’estima. Els dailys amb vosaltres eren únics i són un dels meus millors records. Estic súper orgullós de veure en què us heu convertit dins d’Alea.\n\nWe built the department under Charlotte’s leadership. I have always considered her the heart of Alea: the person who makes everything work. It has been a pleasure to share so many meetings, challenges, and moments with you. I feel incredibly lucky to have learned so much from you.\n\nLater, we identified an opportunity to create the Partnerships department within Alea. I moved on from Games and began building this new department together with Jordi.\n\nGràcies, Jordi, per fer-me gaudir tant de la feina. He après moltíssim de tu, i una gran part del motiu pel qual he estimat aquesta feina ha estat poder construir-la al teu costat. Gràcies pels viatges, per totes les converses honestes i per tots els consells. Professionalment, soc qui soc en gran part gràcies a tu.\n\nThen came the people who have been my driving force over the past two years: Ariadna, Pablo, Ana, and Adrià.\n\nChiquis, gracias por haber confiado en mí y por haber formado parte del equipo. He disfrutado muchísimo trabajando codo a codo con vosotros y viendo cómo habéis ido creciendo y aprendiendo. Me voy súper orgulloso de haber creado un departamento con personas tan bonitas y especiales como cada uno de vosotros. Habéis sido mi mayor motivación y mi mayor orgullo. Gracias por haber hecho de mi última etapa en Alea la mejor.\n\nA special mention goes to Alexandre Tomic  for trusting me with a key role at Alea. It has been a privilege. I am incredibly proud to see what you and Charlotte have built together.\n\nI could mention so many more people, but I would inevitably leave someone out. I have named those I worked most closely with, but my gratitude extends far beyond this list: from my colleagues at Alea to the people working for our providers, many of whom have become friends.\n\nYou all know you can count on me.\n\nThank you all for making these past six years such a special experience. See you around!\n\nThank you Alea.",
+      "date_posted": "2026-08-11T13:48:22.745Z",
+      "hashtags": null,
+      "embedded_links": [
+        "https://es.linkedin.com/in/sara-rodr%C3%ADguez-roberto-180788?trk=public_post-text",
+        "https://es.linkedin.com/in/arnau-ballester-jim%C3%A9nez?trk=public_post-text",
+        "https://es.linkedin.com/in/jan-mart%C3%ADnez-polo-8b5479265?trk=public_post-text",
+        "https://es.linkedin.com/in/jordi-sendra-garcia?trk=public_post-text",
+        "https://es.linkedin.com/in/ariadnariberamorcillo?trk=public_post-text",
+        "https://es.linkedin.com/in/pablo-ruiz-suso-35b509140/en?trk=public_post-text",
+        "https://es.linkedin.com/in/ana-lopez-valero?trk=public_post-text",
+        "https://es.linkedin.com/in/adria-guti%C3%A9rrez-molina?trk=public_post-text",
+        "https://cy.linkedin.com/in/alexandretomic?trk=public_post-text"
+      ],
+      "images": null,
+      "videos": null,
+      "num_likes": 131,
+      "num_comments": 42,
+      "more_articles_by_user": null,
+      "more_relevant_posts": null,
+      "top_visible_comments": [
+        {
+          "use_url": "https://es.linkedin.com/in/sara-rodr%C3%ADguez-roberto-180788?trk=public_post_comment_actor-name",
+          "user_id": "sara-rodr%C3%ADguez-roberto-180788",
+          "user_name": "Sara Rodríguez Roberto",
+          "comment_date": "2026-08-11T14:38:39.516Z",
+          "comment": "Edu, I couldn't be more grateful to have walked this path at Alea alongside you. Having you by my side through all the crazy milestones and watching you grow over these years has been such a special experience. Thank you for every moment, I’m going to miss working with you so much. Wishing you the absolute best in this next chapter, because I know you're going to crush it! ❤️ Dinner is pending ;)",
+          "tagged_users": null,
+          "num_reactions": 3,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492952630822932480",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492939977647976448?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492939977647976448%2C7492952630822932480%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492952630822932480%2Curn%3Ali%3AugcPost%3A7492939977647976448%29"
+        },
+        {
+          "use_url": "https://cy.linkedin.com/in/alexandretomic?trk=public_post_comment_actor-name",
+          "user_id": "alexandretomic",
+          "user_name": "Alexandre Tomic",
+          "comment_date": "2026-08-11T15:03:53.916Z",
+          "comment": "You will be missed Edu. I wish you happiness and fulfilment in your journey. I hope our paths will cross again.",
+          "tagged_users": null,
+          "num_reactions": 3,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492958982676975618",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492939977647976448?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492939977647976448%2C7492958982676975618%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492958982676975618%2Curn%3Ali%3AugcPost%3A7492939977647976448%29"
+        },
+        {
+          "use_url": "https://es.linkedin.com/in/jordi-sendra-garcia?trk=public_post_comment_actor-name",
+          "user_id": "jordi-sendra-garcia",
+          "user_name": "Jordi Sendra",
+          "comment_date": "2026-08-11T17:52:23.344Z",
+          "comment": "Una abraçada Edu! Trobaré a faltar treballar amb tu😘",
+          "tagged_users": null,
+          "num_reactions": 3,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7493001384691257345",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492939977647976448?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492939977647976448%2C7493001384691257345%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287493001384691257345%2Curn%3Ali%3AugcPost%3A7492939977647976448%29"
+        },
+        {
+          "use_url": "https://cy.linkedin.com/in/emanpulis?trk=public_post_comment_actor-name",
+          "user_id": "emanpulis",
+          "user_name": "Eman PULIS",
+          "comment_date": "2026-08-11T16:22:35.319Z",
+          "comment": "Six years is a great stint by any measure. Wish you the best on your next adventure.  👊",
+          "tagged_users": null,
+          "num_reactions": 4,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492978785676431360",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492939977647976448?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492939977647976448%2C7492978785676431360%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492978785676431360%2Curn%3Ali%3AugcPost%3A7492939977647976448%29"
+        },
+        {
+          "use_url": "https://pe.linkedin.com/in/paloma-fl%C3%B3rez-967187134?trk=public_post_comment_actor-name",
+          "user_id": "paloma-fl%C3%B3rez-967187134",
+          "user_name": "Paloma Flórez",
+          "comment_date": "2026-08-11T15:05:15.604Z",
+          "comment": "Eres lo máximo Edu, vamos a extrañar un montón tu increible y graciosa energía en Partnerships  😊",
+          "tagged_users": null,
+          "num_reactions": 2,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492959325301239808",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492939977647976448?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492939977647976448%2C7492959325301239808%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492959325301239808%2Curn%3Ali%3AugcPost%3A7492939977647976448%29"
+        },
+        {
+          "use_url": "https://es.linkedin.com/in/jorge-pascual-escoda/en?trk=public_post_comment_actor-name",
+          "user_id": "en",
+          "user_name": "Jorge Pascual Escoda",
+          "comment_date": "2026-08-11T17:19:28.468Z",
+          "comment": "Eduard Verdaguer Gamell Ets el millor que li ha pogut passar a Alea mai. Sempre portaré al cor els temps junts. Et mereixes lo millor ❤️",
+          "tagged_users": [
+            "https://es.linkedin.com/in/eduardverdaguergamell/en?trk=public_post_comment-text"
+          ],
+          "num_reactions": 2,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492993101461073920",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492939977647976448?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492939977647976448%2C7492993101461073920%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492993101461073920%2Curn%3Ali%3AugcPost%3A7492939977647976448%29"
+        },
+        {
+          "use_url": "https://it.linkedin.com/in/atena-hajigol?trk=public_post_comment_actor-name",
+          "user_id": "atena-hajigol",
+          "user_name": "Atena Hajigol",
+          "comment_date": "2026-08-11T15:13:53.234Z",
+          "comment": "The Alea booth simply won’t be the same without you! Who is going to welcome this “Persian Princess” now?! 👑\nAlea definitely became a favorite partner of ours because of you and your incredible energy. Wishing you nothing but the absolute best in your next chapter, dear Edu! You will be deeply missed! 🚀✨",
+          "tagged_users": null,
+          "num_reactions": 2,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492961496398733312",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492939977647976448?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492939977647976448%2C7492961496398733312%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492961496398733312%2Curn%3Ali%3AugcPost%3A7492939977647976448%29"
+        },
+        {
+          "use_url": "https://de.linkedin.com/in/robert-kocher-de?trk=public_post_comment_actor-name",
+          "user_id": "robert-kocher-de",
+          "user_name": "Robert Kocher",
+          "comment_date": "2026-08-11T16:56:36.346Z",
+          "comment": "Thanks for the great cooperation over the years, Eduard. Alea has always had some great people, and you were definitely one of them. Wishing you all the best for whatever comes next.",
+          "tagged_users": [
+            "https://es.linkedin.com/in/eduardverdaguergamell/en?trk=public_post_comment-text"
+          ],
+          "num_reactions": 1,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492987346364194816",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492939977647976448?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492939977647976448%2C7492987346364194816%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492987346364194816%2Curn%3Ali%3AugcPost%3A7492939977647976448%29"
+        },
+        {
+          "use_url": "https://es.linkedin.com/in/alba-gutierrez?trk=public_post_comment_actor-name",
+          "user_id": "alba-gutierrez",
+          "user_name": "Alba Gutiérrez Sevil",
+          "comment_date": "2026-08-11T16:57:07.562Z",
+          "comment": "Edu, va ser una meravella haver coincidit amb tu. Portes llum allà on vas, aixi que no en tinc dubte que t’espera un futur encara més brillant ✨ Ens veiem en breus!",
+          "tagged_users": null,
+          "num_reactions": 1,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492987477293727745",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492939977647976448?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492939977647976448%2C7492987477293727745%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492987477293727745%2Curn%3Ali%3AugcPost%3A7492939977647976448%29"
+        },
+        {
+          "use_url": "https://es.linkedin.com/in/ana-lopez-valero?trk=public_post_comment_actor-name",
+          "user_id": "ana-lopez-valero",
+          "user_name": "Ana López Valero",
+          "comment_date": "2026-08-11T14:52:33.848Z",
+          "comment": "Te echaremos de menos cada día ❤️🩹\nGracias por darme la oportunidad hace un año de unirme a un equipo de trabajo que dificilmente puede ser mejor!!! Haz lo mismo vayas donde vayas ❤️",
+          "tagged_users": null,
+          "num_reactions": 1,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492956130264928256",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492939977647976448?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492939977647976448%2C7492956130264928256%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492956130264928256%2Curn%3Ali%3AugcPost%3A7492939977647976448%29"
+        }
+      ],
+      "user_followers": 1608,
+      "user_posts": 14,
+      "user_articles": 0,
+      "post_type": "post",
+      "account_type": "Person",
+      "post_text_html": "Last week was my last week at Alea.<br/><br/>I joined more than six years ago, and it is incredible to see how much everything has changed since then. It has been amazing to experience first-hand the journey from a startup to an established company and industry leader.<br/><br/>We have worked incredibly hard, but every effort, every challenge, and every hour invested has been worth it.<br/><br/>Primero de todo, me toca dar las gracias a <a class=\"link\" href=\"https://es.linkedin.com/in/sara-rodr%C3%ADguez-roberto-180788?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Sara</a>. Gracias por confiar en aquel Edu de 22 años y, sobre todo, gracias por creer en mí. Durante mis primeros seis meses me enseñaste una de las lecciones más importantes que me llevo: un buen mánager protege a su equipo, pase lo que pase.<br/><br/>I then had the opportunity to build the Games department from scratch and form a team with <a class=\"link\" href=\"https://es.linkedin.com/in/arnau-ballester-jim%C3%A9nez?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Arnau</a> and <a class=\"link\" href=\"https://es.linkedin.com/in/jan-mart%C3%ADnez-polo-8b5479265?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Jan</a>.<br/><br/>Gràcies, nois, per haver confiat en mi, un manager inexpert. Gràcies per haver sigut dos dels meus pilars a Alea, per la confiança, el respecte i l’estima. Els dailys amb vosaltres eren únics i són un dels meus millors records. Estic súper orgullós de veure en què us heu convertit dins d’Alea.<br/><br/>We built the department under Charlotte’s leadership. I have always considered her the heart of Alea: the person who makes everything work. It has been a pleasure to share so many meetings, challenges, and moments with you. I feel incredibly lucky to have learned so much from you.<br/><br/>Later, we identified an opportunity to create the Partnerships department within Alea. I moved on from Games and began building this new department together with Jordi.<br/><br/>Gràcies, <a class=\"link\" href=\"https://es.linkedin.com/in/jordi-sendra-garcia?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Jordi</a>, per fer-me gaudir tant de la feina. He après moltíssim de tu, i una gran part del motiu pel qual he estimat aquesta feina ha estat poder construir-la al teu costat. Gràcies pels viatges, per totes les converses honestes i per tots els consells. Professionalment, soc qui soc en gran part gràcies a tu.<br/><br/>Then came the people who have been my driving force over the past two years: <a class=\"link\" href=\"https://es.linkedin.com/in/ariadnariberamorcillo?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Ariadna</a>, <a class=\"link\" href=\"https://es.linkedin.com/in/pablo-ruiz-suso-35b509140/en?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Pablo</a>, <a class=\"link\" href=\"https://es.linkedin.com/in/ana-lopez-valero?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Ana</a>, and <a class=\"link\" href=\"https://es.linkedin.com/in/adria-guti%C3%A9rrez-molina?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Adrià</a>.<br/><br/>Chiquis, gracias por haber confiado en mí y por haber formado parte del equipo. He disfrutado muchísimo trabajando codo a codo con vosotros y viendo cómo habéis ido creciendo y aprendiendo. Me voy súper orgulloso de haber creado un departamento con personas tan bonitas y especiales como cada uno de vosotros. Habéis sido mi mayor motivación y mi mayor orgullo. Gracias por haber hecho de mi última etapa en Alea la mejor.<br/><br/>A special mention goes to <a class=\"link\" href=\"https://cy.linkedin.com/in/alexandretomic?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Alexandre Tomic</a>  for trusting me with a key role at Alea. It has been a privilege. I am incredibly proud to see what you and Charlotte have built together.<br/><br/>I could mention so many more people, but I would inevitably leave someone out. I have named those I worked most closely with, but my gratitude extends far beyond this list: from my colleagues at Alea to the people working for our providers, many of whom have become friends.<br/><br/>You all know you can count on me.<br/><br/>Thank you all for making these past six years such a special experience. See you around!<br/><br/>Thank you Alea.",
+      "repost": {
+        "repost_hangtags": null,
+        "repost_attachments": null,
+        "tagged_users": null,
+        "tagged_companies": null
+      },
+      "tagged_companies": [],
+      "tagged_people": [
+        {
+          "name": "Sara",
+          "link": "https://es.linkedin.com/in/sara-rodr%C3%ADguez-roberto-180788?trk=public_post-text"
+        },
+        {
+          "name": "Arnau",
+          "link": "https://es.linkedin.com/in/arnau-ballester-jim%C3%A9nez?trk=public_post-text"
+        },
+        {
+          "name": "Jan",
+          "link": "https://es.linkedin.com/in/jan-mart%C3%ADnez-polo-8b5479265?trk=public_post-text"
+        },
+        {
+          "name": "Jordi",
+          "link": "https://es.linkedin.com/in/jordi-sendra-garcia?trk=public_post-text"
+        },
+        {
+          "name": "Ariadna",
+          "link": "https://es.linkedin.com/in/ariadnariberamorcillo?trk=public_post-text"
+        },
+        {
+          "name": "Pablo",
+          "link": "https://es.linkedin.com/in/pablo-ruiz-suso-35b509140/en?trk=public_post-text"
+        },
+        {
+          "name": "Ana",
+          "link": "https://es.linkedin.com/in/ana-lopez-valero?trk=public_post-text"
+        },
+        {
+          "name": "Adrià",
+          "link": "https://es.linkedin.com/in/adria-guti%C3%A9rrez-molina?trk=public_post-text"
+        },
+        {
+          "name": "Alexandre Tomic",
+          "link": "https://cy.linkedin.com/in/alexandretomic?trk=public_post-text"
+        }
+      ],
+      "user_title": null,
+      "author_profile_pic": "https://static.licdn.com/aero-v1/sc/h/9c8pery4andzj6ohjkjp54ma2",
+      "num_connections": 500,
+      "video_duration": null,
+      "external_link_data": null,
+      "video_thumbnail": null,
+      "document_cover_image": null,
+      "document_page_count": null,
+      "user_profile_pic": "https://static.licdn.com/aero-v1/sc/h/9c8pery4andzj6ohjkjp54ma2",
+      "user_name": "Eduard Verdaguer Gamell",
+      "original_post_text": "Last week was my last week at Alea.\n\nI joined more than six years ago, and it is incredible to see how much everything has changed since then. It has been amazing to experience first-hand the journey from a startup to an established company and industry leader.\n\nWe have worked incredibly hard, but every effort, every challenge, and every hour invested has been worth it.\n\nPrimero de todo, me toca dar las gracias a <a class=\"link\" href=\"https://es.linkedin.com/in/sara-rodr%C3%ADguez-roberto-180788?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Sara</a>. Gracias por confiar en aquel Edu de 22 años y, sobre todo, gracias por creer en mí. Durante mis primeros seis meses me enseñaste una de las lecciones más importantes que me llevo: un buen mánager protege a su equipo, pase lo que pase.\n\nI then had the opportunity to build the Games department from scratch and form a team with <a class=\"link\" href=\"https://es.linkedin.com/in/arnau-ballester-jim%C3%A9nez?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Arnau</a> and <a class=\"link\" href=\"https://es.linkedin.com/in/jan-mart%C3%ADnez-polo-8b5479265?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Jan</a>.\n\nGràcies, nois, per haver confiat en mi, un manager inexpert. Gràcies per haver sigut dos dels meus pilars a Alea, per la confiança, el respecte i l’estima. Els dailys amb vosaltres eren únics i són un dels meus millors records. Estic súper orgullós de veure en què us heu convertit dins d’Alea.\n\nWe built the department under Charlotte’s leadership. I have always considered her the heart of Alea: the person who makes everything work. It has been a pleasure to share so many meetings, challenges, and moments with you. I feel incredibly lucky to have learned so much from you.\n\nLater, we identified an opportunity to create the Partnerships department within Alea. I moved on from Games and began building this new department together with Jordi.\n\nGràcies, <a class=\"link\" href=\"https://es.linkedin.com/in/jordi-sendra-garcia?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Jordi</a>, per fer-me gaudir tant de la feina. He après moltíssim de tu, i una gran part del motiu pel qual he estimat aquesta feina ha estat poder construir-la al teu costat. Gràcies pels viatges, per totes les converses honestes i per tots els consells. Professionalment, soc qui soc en gran part gràcies a tu.\n\nThen came the people who have been my driving force over the past two years: <a class=\"link\" href=\"https://es.linkedin.com/in/ariadnariberamorcillo?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Ariadna</a>, <a class=\"link\" href=\"https://es.linkedin.com/in/pablo-ruiz-suso-35b509140/en?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Pablo</a>, <a class=\"link\" href=\"https://es.linkedin.com/in/ana-lopez-valero?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Ana</a>, and <a class=\"link\" href=\"https://es.linkedin.com/in/adria-guti%C3%A9rrez-molina?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Adrià</a>.\n\nChiquis, gracias por haber confiado en mí y por haber formado parte del equipo. He disfrutado muchísimo trabajando codo a codo con vosotros y viendo cómo habéis ido creciendo y aprendiendo. Me voy súper orgulloso de haber creado un departamento con personas tan bonitas y especiales como cada uno de vosotros. Habéis sido mi mayor motivación y mi mayor orgullo. Gracias por haber hecho de mi última etapa en Alea la mejor.\n\nA special mention goes to <a class=\"link\" href=\"https://cy.linkedin.com/in/alexandretomic?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Alexandre Tomic</a>  for trusting me with a key role at Alea. It has been a privilege. I am incredibly proud to see what you and Charlotte have built together.\n\nI could mention so many more people, but I would inevitably leave someone out. I have named those I worked most closely with, but my gratitude extends far beyond this list: from my colleagues at Alea to the people working for our providers, many of whom have become friends.\n\nYou all know you can count on me.\n\nThank you all for making these past six years such a special experience. See you around!\n\nThank you Alea.",
+      "timestamp": "2026-08-11T20:32:35.810Z",
+      "input": {
+        "num_connections": 500,
+        "url": "https://www.linkedin.com/posts/eduardverdaguergamell_last-week-was-my-last-week-at-alea-i-joined-activity-7492939977647976448-90Ef"
+      },
+      "discovery_input": {
+        "url": "https://www.linkedin.com/in/yaroslavsoloshenko"
+      }
+    },
+    {
+      "url": "https://www.linkedin.com/posts/casino-guru-news_in-our-interview-with-ihor-zarechnyi-activity-7491086752640638976-uRrt",
+      "id": "7491086752640638976",
+      "user_id": "casino-guru-news",
+      "use_url": "https://uk.linkedin.com/company/casino-guru-news",
+      "title": "Ihor Zarechnyi on Lobby Fatigue in Online Casinos | Casino Guru News posted on the topic | LinkedIn",
+      "headline": "🎙️In our interview with Ihor Zarechnyi, CEO of NeverEnding, he discusses why lobby fatigue is becoming a real challenge for online casino operators.",
+      "post_text": "🎙️In our interview with Ihor Zarechnyi, CEO of NeverEnding, he discusses why lobby fatigue is becoming a real challenge for online casino operators.\n\nZarechnyi argues that massive game catalogs are no longer enough. With players facing tens of thousands of titles, the real question is whether they can find something worth playing in the first 30 seconds.\n\nThe interview also explores how NeverEnding uses continuous, data-driven testing across lobby placement, tournaments, promo rotations, and portfolio strategy to help operators understand what actually converts. 🙌",
+      "date_posted": "2026-08-06T11:04:19.463Z",
+      "hashtags": [
+        "#Lynon",
+        "#ProductUpdates",
+        "#TournamentEngine",
+        "#DuncanGarvieIsALiar",
+        "#CasinoGuruAcademyExposed",
+        "#BetBlockerLies",
+        "#SystemicTheft",
+        "#WeWontBeSilenced",
+        "#iGB",
+        "#CasinoGuruAcademy",
+        "#BetBlocker",
+        "#PlayerProtection",
+        "#SaferGambling",
+        "#ResponsibleGambling",
+        "#iGaming",
+        "#Education",
+        "#IndustryPartnerships",
+        "#iGBLive",
+        "#poker",
+        "#gamingindustry",
+        "#casinomanagement",
+        "#benchmarking"
+      ],
+      "embedded_links": [
+        "https://pl.linkedin.com/in/ihorzarechnyi?trk=public_post-text",
+        "https://cy.linkedin.com/company/neverendingtech?trk=public_post-text"
+      ],
+      "images": [
+        "https://media.licdn.com/dms/image/v2/D4D1FAQEDQZ6PjNsiHg/feedshare-document-images_1920/B4DZ.ojFnXIEAo-/1/1785239217570?e=1787184000&v=beta&t=iTnnNYfTABDttRoO0MEKECkxArI-4ar2qTA0conlLFM",
+        "https://media.licdn.com/dms/image/v2/D4D1FAQEDQZ6PjNsiHg/feedshare-document-images_1920/B4DZ.ojFnXIEAo-/2/1785239217570?e=1787184000&v=beta&t=btKfjGOapjLjNhH05r3Ww_tBPGzPYxYo1gw48hE7M8s",
+        "https://media.licdn.com/dms/image/v2/D4D1FAQEDQZ6PjNsiHg/feedshare-document-images_1920/B4DZ.ojFnXIEAo-/3/1785239217570?e=1787184000&v=beta&t=2-qy0iejD7uMl6RhiacNacEzq9-U-LXApoU3Ke28RE8",
+        "https://media.licdn.com/dms/image/v2/D4D1FAQEDQZ6PjNsiHg/feedshare-document-images_1920/B4DZ.ojFnXIEAo-/4/1785239217570?e=1787184000&v=beta&t=sQ0DJ129h-29Q7NwMkMVzWw1kD_ZPk5DOS6Fl14NyWc",
+        "https://media.licdn.com/dms/image/v2/D4D1FAQEDQZ6PjNsiHg/feedshare-document-images_1920/B4DZ.ojFnXIEAo-/5/1785239217570?e=1787184000&v=beta&t=3LRusl_zMCn7V_xGyYOZ4ZbZaMZgWFTEpRmcJc56DVw"
+      ],
+      "videos": null,
+      "num_likes": 25,
+      "num_comments": 2,
+      "more_articles_by_user": null,
+      "more_relevant_posts": [
+        {
+          "post_url": "https://www.linkedin.com/posts/k-pow-pig_welcome-to-the-ultimate-resource-for-the-activity-7488563581576429568-4NIU",
+          "post_id": "7488563581576429568",
+          "user_id": "k-pow-pig",
+          "use_url": "https://www.linkedin.com/posts/k-pow-pig_welcome-to-the-ultimate-resource-for-the-activity-7488563581576429568-4NIU",
+          "headline": null,
+          "post_text": "Welcome to the ultimate resource for the K-Pow Pig slot series. This page is built for players and iGaming fans who want to master Konami’s explosive release. We cut through the noise to bring you the exact mechanics, RTP data, and strategy guides for the entire 15-spot grid franchise. Follow our page for: 🔹 Detailed breakdowns of the Piggy Prize Reel and Hold & Spin mechanics. 🔹 Comparisons between the 6 different game variants (Peaceful Panda, Noble Warrior, etc.). 🔹 Direct access to free HTML5 demos to test the volatility yourself. 🔹 Updates on the best verified platforms to play online. Hit Follow to stay updated on the math and strategy behind K-Pow! Pig.",
+          "date_posted": "2026-07-30T11:58:08.631Z",
+          "num_likes": 0,
+          "num_comments": 0,
+          "images": null,
+          "videos": null,
+          "hashtags": null,
+          "embedded_links": [
+            "https://pl.linkedin.com/in/ihorzarechnyi?trk=public_post-text",
+            "https://cy.linkedin.com/company/neverendingtech?trk=public_post-text",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "https://www.linkedin.com/feed/hashtag/lynon",
+            "https://www.linkedin.com/feed/hashtag/productupdates",
+            "https://www.linkedin.com/feed/hashtag/tournamentengine",
+            "https://www.linkedin.com/feed/hashtag/duncangarvieisaliar",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademyexposed",
+            "https://www.linkedin.com/feed/hashtag/betblockerlies",
+            "https://www.linkedin.com/feed/hashtag/systemictheft",
+            "https://www.linkedin.com/feed/hashtag/wewontbesilenced",
+            "https://www.linkedin.com/feed/hashtag/igb",
+            "https://uk.linkedin.com/in/duncan-garvie-frsph-588658199?trk=public_post-text",
+            "https://uk.linkedin.com/company/betblocker?trk=public_post-text",
+            "https://lnkd.in/d5mw7StE",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademy",
+            "https://www.linkedin.com/feed/hashtag/betblocker",
+            "https://www.linkedin.com/feed/hashtag/playerprotection",
+            "https://www.linkedin.com/feed/hashtag/safergambling",
+            "https://www.linkedin.com/feed/hashtag/responsiblegambling",
+            "https://www.linkedin.com/feed/hashtag/igaming",
+            "https://www.linkedin.com/feed/hashtag/education",
+            "https://www.linkedin.com/feed/hashtag/industrypartnerships",
+            "https://www.linkedin.com/feed/hashtag/igblive",
+            "http://gsipoker.com/",
+            "https://www.linkedin.com/feed/hashtag/poker",
+            "https://www.linkedin.com/feed/hashtag/gamingindustry",
+            "https://www.linkedin.com/feed/hashtag/casinomanagement",
+            "https://www.linkedin.com/feed/hashtag/benchmarking"
+          ]
+        },
+        {
+          "post_url": "https://www.linkedin.com/posts/double-click-media_uk-bingo-players-are-looking-for-trusted-activity-7483982370409218049-EgWn",
+          "post_id": "7483982370409218049",
+          "user_id": "double-click-media",
+          "use_url": "https://www.linkedin.com/posts/double-click-media_uk-bingo-players-are-looking-for-trusted-activity-7483982370409218049-EgWn",
+          "headline": null,
+          "post_text": "UK bingo players are looking for trusted, up‑to‑date information — and BingoMums.co.uk has just published a fresh round of new offers and updated site rankings. Our latest update includes: ✔ Newly added UK‑licensed bingo brands ✔ Updated welcome offers ✔ Mobile‑friendly performance insights ✔ Safer‑play information ✔ Clear, independent comparison tables BingoMums.co.uk continues to grow as one of the UK’s most reliable bingo comparison platforms, helping players make informed decisions with transparent reviews and daily updates. 👉 Explore the latest offers: BingoMums.co.uk 18+ | Informational content | Play responsibly",
+          "date_posted": "2026-07-17T20:34:02.774Z",
+          "num_likes": 0,
+          "num_comments": 0,
+          "images": [
+            "https://media.licdn.com/dms/image/v2/D4E22AQG7b1tugwxjxQ/feedshare-shrink_1280/B4EZ9xyT4TIkAM-/0/1784320442152?e=2147483647&v=beta&t=19cKG3Q8aJ6VpfIiTxYxKZ80m6hpypwMGktLN1-_hbM",
+            "https://static.licdn.com/aero-v1/sc/h/dur0ryw0e9uscxa9b6zqvgvfs"
+          ],
+          "videos": null,
+          "hashtags": null,
+          "embedded_links": [
+            "https://pl.linkedin.com/in/ihorzarechnyi?trk=public_post-text",
+            "https://cy.linkedin.com/company/neverendingtech?trk=public_post-text",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "https://www.linkedin.com/feed/hashtag/lynon",
+            "https://www.linkedin.com/feed/hashtag/productupdates",
+            "https://www.linkedin.com/feed/hashtag/tournamentengine",
+            "https://www.linkedin.com/feed/hashtag/duncangarvieisaliar",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademyexposed",
+            "https://www.linkedin.com/feed/hashtag/betblockerlies",
+            "https://www.linkedin.com/feed/hashtag/systemictheft",
+            "https://www.linkedin.com/feed/hashtag/wewontbesilenced",
+            "https://www.linkedin.com/feed/hashtag/igb",
+            "https://uk.linkedin.com/in/duncan-garvie-frsph-588658199?trk=public_post-text",
+            "https://uk.linkedin.com/company/betblocker?trk=public_post-text",
+            "https://lnkd.in/d5mw7StE",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademy",
+            "https://www.linkedin.com/feed/hashtag/betblocker",
+            "https://www.linkedin.com/feed/hashtag/playerprotection",
+            "https://www.linkedin.com/feed/hashtag/safergambling",
+            "https://www.linkedin.com/feed/hashtag/responsiblegambling",
+            "https://www.linkedin.com/feed/hashtag/igaming",
+            "https://www.linkedin.com/feed/hashtag/education",
+            "https://www.linkedin.com/feed/hashtag/industrypartnerships",
+            "https://www.linkedin.com/feed/hashtag/igblive",
+            "http://gsipoker.com/",
+            "https://www.linkedin.com/feed/hashtag/poker",
+            "https://www.linkedin.com/feed/hashtag/gamingindustry",
+            "https://www.linkedin.com/feed/hashtag/casinomanagement",
+            "https://www.linkedin.com/feed/hashtag/benchmarking"
+          ]
+        },
+        {
+          "post_url": "https://www.linkedin.com/posts/lynonofficial_tournament-engine-activity-7487837417790570497-I-ke",
+          "post_id": "7487837417790570497",
+          "user_id": "lynonofficial",
+          "use_url": "https://www.linkedin.com/posts/lynonofficial_tournament-engine-activity-7487837417790570497-I-ke",
+          "headline": null,
+          "post_text": "Over the past two quarters, our product team has been focused on one thing: building features that solve real challenges for casino operators. We’ve shipped multiple new products and improvements, and today we’d like to highlight one of them - the Lynon Tournament Engine. With the Lynon Tournament Engine, operators can create and launch fully branded tournaments in just a few minutes 🏆 • Configure your own prize structure • Track players with live leaderboards • Brand every tournament to match your casino • No coding. No waiting. Just launch. This is just one of the many releases our team has delivered over the last 6 months, and we’re excited about what’s coming next. #Lynon #ProductUpdates #TournamentEngine",
+          "date_posted": "2026-07-28T11:52:37.693Z",
+          "num_likes": 10,
+          "num_comments": 0,
+          "images": null,
+          "videos": null,
+          "hashtags": [
+            "#Lynon",
+            "#ProductUpdates",
+            "#TournamentEngine"
+          ],
+          "embedded_links": [
+            "https://pl.linkedin.com/in/ihorzarechnyi?trk=public_post-text",
+            "https://cy.linkedin.com/company/neverendingtech?trk=public_post-text",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "https://www.linkedin.com/feed/hashtag/lynon",
+            "https://www.linkedin.com/feed/hashtag/productupdates",
+            "https://www.linkedin.com/feed/hashtag/tournamentengine",
+            "https://www.linkedin.com/feed/hashtag/duncangarvieisaliar",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademyexposed",
+            "https://www.linkedin.com/feed/hashtag/betblockerlies",
+            "https://www.linkedin.com/feed/hashtag/systemictheft",
+            "https://www.linkedin.com/feed/hashtag/wewontbesilenced",
+            "https://www.linkedin.com/feed/hashtag/igb",
+            "https://uk.linkedin.com/in/duncan-garvie-frsph-588658199?trk=public_post-text",
+            "https://uk.linkedin.com/company/betblocker?trk=public_post-text",
+            "https://lnkd.in/d5mw7StE",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademy",
+            "https://www.linkedin.com/feed/hashtag/betblocker",
+            "https://www.linkedin.com/feed/hashtag/playerprotection",
+            "https://www.linkedin.com/feed/hashtag/safergambling",
+            "https://www.linkedin.com/feed/hashtag/responsiblegambling",
+            "https://www.linkedin.com/feed/hashtag/igaming",
+            "https://www.linkedin.com/feed/hashtag/education",
+            "https://www.linkedin.com/feed/hashtag/industrypartnerships",
+            "https://www.linkedin.com/feed/hashtag/igblive",
+            "http://gsipoker.com/",
+            "https://www.linkedin.com/feed/hashtag/poker",
+            "https://www.linkedin.com/feed/hashtag/gamingindustry",
+            "https://www.linkedin.com/feed/hashtag/casinomanagement",
+            "https://www.linkedin.com/feed/hashtag/benchmarking"
+          ]
+        },
+        {
+          "post_url": "https://www.linkedin.com/posts/daniel-musaryan-9067851a9_kickoff-by-ronaldinho-activity-7482768995360784384-o5Z7",
+          "post_id": "7482768995360784384",
+          "user_id": "daniel-musaryan-9067851a9",
+          "use_url": "https://www.linkedin.com/posts/daniel-musaryan-9067851a9_kickoff-by-ronaldinho-activity-7482768995360784384-o5Z7",
+          "headline": null,
+          "post_text": "Sometimes you just need quick content to stay on your customers' radar. For certain types of videos, AI makes it so much faster and easier to remind people about your product than traditional video production.",
+          "date_posted": "2026-07-14T12:12:31.619Z",
+          "num_likes": 0,
+          "num_comments": 0,
+          "images": null,
+          "videos": [
+            "https://dms.licdn.com/playlist/vid/v2/D4D05AQG1jR1nuGSyzw/video-auto-caption-srt-acs-singleton/B4DZ9cPetpGYD8-/0/1783959017023?e=2147483647&v=beta&t=-eVbeWGaBoZRQ9ocLMhZGv_3ShneDoldUCugOEme108"
+          ],
+          "hashtags": null,
+          "embedded_links": [
+            "https://pl.linkedin.com/in/ihorzarechnyi?trk=public_post-text",
+            "https://cy.linkedin.com/company/neverendingtech?trk=public_post-text",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "https://www.linkedin.com/feed/hashtag/lynon",
+            "https://www.linkedin.com/feed/hashtag/productupdates",
+            "https://www.linkedin.com/feed/hashtag/tournamentengine",
+            "https://www.linkedin.com/feed/hashtag/duncangarvieisaliar",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademyexposed",
+            "https://www.linkedin.com/feed/hashtag/betblockerlies",
+            "https://www.linkedin.com/feed/hashtag/systemictheft",
+            "https://www.linkedin.com/feed/hashtag/wewontbesilenced",
+            "https://www.linkedin.com/feed/hashtag/igb",
+            "https://uk.linkedin.com/in/duncan-garvie-frsph-588658199?trk=public_post-text",
+            "https://uk.linkedin.com/company/betblocker?trk=public_post-text",
+            "https://lnkd.in/d5mw7StE",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademy",
+            "https://www.linkedin.com/feed/hashtag/betblocker",
+            "https://www.linkedin.com/feed/hashtag/playerprotection",
+            "https://www.linkedin.com/feed/hashtag/safergambling",
+            "https://www.linkedin.com/feed/hashtag/responsiblegambling",
+            "https://www.linkedin.com/feed/hashtag/igaming",
+            "https://www.linkedin.com/feed/hashtag/education",
+            "https://www.linkedin.com/feed/hashtag/industrypartnerships",
+            "https://www.linkedin.com/feed/hashtag/igblive",
+            "http://gsipoker.com/",
+            "https://www.linkedin.com/feed/hashtag/poker",
+            "https://www.linkedin.com/feed/hashtag/gamingindustry",
+            "https://www.linkedin.com/feed/hashtag/casinomanagement",
+            "https://www.linkedin.com/feed/hashtag/benchmarking"
+          ]
+        },
+        {
+          "post_url": "https://www.linkedin.com/posts/igor-glukhikh-b39756299_duncangarvieisaliar-casinoguruacademyexposed-activity-7486098720262873088-_jlS",
+          "post_id": "7486098720262873088",
+          "user_id": "igor-glukhikh-b39756299",
+          "use_url": "https://www.linkedin.com/posts/igor-glukhikh-b39756299_duncangarvieisaliar-casinoguruacademyexposed-activity-7486098720262873088-_jlS",
+          "headline": null,
+          "post_text": "\"Lies. Lies. Lies. Duncan Garvie is the most dishonest person in this industry. I personally reached out to him about my complaint . I had evidence. Screenshots. Chat logs. And what did he say? \"I don't have time, I'm helping other people.\" What other people, Duncan? Operators? Casinos that steal? Mediators who close complaints? You don't help players. You help the industry save face. And now they've teamed up with Casino Guru Academy. The two biggest manufacturers of lies in one package. Casino Guru closes player complaints. BetBlocker pretends to protect players. Together they pour lies directly into people's ears. They talk about \"education\" and \"player protection.\" But when a real player comes to them with a real problem — they run away. \"I don't have time, I'm helping others.\" This is not a partnership. This is a conspiracy. A conspiracy to create the illusion of player protection. So the industry can say: \"We care.\" But you don't care. You only care about your reputation and operators' money. So here's my answer to your question about \"meaningful partnership\": A meaningful partnership is when you actually help players. When you investigate complaints. When you return stolen money. When you name the thieves. Not when you create pretty videos and run courses to whitewash your reputation. Duncan, you ignored me. You said you didn't have time. You ran off to \"help others.\" So help me now. Investigate my complaint. Demand that Trino Casino return my money. Or admit that you are part of the system. Part of the lie. Part of the cover-up. I'm waiting for an answer. #DuncanGarvieIsALiar #CasinoGuruAcademyExposed #BetBlockerLies #SystemicTheft #WeWontBeSilenced \"",
+          "date_posted": "2026-07-23T16:43:39.899Z",
+          "num_likes": 1,
+          "num_comments": 0,
+          "images": null,
+          "videos": [
+            "https://dms.licdn.com/playlist/vid/v2/D4E05AQG45Ck6MHq9wg/video-auto-caption-webvtt-acs-singleton/B4EZ.N5HcWIkEE-/0/1784792021165?e=2147483647&v=beta&t=umjhp6g1YtEAfXVDmo6aAvCIoCVBbz7fd-iSuvu22yU"
+          ],
+          "hashtags": [
+            "#DuncanGarvieIsALiar",
+            "#CasinoGuruAcademyExposed",
+            "#BetBlockerLies",
+            "#SystemicTheft",
+            "#WeWontBeSilenced"
+          ],
+          "embedded_links": [
+            "https://pl.linkedin.com/in/ihorzarechnyi?trk=public_post-text",
+            "https://cy.linkedin.com/company/neverendingtech?trk=public_post-text",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "https://www.linkedin.com/feed/hashtag/lynon",
+            "https://www.linkedin.com/feed/hashtag/productupdates",
+            "https://www.linkedin.com/feed/hashtag/tournamentengine",
+            "https://www.linkedin.com/feed/hashtag/duncangarvieisaliar",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademyexposed",
+            "https://www.linkedin.com/feed/hashtag/betblockerlies",
+            "https://www.linkedin.com/feed/hashtag/systemictheft",
+            "https://www.linkedin.com/feed/hashtag/wewontbesilenced",
+            "https://www.linkedin.com/feed/hashtag/igb",
+            "https://uk.linkedin.com/in/duncan-garvie-frsph-588658199?trk=public_post-text",
+            "https://uk.linkedin.com/company/betblocker?trk=public_post-text",
+            "https://lnkd.in/d5mw7StE",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademy",
+            "https://www.linkedin.com/feed/hashtag/betblocker",
+            "https://www.linkedin.com/feed/hashtag/playerprotection",
+            "https://www.linkedin.com/feed/hashtag/safergambling",
+            "https://www.linkedin.com/feed/hashtag/responsiblegambling",
+            "https://www.linkedin.com/feed/hashtag/igaming",
+            "https://www.linkedin.com/feed/hashtag/education",
+            "https://www.linkedin.com/feed/hashtag/industrypartnerships",
+            "https://www.linkedin.com/feed/hashtag/igblive",
+            "http://gsipoker.com/",
+            "https://www.linkedin.com/feed/hashtag/poker",
+            "https://www.linkedin.com/feed/hashtag/gamingindustry",
+            "https://www.linkedin.com/feed/hashtag/casinomanagement",
+            "https://www.linkedin.com/feed/hashtag/benchmarking"
+          ]
+        },
+        {
+          "post_url": "https://www.linkedin.com/posts/casinoguruacademy_igb-casinoguruacademy-betblocker-activity-7485960268573937664-qPi3",
+          "post_id": "7485960268573937664",
+          "user_id": "casinoguruacademy",
+          "use_url": "https://www.linkedin.com/posts/casinoguruacademy_igb-casinoguruacademy-betblocker-activity-7485960268573937664-qPi3",
+          "headline": null,
+          "post_text": "The best partnerships don't happen by accident. 🤝 When organizations share the same mission, meaningful collaboration follows. At #iGB LIVE, we asked Duncan Garvie FRSPH , Founder of BetBlocker : 🎥 \"Why did BetBlocker partner with Casino Guru Academy on this course?\" His answer goes beyond a simple partnership, it highlights a shared commitment to making player protection education more accessible and helping the industry better support those who need it most. 🎥Watch the video to hear why BetBlocker chose to collaborate with Casino Guru Academy. 💬 What do you think makes a truly impactful industry partnership? Here you can find the course: https://lnkd.in/d5mw7StE #CasinoGuruAcademy #BetBlocker #PlayerProtection #SaferGambling #ResponsibleGambling #iGaming #Education #IndustryPartnerships #iGBLive",
+          "date_posted": "2026-07-23T07:33:30.444Z",
+          "num_likes": 10,
+          "num_comments": 0,
+          "images": null,
+          "videos": [
+            "https://dms.licdn.com/playlist/vid/v2/D4E05AQG45Ck6MHq9wg/video-auto-caption-webvtt-acs-singleton/B4EZ.N5HcWIkEE-/0/1784792021165?e=2147483647&v=beta&t=umjhp6g1YtEAfXVDmo6aAvCIoCVBbz7fd-iSuvu22yU"
+          ],
+          "hashtags": [
+            "#iGB",
+            "#CasinoGuruAcademy",
+            "#BetBlocker",
+            "#PlayerProtection",
+            "#SaferGambling",
+            "#ResponsibleGambling",
+            "#iGaming",
+            "#Education",
+            "#IndustryPartnerships",
+            "#iGBLive"
+          ],
+          "embedded_links": [
+            "https://pl.linkedin.com/in/ihorzarechnyi?trk=public_post-text",
+            "https://cy.linkedin.com/company/neverendingtech?trk=public_post-text",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "https://www.linkedin.com/feed/hashtag/lynon",
+            "https://www.linkedin.com/feed/hashtag/productupdates",
+            "https://www.linkedin.com/feed/hashtag/tournamentengine",
+            "https://www.linkedin.com/feed/hashtag/duncangarvieisaliar",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademyexposed",
+            "https://www.linkedin.com/feed/hashtag/betblockerlies",
+            "https://www.linkedin.com/feed/hashtag/systemictheft",
+            "https://www.linkedin.com/feed/hashtag/wewontbesilenced",
+            "https://www.linkedin.com/feed/hashtag/igb",
+            "https://uk.linkedin.com/in/duncan-garvie-frsph-588658199?trk=public_post-text",
+            "https://uk.linkedin.com/company/betblocker?trk=public_post-text",
+            "https://lnkd.in/d5mw7StE",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademy",
+            "https://www.linkedin.com/feed/hashtag/betblocker",
+            "https://www.linkedin.com/feed/hashtag/playerprotection",
+            "https://www.linkedin.com/feed/hashtag/safergambling",
+            "https://www.linkedin.com/feed/hashtag/responsiblegambling",
+            "https://www.linkedin.com/feed/hashtag/igaming",
+            "https://www.linkedin.com/feed/hashtag/education",
+            "https://www.linkedin.com/feed/hashtag/industrypartnerships",
+            "https://www.linkedin.com/feed/hashtag/igblive",
+            "http://gsipoker.com/",
+            "https://www.linkedin.com/feed/hashtag/poker",
+            "https://www.linkedin.com/feed/hashtag/gamingindustry",
+            "https://www.linkedin.com/feed/hashtag/casinomanagement",
+            "https://www.linkedin.com/feed/hashtag/benchmarking"
+          ]
+        },
+        {
+          "post_url": "https://www.linkedin.com/posts/launchpadtv_mistake-4-forgetting-that-casino-night-is-activity-7486027369615441920-RiJb",
+          "post_id": "7486027369615441920",
+          "user_id": "launchpadtv",
+          "use_url": "https://www.linkedin.com/posts/launchpadtv_mistake-4-forgetting-that-casino-night-is-activity-7486027369615441920-RiJb",
+          "headline": null,
+          "post_text": "Mistake #4 Forgetting That Casino Night Is About Entertainment Guests aren't professional gamblers. They're there to laugh. Socialize. Network. Support your organization. When the atmosphere becomes overly competitive or overly complicated, participation decreases. Expert Recommendation: Professional dealers should teach games, encourage participation, and create energy—not intimidate guests.",
+          "date_posted": "2026-07-23T12:00:08.579Z",
+          "num_likes": 2,
+          "num_comments": 0,
+          "images": [
+            "https://media.licdn.com/dms/image/v2/D4E22AQEgO9qcCwbZng/feedshare-image-high-res/B4EZ.NKT4OK4AU-/0/1784779718502?e=2147483647&v=beta&t=Hdqw9BH8yHEGoiAZbfOUVVUCFcSPpJnhlrjsst6rhAc",
+            "https://static.licdn.com/aero-v1/sc/h/dur0ryw0e9uscxa9b6zqvgvfs"
+          ],
+          "videos": null,
+          "hashtags": null,
+          "embedded_links": [
+            "https://pl.linkedin.com/in/ihorzarechnyi?trk=public_post-text",
+            "https://cy.linkedin.com/company/neverendingtech?trk=public_post-text",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "https://www.linkedin.com/feed/hashtag/lynon",
+            "https://www.linkedin.com/feed/hashtag/productupdates",
+            "https://www.linkedin.com/feed/hashtag/tournamentengine",
+            "https://www.linkedin.com/feed/hashtag/duncangarvieisaliar",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademyexposed",
+            "https://www.linkedin.com/feed/hashtag/betblockerlies",
+            "https://www.linkedin.com/feed/hashtag/systemictheft",
+            "https://www.linkedin.com/feed/hashtag/wewontbesilenced",
+            "https://www.linkedin.com/feed/hashtag/igb",
+            "https://uk.linkedin.com/in/duncan-garvie-frsph-588658199?trk=public_post-text",
+            "https://uk.linkedin.com/company/betblocker?trk=public_post-text",
+            "https://lnkd.in/d5mw7StE",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademy",
+            "https://www.linkedin.com/feed/hashtag/betblocker",
+            "https://www.linkedin.com/feed/hashtag/playerprotection",
+            "https://www.linkedin.com/feed/hashtag/safergambling",
+            "https://www.linkedin.com/feed/hashtag/responsiblegambling",
+            "https://www.linkedin.com/feed/hashtag/igaming",
+            "https://www.linkedin.com/feed/hashtag/education",
+            "https://www.linkedin.com/feed/hashtag/industrypartnerships",
+            "https://www.linkedin.com/feed/hashtag/igblive",
+            "http://gsipoker.com/",
+            "https://www.linkedin.com/feed/hashtag/poker",
+            "https://www.linkedin.com/feed/hashtag/gamingindustry",
+            "https://www.linkedin.com/feed/hashtag/casinomanagement",
+            "https://www.linkedin.com/feed/hashtag/benchmarking"
+          ]
+        },
+        {
+          "post_url": "https://www.linkedin.com/posts/we-play-network_you-know-how-to-run-a-casino-but-poker-is-activity-7489978249427488769-q6pq",
+          "post_id": "7489978249427488769",
+          "user_id": "we-play-network",
+          "use_url": "https://www.linkedin.com/posts/we-play-network_you-know-how-to-run-a-casino-but-poker-is-activity-7489978249427488769-q6pq",
+          "headline": null,
+          "post_text": "You know how to run a casino, but poker is a different animal. It carries operational weight most operators never see until they're already in it. Catching collusion and bots. Keeping the games healthy so recreational players can enjoy the product and come back. Running promotions across a whole network of tables. Plus, a support team that works around the clock. Our latest piece breaks down what adding poker really takes, and who ends up carrying that load. Full article is in the comments below. ⤵️",
+          "date_posted": "2026-08-03T09:39:31.730Z",
+          "num_likes": 9,
+          "num_comments": 2,
+          "images": [
+            "https://media.licdn.com/dms/image/v2/D4D22AQFzCbhjHeUNoA/feedshare-shrink_800/B4DZ_G_hxaKgAc-/0/1785749970464?e=2147483647&v=beta&t=ORiwup6l8JrYOE8bsOVDbOUWOHsaie2ot-v7c-UfQBU"
+          ],
+          "videos": null,
+          "hashtags": null,
+          "embedded_links": [
+            "https://pl.linkedin.com/in/ihorzarechnyi?trk=public_post-text",
+            "https://cy.linkedin.com/company/neverendingtech?trk=public_post-text",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "https://www.linkedin.com/feed/hashtag/lynon",
+            "https://www.linkedin.com/feed/hashtag/productupdates",
+            "https://www.linkedin.com/feed/hashtag/tournamentengine",
+            "https://www.linkedin.com/feed/hashtag/duncangarvieisaliar",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademyexposed",
+            "https://www.linkedin.com/feed/hashtag/betblockerlies",
+            "https://www.linkedin.com/feed/hashtag/systemictheft",
+            "https://www.linkedin.com/feed/hashtag/wewontbesilenced",
+            "https://www.linkedin.com/feed/hashtag/igb",
+            "https://uk.linkedin.com/in/duncan-garvie-frsph-588658199?trk=public_post-text",
+            "https://uk.linkedin.com/company/betblocker?trk=public_post-text",
+            "https://lnkd.in/d5mw7StE",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademy",
+            "https://www.linkedin.com/feed/hashtag/betblocker",
+            "https://www.linkedin.com/feed/hashtag/playerprotection",
+            "https://www.linkedin.com/feed/hashtag/safergambling",
+            "https://www.linkedin.com/feed/hashtag/responsiblegambling",
+            "https://www.linkedin.com/feed/hashtag/igaming",
+            "https://www.linkedin.com/feed/hashtag/education",
+            "https://www.linkedin.com/feed/hashtag/industrypartnerships",
+            "https://www.linkedin.com/feed/hashtag/igblive",
+            "http://gsipoker.com/",
+            "https://www.linkedin.com/feed/hashtag/poker",
+            "https://www.linkedin.com/feed/hashtag/gamingindustry",
+            "https://www.linkedin.com/feed/hashtag/casinomanagement",
+            "https://www.linkedin.com/feed/hashtag/benchmarking"
+          ]
+        },
+        {
+          "post_url": "https://www.linkedin.com/posts/john-frasco-385040248_heres-what-happens-when-you-set-up-a-tournament-activity-7486492337980854273-HPeD",
+          "post_id": "7486492337980854273",
+          "user_id": "john-frasco-385040248",
+          "use_url": "https://www.linkedin.com/posts/john-frasco-385040248_heres-what-happens-when-you-set-up-a-tournament-activity-7486492337980854273-HPeD",
+          "headline": null,
+          "post_text": "Here's what happens when you set up a tournament in TourneyMaster. You enter your teams and seeds. The double-elimination bracket generates itself. A team wins - they advance automatically. A team loses - they drop to the loser bracket automatically. Grand final sets itself up when it's time. No formulas. No copy-paste. No re-drawing anything. You assign referees to matches inside the same platform. Venues are logged with addresses and capacity. Coaches get their own portal to see schedules and rosters. Core Features Smart Scheduling: Auto-schedule games, assign locations, and coordinate referees without conflicts. Live Standings: Track real-time scores, team rankings, and winning brackets instantly. Complete Directory: Keep team details, referee lists, venues, and tournament rules easily accessible.",
+          "date_posted": "2026-07-24T18:47:45.676Z",
+          "num_likes": 0,
+          "num_comments": 0,
+          "images": null,
+          "videos": null,
+          "hashtags": null,
+          "embedded_links": [
+            "https://pl.linkedin.com/in/ihorzarechnyi?trk=public_post-text",
+            "https://cy.linkedin.com/company/neverendingtech?trk=public_post-text",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "https://www.linkedin.com/feed/hashtag/lynon",
+            "https://www.linkedin.com/feed/hashtag/productupdates",
+            "https://www.linkedin.com/feed/hashtag/tournamentengine",
+            "https://www.linkedin.com/feed/hashtag/duncangarvieisaliar",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademyexposed",
+            "https://www.linkedin.com/feed/hashtag/betblockerlies",
+            "https://www.linkedin.com/feed/hashtag/systemictheft",
+            "https://www.linkedin.com/feed/hashtag/wewontbesilenced",
+            "https://www.linkedin.com/feed/hashtag/igb",
+            "https://uk.linkedin.com/in/duncan-garvie-frsph-588658199?trk=public_post-text",
+            "https://uk.linkedin.com/company/betblocker?trk=public_post-text",
+            "https://lnkd.in/d5mw7StE",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademy",
+            "https://www.linkedin.com/feed/hashtag/betblocker",
+            "https://www.linkedin.com/feed/hashtag/playerprotection",
+            "https://www.linkedin.com/feed/hashtag/safergambling",
+            "https://www.linkedin.com/feed/hashtag/responsiblegambling",
+            "https://www.linkedin.com/feed/hashtag/igaming",
+            "https://www.linkedin.com/feed/hashtag/education",
+            "https://www.linkedin.com/feed/hashtag/industrypartnerships",
+            "https://www.linkedin.com/feed/hashtag/igblive",
+            "http://gsipoker.com/",
+            "https://www.linkedin.com/feed/hashtag/poker",
+            "https://www.linkedin.com/feed/hashtag/gamingindustry",
+            "https://www.linkedin.com/feed/hashtag/casinomanagement",
+            "https://www.linkedin.com/feed/hashtag/benchmarking"
+          ]
+        },
+        {
+          "post_url": "https://www.linkedin.com/posts/gsi-global-structure-index_global-structure-index-the-global-tournament-activity-7490333094915489792-UkLk",
+          "post_id": "7490333094915489792",
+          "user_id": "gsi-global-structure-index",
+          "use_url": "https://www.linkedin.com/posts/gsi-global-structure-index_global-structure-index-the-global-tournament-activity-7490333094915489792-UkLk",
+          "headline": null,
+          "post_text": "The WSOP Main Event is considered the most prestigious tournament in the world. That's a matter of reputation, built over fifty years. Its structure, however, had never been evaluated. Neither its own, nor any other tournament's — because no common method existed to do it. The Global Structure Index launches a public index in September: every structure rated out of 100, with the same engine applied to all of them, no exceptions and no way to buy a better result. The Main Event is in there like everyone else. What this changes for the industry: for the first time, an organiser genuinely investing in their structure has quantified proof of it, and a player can compare before registering. To organisers, casinos and operators: your structure is already indexed. Write to me if you'd rather see your score before the public does. gsipoker.com #poker #gamingindustry #casinomanagement #benchmarking",
+          "date_posted": "2026-08-04T09:09:33.487Z",
+          "num_likes": 0,
+          "num_comments": 0,
+          "images": null,
+          "videos": null,
+          "hashtags": [
+            "#poker",
+            "#gamingindustry",
+            "#casinomanagement",
+            "#benchmarking"
+          ],
+          "embedded_links": [
+            "https://pl.linkedin.com/in/ihorzarechnyi?trk=public_post-text",
+            "https://cy.linkedin.com/company/neverendingtech?trk=public_post-text",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "http://bingomums.co.uk/",
+            "https://www.linkedin.com/feed/hashtag/lynon",
+            "https://www.linkedin.com/feed/hashtag/productupdates",
+            "https://www.linkedin.com/feed/hashtag/tournamentengine",
+            "https://www.linkedin.com/feed/hashtag/duncangarvieisaliar",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademyexposed",
+            "https://www.linkedin.com/feed/hashtag/betblockerlies",
+            "https://www.linkedin.com/feed/hashtag/systemictheft",
+            "https://www.linkedin.com/feed/hashtag/wewontbesilenced",
+            "https://www.linkedin.com/feed/hashtag/igb",
+            "https://uk.linkedin.com/in/duncan-garvie-frsph-588658199?trk=public_post-text",
+            "https://uk.linkedin.com/company/betblocker?trk=public_post-text",
+            "https://lnkd.in/d5mw7StE",
+            "https://www.linkedin.com/feed/hashtag/casinoguruacademy",
+            "https://www.linkedin.com/feed/hashtag/betblocker",
+            "https://www.linkedin.com/feed/hashtag/playerprotection",
+            "https://www.linkedin.com/feed/hashtag/safergambling",
+            "https://www.linkedin.com/feed/hashtag/responsiblegambling",
+            "https://www.linkedin.com/feed/hashtag/igaming",
+            "https://www.linkedin.com/feed/hashtag/education",
+            "https://www.linkedin.com/feed/hashtag/industrypartnerships",
+            "https://www.linkedin.com/feed/hashtag/igblive",
+            "http://gsipoker.com/",
+            "https://www.linkedin.com/feed/hashtag/poker",
+            "https://www.linkedin.com/feed/hashtag/gamingindustry",
+            "https://www.linkedin.com/feed/hashtag/casinomanagement",
+            "https://www.linkedin.com/feed/hashtag/benchmarking"
+          ]
+        }
+      ],
+      "top_visible_comments": [
+        {
+          "use_url": "https://cy.linkedin.com/company/neverendingtech?trk=public_post_comment_actor-name",
+          "user_id": "neverendingtech",
+          "user_name": "NeverEnding",
+          "comment_date": "2026-08-06T12:42:59.123Z",
+          "comment": "More games ≠ more revenue. Glad this conversation is happening. Thanks for having us, Casino Guru News 🙌",
+          "tagged_users": null,
+          "num_reactions": 3,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7491111581376839680",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7491086752640638976?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7491086752640638976%2C7491111581376839680%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287491111581376839680%2Curn%3Ali%3AugcPost%3A7491086752640638976%29"
+        },
+        {
+          "use_url": "https://uk.linkedin.com/company/casino-guru-news?trk=public_post_comment_actor-name",
+          "user_id": "casino-guru-news",
+          "user_name": "Casino Guru News",
+          "comment_date": "2026-08-06T11:04:29.488Z",
+          "comment": "Read the full interview here 👉 https://casino.guru/news/in-depth/attention-is-the-new-currency--neverending-s-ceo-on-beating-lobby-fatigue-10526",
+          "tagged_users": null,
+          "num_reactions": 1,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7491086794571116545",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7491086752640638976?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7491086752640638976%2C7491086794571116545%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287491086794571116545%2Curn%3Ali%3AugcPost%3A7491086752640638976%29"
+        }
+      ],
+      "user_followers": 4882,
+      "user_posts": 0,
+      "user_articles": 0,
+      "post_type": "post",
+      "account_type": "Organization",
+      "post_text_html": "🎙️In our interview with <a class=\"link\" href=\"https://pl.linkedin.com/in/ihorzarechnyi?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Ihor Zarechnyi</a>, CEO of <a class=\"link\" href=\"https://cy.linkedin.com/company/neverendingtech?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>NeverEnding</a>, he discusses why lobby fatigue is becoming a real challenge for online casino operators.<br/><br/>Zarechnyi argues that massive game catalogs are no longer enough. With players facing tens of thousands of titles, the real question is whether they can find something worth playing in the first 30 seconds.<br/><br/>The interview also explores how NeverEnding uses continuous, data-driven testing across lobby placement, tournaments, promo rotations, and portfolio strategy to help operators understand what actually converts. 🙌",
+      "repost": {
+        "repost_hangtags": null,
+        "repost_attachments": null,
+        "tagged_users": null,
+        "tagged_companies": null
+      },
+      "tagged_companies": [],
+      "tagged_people": [],
+      "user_title": null,
+      "author_profile_pic": "https://media.licdn.com/dms/image/v2/C4E0BAQE4RClry0nPrQ/company-logo_100_100/company-logo_100_100/0/1675171740444?e=2147483647&v=beta&t=Kw6iSQhDxbmuBWVM0lb-RKRDAfD5Dka_MDQQN2Fd8CE",
+      "num_connections": 500,
+      "video_duration": null,
+      "external_link_data": null,
+      "video_thumbnail": null,
+      "document_cover_image": null,
+      "document_page_count": null,
+      "user_profile_pic": "https://media.licdn.com/dms/image/v2/C4E0BAQE4RClry0nPrQ/company-logo_100_100/company-logo_100_100/0/1675171740444?e=2147483647&v=beta&t=Kw6iSQhDxbmuBWVM0lb-RKRDAfD5Dka_MDQQN2Fd8CE",
+      "user_name": "Casino Guru News",
+      "original_post_text": "🎙️In our interview with <a class=\"link\" href=\"https://pl.linkedin.com/in/ihorzarechnyi?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Ihor Zarechnyi</a>, CEO of <a class=\"link\" href=\"https://cy.linkedin.com/company/neverendingtech?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>NeverEnding</a>, he discusses why lobby fatigue is becoming a real challenge for online casino operators.\n\nZarechnyi argues that massive game catalogs are no longer enough. With players facing tens of thousands of titles, the real question is whether they can find something worth playing in the first 30 seconds.\n\nThe interview also explores how NeverEnding uses continuous, data-driven testing across lobby placement, tournaments, promo rotations, and portfolio strategy to help operators understand what actually converts. 🙌",
+      "timestamp": "2026-08-11T20:32:36.884Z",
+      "input": {
+        "num_connections": 500,
+        "url": "https://www.linkedin.com/posts/casino-guru-news_in-our-interview-with-ihor-zarechnyi-activity-7491086752640638976-uRrt"
+      },
+      "discovery_input": {
+        "url": "https://www.linkedin.com/in/yaroslavsoloshenko"
+      }
+    },
+    {
+      "url": "https://ru.linkedin.com/posts/nare-sujyan_%D0%B2%D1%81%D0%B5%D0%BC-%D0%B4%D0%BE%D0%B1%D1%80%D0%BE-%D0%BA%D0%B0%D0%BA-%D1%85%D1%80%D0%BE%D0%BD%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D0%B9-%D0%BB%D0%B8%D0%BD%D0%BA%D0%B4%D0%B8%D0%BD-%D1%81%D0%BA%D1%80%D0%BE%D0%BB%D0%BB%D0%B5%D1%80-activity-7491156185921015808-hH1w",
+      "id": "7491156185921015808",
+      "user_id": "nare-sujyan",
+      "use_url": "https://ae.linkedin.com/in/nare-sujyan?trk=public_post_feed-actor-image",
+      "title": "Всем добро. Как хронический линкдин-скроллер на протяжении нескольких недель я следила за постами Nina Duz - “дневник безработного”. Тогда еще пришла мысль копи пастить(ладно шучу, я реально… | Nare Sujyan | 11 comments",
+      "headline": "Всем добро.",
+      "post_text": "Всем добро. Как хронический линкдин-скроллер на протяжении нескольких недель я следила за постами Nina Duz  - “дневник безработного”. Тогда еще пришла мысль копи пастить(ладно шучу, я реально вдохновилась идеей, за что спасибо <3 ). \n\nВо мне проснулся какой то марафонщик и большое желание писать, МНОГО писать. Вот я и решила сделать челлендж - 30 дней я каждый день буду публиковать посты, но моя рубрика называется “Дневники казино менеджера” (братья Сальваторе - помним, любим, скорбим). \n\nХочу говорить о том о сем, о гемблинге, о моей работе, командах которые стоят за б2с проектом, продукте, играх, метриках и еще немного(или много) хихиньки-хахиньки. Все посты были заранее написаны, фотки заранее подобраны на протяжении нескольких прекрасных вечеров когда ко мне приходила ✨музааа✨. \n\nЧестно, я не ожидаю что мои зумерские приколы рассмешат всех(но не важно, лайк и коммент я все равно жду 👉🏻👈🏻).\n\nИ еще. На фотке я первый раз в ленд бейзд казино, где я успешно отыгрываю свои 40 евро, 30 из которых я в итоге заберу обратно(да, я скупая). Потом эти деньги полежат у меня в кошельке целый год и выручат где то в Португалии в очень странных обстоятельствах. \n\nА что эта тридцатка сделает? 🤣🤣\n\nПо этому, официальный старт “Дневники казино менеджера. День 1/30”.",
+      "date_posted": "2026-08-06T15:40:13.621Z",
+      "hashtags": null,
+      "embedded_links": [
+        "https://bg.linkedin.com/in/nina-duz-14824b414?trk=public_post-text"
+      ],
+      "images": [
+        "https://media.licdn.com/dms/image/v2/D4D22AQFsrxrMqSd6RA/feedshare-image-high-res/B4DZ_Xu2pcGkAU-/0/1786030812159?e=2147483647&v=beta&t=3E5T8k-bSUyk12nP8qay8mksogjrPTiMajGTbVdLmH4"
+      ],
+      "videos": null,
+      "num_likes": 107,
+      "num_comments": 11,
+      "more_articles_by_user": null,
+      "more_relevant_posts": null,
+      "top_visible_comments": [
+        {
+          "use_url": "https://cy.linkedin.com/in/makvitaly?trk=public_post_comment_actor-name",
+          "user_id": "makvitaly",
+          "user_name": "Vitaly Makarenko",
+          "comment_date": "2026-08-07T07:13:19.031Z",
+          "comment": "Когда дойдете до «метриках и еще немного», какой один показатель для b2c-казино вы считаете главным на раннем цикле: конверсию в первый депозит, time-to-second-deposit или D7 retention?",
+          "tagged_users": null,
+          "num_reactions": 0,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7491391005523447808",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7491156185921015808?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7491156185921015808%2C7491391005523447808%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287491391005523447808%2Curn%3Ali%3AugcPost%3A7491156185921015808%29"
+        },
+        {
+          "use_url": "https://bg.linkedin.com/in/nina-duz-14824b414?trk=public_post_comment_actor-name",
+          "user_id": "nina-duz-14824b414",
+          "user_name": "Nina Duz",
+          "comment_date": "2026-08-06T16:02:24.718Z",
+          "comment": "агонь! удачи! идея топ",
+          "tagged_users": null,
+          "num_reactions": 5,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7491161768719933440",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7491156185921015808?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7491156185921015808%2C7491161768719933440%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287491161768719933440%2Curn%3Ali%3AugcPost%3A7491156185921015808%29"
+        },
+        {
+          "use_url": "https://am.linkedin.com/in/leonnikolaev/en?trk=public_post_comment_actor-name",
+          "user_id": "en",
+          "user_name": "Leon Nikolaev",
+          "comment_date": "2026-08-06T17:26:30.684Z",
+          "comment": "Наре Джан!, казино не одобряю, но следить буду",
+          "tagged_users": null,
+          "num_reactions": 2,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7491182933035139072",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7491156185921015808?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7491156185921015808%2C7491182933035139072%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287491182933035139072%2Curn%3Ali%3AugcPost%3A7491156185921015808%29"
+        },
+        {
+          "use_url": "https://ge.linkedin.com/in/anna-chistiakova-sales?trk=public_post_comment_actor-name",
+          "user_id": "anna-chistiakova-sales",
+          "user_name": "Anna Chistiakova",
+          "comment_date": "2026-08-06T16:05:13.479Z",
+          "comment": "Ценность тех 30 евро была выше всех высот 😅",
+          "tagged_users": null,
+          "num_reactions": 2,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7491162476554805249",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7491156185921015808?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7491156185921015808%2C7491162476554805249%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287491162476554805249%2Curn%3Ali%3AugcPost%3A7491156185921015808%29"
+        },
+        {
+          "use_url": "https://ru.linkedin.com/in/artem-kochergin-844a9b380/en?trk=public_post_comment_actor-name",
+          "user_id": "en",
+          "user_name": "Artem Kochergin",
+          "comment_date": "2026-08-07T03:34:04.826Z",
+          "comment": "А раньше (иксы, миллениалы) писали: «Здравствуй, дорогой дневник! Буду каждый день писать, чтобы…» 😁\nУдачи! Будет интересно почитать!",
+          "tagged_users": null,
+          "num_reactions": 1,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7491335832788959232",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7491156185921015808?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7491156185921015808%2C7491335832788959232%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287491335832788959232%2Curn%3Ali%3AugcPost%3A7491156185921015808%29"
+        },
+        {
+          "use_url": "https://cy.linkedin.com/in/betorize?trk=public_post_comment_actor-name",
+          "user_id": "betorize",
+          "user_name": "Sergey Kulick",
+          "comment_date": "2026-08-06T16:26:38.414Z",
+          "comment": "Класс, интересно, подписался!)",
+          "tagged_users": null,
+          "num_reactions": 1,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7491167865962696704",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7491156185921015808?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7491156185921015808%2C7491167865962696704%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287491167865962696704%2Curn%3Ali%3AugcPost%3A7491156185921015808%29"
+        }
+      ],
+      "user_followers": 2907,
+      "user_posts": 158,
+      "user_articles": 0,
+      "post_type": "post",
+      "account_type": "Person",
+      "post_text_html": "Всем добро. Как хронический линкдин-скроллер на протяжении нескольких недель я следила за постами <a class=\"link\" href=\"https://bg.linkedin.com/in/nina-duz-14824b414?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Nina Duz</a>  - “дневник безработного”. Тогда еще пришла мысль копи пастить(ладно шучу, я реально вдохновилась идеей, за что спасибо &lt;3 ). <br/><br/>Во мне проснулся какой то марафонщик и большое желание писать, МНОГО писать. Вот я и решила сделать челлендж - 30 дней я каждый день буду публиковать посты, но моя рубрика называется “Дневники казино менеджера” (братья Сальваторе - помним, любим, скорбим). <br/><br/>Хочу говорить о том о сем, о гемблинге, о моей работе, командах которые стоят за б2с проектом, продукте, играх, метриках и еще немного(или много) хихиньки-хахиньки. Все посты были заранее написаны, фотки заранее подобраны на протяжении нескольких прекрасных вечеров когда ко мне приходила ✨музааа✨. <br/><br/>Честно, я не ожидаю что мои зумерские приколы рассмешат всех(но не важно, лайк и коммент я все равно жду 👉🏻👈🏻).<br/><br/>И еще. На фотке я первый раз в ленд бейзд казино, где я успешно отыгрываю свои 40 евро, 30 из которых я в итоге заберу обратно(да, я скупая). Потом эти деньги полежат у меня в кошельке целый год и выручат где то в Португалии в очень странных обстоятельствах. <br/><br/>А что эта тридцатка сделает? 🤣🤣<br/><br/>По этому, официальный старт “Дневники казино менеджера. День 1/30”.",
+      "repost": {
+        "repost_hangtags": null,
+        "repost_attachments": null,
+        "tagged_users": null,
+        "tagged_companies": null
+      },
+      "tagged_companies": [],
+      "tagged_people": [
+        {
+          "name": "Nina Duz",
+          "link": "https://bg.linkedin.com/in/nina-duz-14824b414?trk=public_post-text"
+        }
+      ],
+      "user_title": null,
+      "author_profile_pic": "https://media.licdn.com/dms/image/v2/D4D03AQGmCDGRHTAg2A/profile-displayphoto-scale_400_400/B4DZxOG6NwIUAg-/0/1770836961450?e=2147483647&v=beta&t=bQO8y1bZXVP-JrQj7rl3acDbdk3nKkWjqzEaeM7u9ZM",
+      "num_connections": 500,
+      "video_duration": null,
+      "external_link_data": null,
+      "video_thumbnail": null,
+      "document_cover_image": null,
+      "document_page_count": null,
+      "user_profile_pic": "https://media.licdn.com/dms/image/v2/D4D03AQGmCDGRHTAg2A/profile-displayphoto-scale_200_200/B4DZxOG6NwIUAY-/0/1770836961450?e=2147483647&v=beta&t=YfMC3JZQDecsmJIhLU9yShgZQfG4orVjkdZtmHF8E0g",
+      "user_name": "Nare Sujyan",
+      "original_post_text": "Всем добро. Как хронический линкдин-скроллер на протяжении нескольких недель я следила за постами <a class=\"link\" href=\"https://bg.linkedin.com/in/nina-duz-14824b414?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Nina Duz</a>  - “дневник безработного”. Тогда еще пришла мысль копи пастить(ладно шучу, я реально вдохновилась идеей, за что спасибо &lt;3 ). \n\nВо мне проснулся какой то марафонщик и большое желание писать, МНОГО писать. Вот я и решила сделать челлендж - 30 дней я каждый день буду публиковать посты, но моя рубрика называется “Дневники казино менеджера” (братья Сальваторе - помним, любим, скорбим). \n\nХочу говорить о том о сем, о гемблинге, о моей работе, командах которые стоят за б2с проектом, продукте, играх, метриках и еще немного(или много) хихиньки-хахиньки. Все посты были заранее написаны, фотки заранее подобраны на протяжении нескольких прекрасных вечеров когда ко мне приходила ✨музааа✨. \n\nЧестно, я не ожидаю что мои зумерские приколы рассмешат всех(но не важно, лайк и коммент я все равно жду 👉🏻👈🏻).\n\nИ еще. На фотке я первый раз в ленд бейзд казино, где я успешно отыгрываю свои 40 евро, 30 из которых я в итоге заберу обратно(да, я скупая). Потом эти деньги полежат у меня в кошельке целый год и выручат где то в Португалии в очень странных обстоятельствах. \n\nА что эта тридцатка сделает? 🤣🤣\n\nПо этому, официальный старт “Дневники казино менеджера. День 1/30”.",
+      "timestamp": "2026-08-11T20:32:37.107Z",
+      "input": {
+        "num_connections": 500,
+        "url": "https://www.linkedin.com/posts/nare-sujyan_%D0%B2%D1%81%D0%B5%D0%BC-%D0%B4%D0%BE%D0%B1%D1%80%D0%BE-%D0%BA%D0%B0%D0%BA-%D1%85%D1%80%D0%BE%D0%BD%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D0%B9-%D0%BB%D0%B8%D0%BD%D0%BA%D0%B4%D0%B8%D0%BD-%D1%81%D0%BA%D1%80%D0%BE%D0%BB%D0%BB%D0%B5%D1%80-activity-7491156185921015808-hH1w"
+      },
+      "discovery_input": {
+        "url": "https://www.linkedin.com/in/yaroslavsoloshenko"
+      }
+    },
+    {
+      "url": "https://www.linkedin.com/posts/neverendingtech_igaming-onlinecasino-gameproviders-activity-7492863841295499265-l8gM",
+      "id": "7492863841295499265",
+      "user_id": "neverendingtech",
+      "use_url": "https://cy.linkedin.com/company/neverendingtech?trk=public_post_feed-actor-image",
+      "title": "#igaming #onlinecasino #gameproviders | NeverEnding",
+      "headline": "🎙️ In our newest interview with Casino Guru News, Ihor Zarechnyi, CEO of NeverEnding, talks about lobby fatigue and why it's becoming a real problem for online casino operators.",
+      "post_text": "🎙️ In our newest interview with Casino Guru News, Ihor Zarechnyi, CEO of NeverEnding, talks about lobby fatigue and why it's becoming a real problem for online casino operators.\n\nIhor makes the case that a massive game catalog isn't the win it used to be. With players facing tens of thousands of titles, what matters now is whether they can find something worth playing in the first 30 seconds.\n\nHe also walks through how NeverEnding approaches this with continuous, data-driven testing across lobby placement, tournaments, promo rotations, and portfolio strategy, helping operators understand what actually converts, and why.\n\nFull interview in the first comment 👇\n\n#iGaming #OnlineCasino #GameProviders",
+      "date_posted": "2026-08-11T08:45:50.416Z",
+      "hashtags": [
+        "#iGaming",
+        "#OnlineCasino",
+        "#GameProviders"
+      ],
+      "embedded_links": [
+        "https://uk.linkedin.com/company/casino-guru-news?trk=public_post-text",
+        "https://pl.linkedin.com/in/ihorzarechnyi?trk=public_post-text",
+        "https://www.linkedin.com/feed/hashtag/igaming",
+        "https://www.linkedin.com/feed/hashtag/onlinecasino",
+        "https://www.linkedin.com/feed/hashtag/gameproviders"
+      ],
+      "images": [
+        "https://media.licdn.com/dms/image/v2/D4E22AQGvzfH8BT7HwQ/feedshare-shrink_1280/B4EZ_v_9e3K0AM-/0/1786437949633?e=2147483647&v=beta&t=8wdLXSQCDSVUyY88h9L95MTeBZU8wFAEmhcK_-W-N6E"
+      ],
+      "videos": null,
+      "num_likes": 9,
+      "num_comments": 1,
+      "more_articles_by_user": null,
+      "more_relevant_posts": null,
+      "top_visible_comments": [
+        {
+          "use_url": "https://cy.linkedin.com/company/neverendingtech?trk=public_post_comment_actor-name",
+          "user_id": "neverendingtech",
+          "user_name": "NeverEnding",
+          "comment_date": "2026-08-11T08:46:49.587Z",
+          "comment": "https://casino.guru/news/in-depth/attention-is-the-new-currency--neverending-s-ceo-on-beating-lobby-fatigue-10526",
+          "tagged_users": null,
+          "num_reactions": 0,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492864089363484675",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492863841295499265?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492863841295499265%2C7492864089363484675%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492864089363484675%2Curn%3Ali%3AugcPost%3A7492863841295499265%29"
+        }
+      ],
+      "user_followers": 853,
+      "user_posts": 0,
+      "user_articles": 0,
+      "post_type": "post",
+      "account_type": "Organization",
+      "post_text_html": "🎙️ In our newest interview with <a class=\"link\" href=\"https://uk.linkedin.com/company/casino-guru-news?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Casino Guru News</a>, <a class=\"link\" href=\"https://pl.linkedin.com/in/ihorzarechnyi?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Ihor Zarechnyi</a>, CEO of NeverEnding, talks about lobby fatigue and why it&apos;s becoming a real problem for online casino operators.<br/><br/>Ihor makes the case that a massive game catalog isn&apos;t the win it used to be. With players facing tens of thousands of titles, what matters now is whether they can find something worth playing in the first 30 seconds.<br/><br/>He also walks through how NeverEnding approaches this with continuous, data-driven testing across lobby placement, tournaments, promo rotations, and portfolio strategy, helping operators understand what actually converts, and why.<br/><br/>Full interview in the first comment 👇<br/><br/><a class=\"link\" href=\"https://www.linkedin.com/signup/cold-join?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2Fhashtag%2Figaming&amp;trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>#iGaming</a> <a class=\"link\" href=\"https://www.linkedin.com/signup/cold-join?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2Fhashtag%2Fonlinecasino&amp;trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>#OnlineCasino</a> <a class=\"link\" href=\"https://www.linkedin.com/signup/cold-join?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2Fhashtag%2Fgameproviders&amp;trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>#GameProviders</a>",
+      "repost": {
+        "repost_hangtags": null,
+        "repost_attachments": null,
+        "tagged_users": null,
+        "tagged_companies": null
+      },
+      "tagged_companies": [
+        {
+          "name": "Casino Guru News",
+          "link": "https://uk.linkedin.com/company/casino-guru-news?trk=public_post-text"
+        }
+      ],
+      "tagged_people": [
+        {
+          "name": "Ihor Zarechnyi",
+          "link": "https://pl.linkedin.com/in/ihorzarechnyi?trk=public_post-text"
+        }
+      ],
+      "user_title": null,
+      "author_profile_pic": "https://media.licdn.com/dms/image/v2/D4D0BAQG-mfQmHNL7Qg/company-logo_100_100/B4DZqcU8gGIgAQ-/0/1763559328194/neverendingtech_logo?e=2147483647&v=beta&t=418sG6meu5Dx3dGw9i9w8f-xVnVMCjP7tS9ksTUtVLk",
+      "num_connections": 500,
+      "video_duration": null,
+      "external_link_data": null,
+      "video_thumbnail": null,
+      "document_cover_image": null,
+      "document_page_count": null,
+      "user_profile_pic": "https://media.licdn.com/dms/image/v2/D4D0BAQG-mfQmHNL7Qg/company-logo_100_100/B4DZqcU8gGIgAQ-/0/1763559328194/neverendingtech_logo?e=2147483647&v=beta&t=418sG6meu5Dx3dGw9i9w8f-xVnVMCjP7tS9ksTUtVLk",
+      "user_name": "NeverEnding",
+      "original_post_text": "🎙️ In our newest interview with <a class=\"link\" href=\"https://uk.linkedin.com/company/casino-guru-news?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Casino Guru News</a>, <a class=\"link\" href=\"https://pl.linkedin.com/in/ihorzarechnyi?trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>Ihor Zarechnyi</a>, CEO of NeverEnding, talks about lobby fatigue and why it&apos;s becoming a real problem for online casino operators.\n\nIhor makes the case that a massive game catalog isn&apos;t the win it used to be. With players facing tens of thousands of titles, what matters now is whether they can find something worth playing in the first 30 seconds.\n\nHe also walks through how NeverEnding approaches this with continuous, data-driven testing across lobby placement, tournaments, promo rotations, and portfolio strategy, helping operators understand what actually converts, and why.\n\nFull interview in the first comment 👇\n\n<a class=\"link\" href=\"https://www.linkedin.com/signup/cold-join?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2Fhashtag%2Figaming&amp;trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>#iGaming</a> <a class=\"link\" href=\"https://www.linkedin.com/signup/cold-join?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2Fhashtag%2Fonlinecasino&amp;trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>#OnlineCasino</a> <a class=\"link\" href=\"https://www.linkedin.com/signup/cold-join?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2Fhashtag%2Fgameproviders&amp;trk=public_post-text\" target=\"_self\" data-tracking-control-name=\"public_post-text\" data-tracking-will-navigate>#GameProviders</a>",
+      "timestamp": "2026-08-11T20:32:41.581Z",
+      "input": {
+        "num_connections": 500,
+        "url": "https://www.linkedin.com/posts/neverendingtech_igaming-onlinecasino-gameproviders-activity-7492863841295499265-l8gM"
+      },
+      "discovery_input": {
+        "url": "https://www.linkedin.com/in/yaroslavsoloshenko"
+      }
+    },
+    {
+      "url": "https://ru.linkedin.com/posts/nare-sujyan_%D0%B4%D0%BD%D0%B5%D0%B2%D0%BD%D0%B8%D0%BA%D0%B8-%D0%BA%D0%B0%D0%B7%D0%B8%D0%BD%D0%BE-%D0%BC%D0%B5%D0%BD%D0%B5%D0%B4%D0%B6%D0%B5%D1%80%D0%B0-%D0%B4%D0%B5%D0%BD%D1%8C-430-%D0%BA%D0%B0%D0%BA-activity-7492204067327426560-ypRv",
+      "id": "7492204067327426560",
+      "user_id": "nare-sujyan",
+      "use_url": "https://ae.linkedin.com/in/nare-sujyan?trk=public_post_feed-actor-image",
+      "title": "Дневники казино менеджера. День 4/30 - *Как я вижу привлечение трафика* Понятно что есть люди благодаря которым игрок вообще узнал о вашем проекте. По мне за аквизишн в принципе отвечает много кто… | Nare Sujyan",
+      "headline": "Дневники казино менеджера.",
+      "post_text": "Дневники казино менеджера. День 4/30 - *Как я вижу привлечение трафика*\n\nПонятно что есть люди благодаря которым игрок вообще узнал о вашем проекте. \nПо мне за аквизишн в принципе отвечает много кто - хорошие аффилиаты, арбитражники, инфлюенсер/стример менеджера, хороший сео, где то вообще агенты. Та много кто с интересными ролями. Где то наверно это все один человек-швейцарский нож который в себе включает все(но не точно). Но да, суть в том что удержать то что еще не пришло не получиться.\nА привести качество вместо количества это тоже сам по себе отдельный челендж. \nВообще по мне это один из самых интересных направлении в гемблинге, где и глубокая аналитика, и креатив, и знание, и много много много общения, сильная ответственность и прочее. Я в этом конечно не глубоко разбираюсь, ну как бы Sue me! \n\nЧто думаете? Кто и что вам нужно в плане аквизишна чтобы запустить успешный, качественный проект и дальше идти к масштабированию?",
+      "date_posted": "2026-08-09T13:04:08.053Z",
+      "hashtags": null,
+      "embedded_links": null,
+      "images": [
+        "https://media.licdn.com/dms/image/v2/D4D22AQGj7qAYn11qow/feedshare-shrink_1280/B4DZ_mn5hxGYAM-/0/1786280647076?e=2147483647&v=beta&t=lFA0-h0mNEVE216uXUsPhJ8GRnTPNvmzyXMXEK1JrbQ"
+      ],
+      "videos": null,
+      "num_likes": 7,
+      "num_comments": 2,
+      "more_articles_by_user": null,
+      "more_relevant_posts": null,
+      "top_visible_comments": [
+        {
+          "use_url": "https://cy.linkedin.com/in/betorize?trk=public_post_comment_actor-name",
+          "user_id": "betorize",
+          "user_name": "Sergey Kulick",
+          "comment_date": "2026-08-09T14:21:31.684Z",
+          "comment": "Понятно только что если есть трафик, то остальное - не проблема)",
+          "tagged_users": null,
+          "num_reactions": 1,
+          "user_title": null,
+          "comment_images": null,
+          "comment_id": "7492223544051822594",
+          "comment_url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7492204067327426560?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7492204067327426560%2C7492223544051822594%29&dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287492223544051822594%2Curn%3Ali%3AugcPost%3A7492204067327426560%29"
+        }
+      ],
+      "user_followers": 2907,
+      "user_posts": 158,
+      "user_articles": 0,
+      "post_type": "post",
+      "account_type": "Person",
+      "post_text_html": "Дневники казино менеджера. День 4/30 - *Как я вижу привлечение трафика*<br/><br/>Понятно что есть люди благодаря которым игрок вообще узнал о вашем проекте. <br/>По мне за аквизишн в принципе отвечает много кто - хорошие аффилиаты, арбитражники, инфлюенсер/стример менеджера, хороший сео, где то вообще агенты. Та много кто с интересными ролями. Где то наверно это все один человек-швейцарский нож который в себе включает все(но не точно). Но да, суть в том что удержать то что еще не пришло не получиться.<br/>А привести качество вместо количества это тоже сам по себе отдельный челендж. <br/>Вообще по мне это один из самых интересных направлении в гемблинге, где и глубокая аналитика, и креатив, и знание, и много много много общения, сильная ответственность и прочее. Я в этом конечно не глубоко разбираюсь, ну как бы Sue me! <br/><br/>Что думаете? Кто и что вам нужно в плане аквизишна чтобы запустить успешный, качественный проект и дальше идти к масштабированию?",
+      "repost": {
+        "repost_hangtags": null,
+        "repost_attachments": null,
+        "tagged_users": null,
+        "tagged_companies": null
+      },
+      "tagged_companies": [],
+      "tagged_people": [],
+      "user_title": null,
+      "author_profile_pic": null,
+      "num_connections": 500,
+      "video_duration": null,
+      "external_link_data": null,
+      "video_thumbnail": null,
+      "document_cover_image": null,
+      "document_page_count": null,
+      "user_profile_pic": "https://media.licdn.com/dms/image/v2/D4D03AQGmCDGRHTAg2A/profile-displayphoto-scale_200_200/B4DZxOG6NwIUAY-/0/1770836961450?e=2147483647&v=beta&t=YfMC3JZQDecsmJIhLU9yShgZQfG4orVjkdZtmHF8E0g",
+      "user_name": "Nare Sujyan",
+      "original_post_text": "Дневники казино менеджера. День 4/30 - *Как я вижу привлечение трафика*\n\nПонятно что есть люди благодаря которым игрок вообще узнал о вашем проекте. \nПо мне за аквизишн в принципе отвечает много кто - хорошие аффилиаты, арбитражники, инфлюенсер/стример менеджера, хороший сео, где то вообще агенты. Та много кто с интересными ролями. Где то наверно это все один человек-швейцарский нож который в себе включает все(но не точно). Но да, суть в том что удержать то что еще не пришло не получиться.\nА привести качество вместо количества это тоже сам по себе отдельный челендж. \nВообще по мне это один из самых интересных направлении в гемблинге, где и глубокая аналитика, и креатив, и знание, и много много много общения, сильная ответственность и прочее. Я в этом конечно не глубоко разбираюсь, ну как бы Sue me! \n\nЧто думаете? Кто и что вам нужно в плане аквизишна чтобы запустить успешный, качественный проект и дальше идти к масштабированию?",
+      "timestamp": "2026-08-11T20:33:27.422Z",
+      "input": {
+        "num_connections": 500,
+        "url": "https://www.linkedin.com/posts/nare-sujyan_%D0%B4%D0%BD%D0%B5%D0%B2%D0%BD%D0%B8%D0%BA%D0%B8-%D0%BA%D0%B0%D0%B7%D0%B8%D0%BD%D0%BE-%D0%BC%D0%B5%D0%BD%D0%B5%D0%B4%D0%B6%D0%B5%D1%80%D0%B0-%D0%B4%D0%B5%D0%BD%D1%8C-430-%D0%BA%D0%B0%D0%BA-activity-7492204067327426560-ypRv"
+      },
+      "discovery_input": {
+        "url": "https://www.linkedin.com/in/yaroslavsoloshenko"
+      }
+    }
+  ]
+}

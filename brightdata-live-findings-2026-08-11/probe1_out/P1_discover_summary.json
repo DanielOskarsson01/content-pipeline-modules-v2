@@ -1,0 +1,228 @@
+[
+  {
+    "label": "P1A_BTG_canonical",
+    "url": "https://www.linkedin.com/company/big-time-gaming",
+    "trigger_http": 200,
+    "status": "ready",
+    "delivered": 1,
+    "billable": 0,
+    "error_rows": {
+      "dead_page": 1
+    },
+    "progress_records": 0,
+    "progress_errors": 1,
+    "progress_error_codes": {
+      "dead_page": 1
+    },
+    "snapshot_id": "sd_mspbcnngyvutarbw7"
+  },
+  {
+    "label": "P1A_BTG_trailingslash",
+    "url": "https://www.linkedin.com/company/big-time-gaming/",
+    "trigger_http": 200,
+    "status": "ready",
+    "delivered": 1,
+    "billable": 0,
+    "error_rows": {
+      "dead_page": 1
+    },
+    "progress_records": 0,
+    "progress_errors": 1,
+    "progress_error_codes": {
+      "dead_page": 1
+    },
+    "snapshot_id": "sd_mspbcoz82570er8lyv"
+  },
+  {
+    "label": "P1A_BTG_posts",
+    "url": "https://www.linkedin.com/company/big-time-gaming/posts/",
+    "trigger_http": 200,
+    "status": "ready",
+    "delivered": 1,
+    "billable": 0,
+    "error_rows": {
+      "dead_page": 1
+    },
+    "progress_records": 0,
+    "progress_errors": 1,
+    "progress_error_codes": {
+      "dead_page": 1
+    },
+    "snapshot_id": "sd_mspbcqbe1652nw2rgd"
+  },
+  {
+    "label": "P1A_BTG_nowww",
+    "url": "https://linkedin.com/company/big-time-gaming",
+    "trigger_http": 200,
+    "status": "ready",
+    "delivered": 1,
+    "billable": 0,
+    "error_rows": {
+      "dead_page": 1
+    },
+    "progress_records": 0,
+    "progress_errors": 1,
+    "progress_error_codes": {
+      "dead_page": 1
+    },
+    "snapshot_id": "sd_mspbcrn012doe40yib"
+  },
+  {
+    "label": "P1A_LP_canonical_encoded",
+    "url": "https://www.linkedin.com/company/l%C3%B6wen-play",
+    "trigger_http": 200,
+    "status": "ready",
+    "delivered": 1,
+    "billable": 0,
+    "error_rows": {
+      "dead_page": 1
+    },
+    "progress_records": 0,
+    "progress_errors": 1,
+    "progress_error_codes": {
+      "dead_page": 1
+    },
+    "snapshot_id": "sd_mspbct67pytis0j7q"
+  },
+  {
+    "label": "P1A_LP_unencoded",
+    "url": "https://www.linkedin.com/company/löwen-play",
+    "trigger_http": 200,
+    "status": "ready",
+    "delivered": 1,
+    "billable": 0,
+    "error_rows": {
+      "dead_page": 1
+    },
+    "progress_records": 0,
+    "progress_errors": 1,
+    "progress_error_codes": {
+      "dead_page": 1
+    },
+    "snapshot_id": "sd_mspbcujd1pukdgokmu"
+  },
+  {
+    "label": "P1A_LP_trailingslash",
+    "url": "https://www.linkedin.com/company/l%C3%B6wen-play/",
+    "trigger_http": 200,
+    "status": "ready",
+    "delivered": 1,
+    "billable": 0,
+    "error_rows": {
+      "dead_page": 1
+    },
+    "progress_records": 0,
+    "progress_errors": 1,
+    "progress_error_codes": {
+      "dead_page": 1
+    },
+    "snapshot_id": "sd_mspbcvuq2qclmu06ke"
+  },
+  {
+    "label": "P1A_LP_posts",
+    "url": "https://www.linkedin.com/company/l%C3%B6wen-play/posts/",
+    "trigger_http": 200,
+    "status": "ready",
+    "delivered": 1,
+    "billable": 0,
+    "error_rows": {
+      "dead_page": 1
+    },
+    "progress_records": 0,
+    "progress_errors": 1,
+    "progress_error_codes": {
+      "dead_page": 1
+    },
+    "snapshot_id": "sd_mspbcx6l116eo7lwgo"
+  },
+  {
+    "label": "P1A_LP_de_subdomain",
+    "url": "https://de.linkedin.com/company/löwen-play",
+    "trigger_http": 200,
+    "status": "ready",
+    "delivered": 1,
+    "billable": 0,
+    "error_rows": {
+      "dead_page": 1
+    },
+    "progress_records": 0,
+    "progress_errors": 1,
+    "progress_error_codes": {
+      "dead_page": 1
+    },
+    "snapshot_id": "sd_mspbcyk72j86ibvzq5"
+  },
+  {
+    "label": "P1A_LP_ascii_slug",
+    "url": "https://www.linkedin.com/company/loewen-play",
+    "trigger_http": 200,
+    "status": "ready",
+    "delivered": 1,
+    "billable": 0,
+    "error_rows": {
+      "dead_page": 1
+    },
+    "progress_records": 0,
+    "progress_errors": 1,
+    "progress_error_codes": {
+      "dead_page": 1
+    },
+    "snapshot_id": "sd_mspbczwj232lo7ghk0"
+  },
+  {
+    "label": "P1B_VG_canonical_control",
+    "url": "https://www.linkedin.com/company/vegangster-team",
+    "trigger_http": 200,
+    "status": "TIMEOUT",
+    "delivered": 0,
+    "billable": 0,
+    "error_rows": {},
+    "progress_records": null,
+    "progress_errors": null,
+    "progress_error_codes": null,
+    "snapshot_id": "sd_mspbd189zissbz7dv"
+  },
+  {
+    "label": "P1B_VG_mangle_case",
+    "url": "https://www.linkedin.com/company/Vegangster-Team",
+    "trigger_http": 200,
+    "status": "ready",
+    "delivered": 10,
+    "billable": 10,
+    "error_rows": {},
+    "progress_records": 10,
+    "progress_errors": 0,
+    "progress_error_codes": null,
+    "snapshot_id": "sd_mspbd2jruf05y81uc"
+  },
+  {
+    "label": "P1B_VG_mangle_path",
+    "url": "https://www.linkedin.com/company/vegangster-team/about/",
+    "trigger_http": 200,
+    "status": "ready",
+    "delivered": 1,
+    "billable": 0,
+    "error_rows": {
+      "dead_page": 1
+    },
+    "progress_records": 0,
+    "progress_errors": 1,
+    "progress_error_codes": {
+      "dead_page": 1
+    },
+    "snapshot_id": "sd_mspbd3wq2qnxi7u00z"
+  },
+  {
+    "label": "P1B_VG_mangle_nowww",
+    "url": "https://linkedin.com/company/vegangster-team",
+    "trigger_http": 200,
+    "status": "ready",
+    "delivered": 10,
+    "billable": 10,
+    "error_rows": {},
+    "progress_records": 10,
+    "progress_errors": 0,
+    "progress_error_codes": null,
+    "snapshot_id": "sd_mspbd58xrx48zh8jw"
+  }
+]

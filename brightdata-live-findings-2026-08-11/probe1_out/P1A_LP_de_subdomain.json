@@ -1,0 +1,10 @@
+[
+  {
+    "timestamp": "2026-08-11T23:50:56.362Z",
+    "input": {
+      "url": "https://de.linkedin.com/company/löwen-play"
+    },
+    "error": "Activities are not found",
+    "error_code": "dead_page"
+  }
+]

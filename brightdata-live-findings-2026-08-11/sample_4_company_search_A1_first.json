@@ -1,0 +1,114 @@
+{
+  "hits": [
+    {
+      "about": "Punters Lounge is one of the largest betting communities around the globe. Over 100,000 forum members and growing all the time.",
+      "additional_information": null,
+      "alumni": null,
+      "alumni_information": null,
+      "company_id": "11690734",
+      "company_size": "2-10 employees",
+      "country_code": "GB",
+      "country_codes_array": [
+        "GB"
+      ],
+      "description": "Punters Lounge | 135 followers on LinkedIn. Punters Lounge is one of the largest betting communities around the globe. Over 100,000 forum members and growing all the time.",
+      "employees": [
+        {
+          "img": "https://media.licdn.com/dms/image/v2/C4E03AQFhSJdpuR0dSA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1657632820730?e=2147483647&v=beta&t=71ylHfWpWpxOBBUL1OZUxG-IJBI56GNZ4a9uVIeap7E",
+          "link": "https://uk.linkedin.com/in/andrew-punter?trk=org-employees",
+          "title": "Andrew Punter"
+        },
+        {
+          "img": "https://media.licdn.com/dms/image/v2/C4D03AQGnt8EBQ3FXwg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1528893584261?e=2147483647&v=beta&t=AEL05bw3L0Xnp8qdaXYZya6MjL4SBaFUTTVyCfq7Tyk",
+          "title": "LinkedIn Member"
+        }
+      ],
+      "employees_in_linkedin": 3,
+      "followers": 135,
+      "formatted_locations": [
+        "175 High Street, Tonbridge, England TN9 1BX, GB"
+      ],
+      "founded": 2004,
+      "get_directions_url": [
+        {
+          "directions_url": "https://www.bing.com/maps?where=175+High+Street+Tonbridge+TN9+1BX+England+GB&trk=org-locations_url"
+        }
+      ],
+      "headquarters": "Tonbridge, England",
+      "id": "punters-lounge",
+      "image": "https://media.licdn.com/dms/image/v2/C4D1BAQFlEFH6HuXr2w/company-background_10000/company-background_10000/0/1583728490191/punters_lounge_ltd_cover?e=2147483647&v=beta&t=bIRJcZHgIKxj2BybCBNLklxduRxjeQLKveqIIQCsVg4",
+      "industries": "Gambling Facilities and Casinos",
+      "locations": [
+        "175 High Street Tonbridge, England TN9 1BX, GB"
+      ],
+      "logo": "https://media.licdn.com/dms/image/v2/C4D0BAQH577DwYPblAg/company-logo_200_200/company-logo_200_200/0/1631369451974/punters_lounge_ltd_logo?e=2147483647&v=beta&t=Qh0UjJ9VN_a_x4JNF1LcA4RG8zFQUeWNylZ8T3mH6b8",
+      "name": "Punters Lounge",
+      "organization_type": "Privately Held",
+      "similar": [
+        {
+          "Links": "https://au.linkedin.com/company/punters-paradise?trk=similar-pages",
+          "location": "Melbourne, VIC",
+          "subtitle": "Gambling Facilities and Casinos",
+          "title": "Punters.com.au"
+        },
+        {
+          "Links": "https://uk.linkedin.com/company/tag-media-limited-uk?trk=similar-pages",
+          "location": "Tonbridge, England",
+          "subtitle": "Internet Publishing",
+          "title": "TAG Media"
+        },
+        {
+          "Links": "https://uk.linkedin.com/company/sportygroup?trk=similar-pages",
+          "subtitle": "Spectator Sports",
+          "title": "Sporty Group"
+        },
+        {
+          "Links": "https://www.linkedin.com/company/bettinglounge?trk=similar-pages",
+          "subtitle": "Gambling Facilities and Casinos",
+          "title": "Bettinglounge"
+        },
+        {
+          "Links": "https://it.linkedin.com/company/sbostats?trk=similar-pages",
+          "location": "Milano, Lombardia",
+          "subtitle": "Technology, Information and Internet",
+          "title": "Sbostats"
+        },
+        {
+          "Links": "https://www.linkedin.com/company/justundeniable?trk=similar-pages",
+          "subtitle": "Business Consulting and Services",
+          "title": "Undeniable"
+        },
+        {
+          "Links": "https://uk.linkedin.com/company/hubaffiliations?trk=similar-pages",
+          "location": "London, London",
+          "subtitle": "Marketing Services",
+          "title": "Hub Affiliations"
+        },
+        {
+          "Links": "https://be.linkedin.com/company/base-telenet-group?trk=similar-pages",
+          "subtitle": "Telecommunications",
+          "title": "BASE (Telenet group)"
+        },
+        {
+          "Links": "https://uk.linkedin.com/company/dream-spin-studios?trk=similar-pages",
+          "subtitle": "Gambling Facilities and Casinos",
+          "title": "DreamSpin"
+        },
+        {
+          "Links": "https://ca.linkedin.com/company/tylt-money?trk=similar-pages",
+          "location": "Coquitlam, British Columbia",
+          "subtitle": "Financial Services",
+          "title": "Tylt"
+        }
+      ],
+      "status_code": 200,
+      "timestamp": "2026-07-27T10:54:24.297Z",
+      "unformatted_about": "\n              Punters Lounge is one of the largest betting communities around the globe. Over 100,000 forum members and growing all the time.\n          ",
+      "url": "https://www.linkedin.com/company/punters-lounge",
+      "website": "https://www.punterslounge.com/",
+      "website_simplified": "punterslounge.com"
+    }
+  ],
+  "total_hits": 1,
+  "took": 605
+}

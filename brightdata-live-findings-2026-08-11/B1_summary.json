@@ -1,0 +1,12 @@
+{
+  "target": "https://www.linkedin.com/in/michaeloziransky",
+  "requested_limit": 10,
+  "status": "ready",
+  "elapsed": 24,
+  "records_reported": 0,
+  "records_returned": 0,
+  "authored_by_target": 0,
+  "foreign_authors": 0,
+  "limit_bind": "requested 10, observed 0",
+  "authors": []
+}

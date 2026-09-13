@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "target": "https://www.linkedin.com/in/michaeloziransky",
+    "requested_limit": 10,
+    "status": "ready",
+    "elapsed": 24,
+    "records_reported": 0,
+    "records_returned": 0,
+    "authored_by_target": 0,
+    "foreign_authors": 0,
+    "limit_bind": "requested 10, observed 0",
+    "authors": []
+  },
+  "progress": {
+    "status": "ready",
+    "snapshot_id": "sd_msp3y0nu3urydamnt",
+    "dataset_id": "gd_lyy3tktm25m4avu764",
+    "records": 0,
+    "errors": 0,
+    "collection_duration": 20483,
+    "avg_duration_per_input": 20483
+  },
+  "records": []
+}

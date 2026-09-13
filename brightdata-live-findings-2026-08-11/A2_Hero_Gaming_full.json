@@ -1,0 +1,32 @@
+{
+  "meta": {
+    "name": "Hero Gaming",
+    "url": "https://www.linkedin.com/company/hero-gaming",
+    "status": "ready",
+    "records_reported": 0,
+    "good": 0,
+    "elapsed": 8
+  },
+  "progress": {
+    "status": "ready",
+    "snapshot_id": "sd_msp3xsep26vvcxe9n",
+    "dataset_id": "gd_lyy3tktm25m4avu764",
+    "error_codes": {
+      "dead_page": 1
+    },
+    "records": 0,
+    "errors": 1,
+    "collection_duration": 5939,
+    "avg_duration_per_input": 5939
+  },
+  "records": [
+    {
+      "timestamp": "2026-08-11T20:23:10.818Z",
+      "input": {
+        "url": "https://www.linkedin.com/company/hero-gaming"
+      },
+      "error": "Activities are not found",
+      "error_code": "dead_page"
+    }
+  ]
+}

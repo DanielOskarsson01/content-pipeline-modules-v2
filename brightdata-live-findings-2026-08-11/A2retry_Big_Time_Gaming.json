@@ -1,0 +1,41 @@
+{
+  "name": "Big Time Gaming",
+  "url": "https://www.linkedin.com/company/big-time-gaming",
+  "good": 0,
+  "attempts": [
+    {
+      "try": 1,
+      "status": "ready",
+      "reported": 0,
+      "errors": 1,
+      "error_codes": {
+        "dead_page": 1
+      },
+      "good": 0,
+      "elapsed": 16
+    },
+    {
+      "try": 2,
+      "status": "ready",
+      "reported": 0,
+      "errors": 1,
+      "error_codes": {
+        "dead_page": 1
+      },
+      "good": 0,
+      "elapsed": 8
+    },
+    {
+      "try": 3,
+      "status": "ready",
+      "reported": 0,
+      "errors": 1,
+      "error_codes": {
+        "dead_page": 1
+      },
+      "good": 0,
+      "elapsed": 8
+    }
+  ],
+  "records": []
+}

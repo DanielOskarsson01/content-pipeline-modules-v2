@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Hero Gaming",
+    "url": "https://www.linkedin.com/company/hero-gaming",
+    "status": "ready",
+    "records_reported": 0,
+    "good": 0,
+    "elapsed": 8
+  },
+  {
+    "name": "Big Time Gaming",
+    "url": "https://www.linkedin.com/company/big-time-gaming",
+    "status": "ready",
+    "records_reported": 0,
+    "good": 0,
+    "elapsed": 8
+  },
+  {
+    "name": "Löwen Play",
+    "url": "https://www.linkedin.com/company/l%C3%B6wen-play",
+    "status": "ready",
+    "records_reported": 0,
+    "good": 0,
+    "elapsed": 8
+  }
+]

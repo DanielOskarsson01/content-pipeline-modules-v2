@@ -1,0 +1,83 @@
+{
+  "target": "https://www.linkedin.com/in/yaroslavsoloshenko",
+  "requested_limit": 10,
+  "status": "ready",
+  "elapsed": 75,
+  "records_reported": 10,
+  "records_returned": 10,
+  "limit_bind": "requested 10, observed 10",
+  "authored_by_target": 0,
+  "foreign_authors": 10,
+  "authors": [
+    {
+      "user_id": "igamingexpress",
+      "user_name": "iGaming Express",
+      "account_type": "Organization",
+      "use_url": "https://www.linkedin.com/company/igamingexpress?trk=public_post_feed-actor-image",
+      "is_target": false
+    },
+    {
+      "user_id": "yelyzaveta-kundel",
+      "user_name": "Yelyzaveta Kundel",
+      "account_type": "Person",
+      "use_url": "https://cz.linkedin.com/in/yelyzaveta-kundel?trk=public_post_feed-actor-image",
+      "is_target": false
+    },
+    {
+      "user_id": "playson",
+      "user_name": "Playson",
+      "account_type": "Organization",
+      "use_url": "https://mt.linkedin.com/company/playson?trk=public_post_feed-actor-image",
+      "is_target": false
+    },
+    {
+      "user_id": "nare-sujyan",
+      "user_name": "Nare Sujyan",
+      "account_type": "Person",
+      "use_url": "https://ae.linkedin.com/in/nare-sujyan",
+      "is_target": false
+    },
+    {
+      "user_id": "hermannalex",
+      "user_name": "Alex Hermann",
+      "account_type": "Person",
+      "use_url": "https://ua.linkedin.com/in/hermannalex",
+      "is_target": false
+    },
+    {
+      "user_id": "eduardverdaguergamell",
+      "user_name": "Eduard Verdaguer Gamell",
+      "account_type": "Person",
+      "use_url": "https://es.linkedin.com/in/eduardverdaguergamell/en?trk=public_post_feed-actor-image",
+      "is_target": false
+    },
+    {
+      "user_id": "casino-guru-news",
+      "user_name": "Casino Guru News",
+      "account_type": "Organization",
+      "use_url": "https://uk.linkedin.com/company/casino-guru-news",
+      "is_target": false
+    },
+    {
+      "user_id": "nare-sujyan",
+      "user_name": "Nare Sujyan",
+      "account_type": "Person",
+      "use_url": "https://ae.linkedin.com/in/nare-sujyan?trk=public_post_feed-actor-image",
+      "is_target": false
+    },
+    {
+      "user_id": "neverendingtech",
+      "user_name": "NeverEnding",
+      "account_type": "Organization",
+      "use_url": "https://cy.linkedin.com/company/neverendingtech?trk=public_post_feed-actor-image",
+      "is_target": false
+    },
+    {
+      "user_id": "nare-sujyan",
+      "user_name": "Nare Sujyan",
+      "account_type": "Person",
+      "use_url": "https://ae.linkedin.com/in/nare-sujyan?trk=public_post_feed-actor-image",
+      "is_target": false
+    }
+  ]
+}

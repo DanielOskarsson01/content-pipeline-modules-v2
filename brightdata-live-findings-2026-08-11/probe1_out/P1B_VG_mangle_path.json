@@ -1,0 +1,10 @@
+[
+  {
+    "timestamp": "2026-08-11T23:51:07.949Z",
+    "input": {
+      "url": "https://www.linkedin.com/company/vegangster-team/about/"
+    },
+    "error": "4XX page - dead page.",
+    "error_code": "dead_page"
+  }
+]

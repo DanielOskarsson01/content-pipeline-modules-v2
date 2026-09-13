@@ -1,0 +1,8 @@
+{
+  "timestamp": "2026-08-11T20:23:29.368Z",
+  "input": {
+    "url": "https://www.linkedin.com/company/l%C3%B6wen-play"
+  },
+  "error": "Activities are not found",
+  "error_code": "dead_page"
+}

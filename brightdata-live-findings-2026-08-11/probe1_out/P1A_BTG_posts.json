@@ -1,0 +1,10 @@
+[
+  {
+    "timestamp": "2026-08-11T23:50:49.555Z",
+    "input": {
+      "url": "https://www.linkedin.com/company/big-time-gaming/posts/"
+    },
+    "error": "4XX page - dead page.",
+    "error_code": "dead_page"
+  }
+]

@@ -1,0 +1,30 @@
+{
+  "name": "BTCGOSU",
+  "url": "https://www.linkedin.com/company/btcgosu",
+  "good": 0,
+  "attempts": [
+    {
+      "try": 1,
+      "status": "ready",
+      "reported": 0,
+      "errors": 1,
+      "error_codes": {
+        "dead_page": 1
+      },
+      "good": 0,
+      "elapsed": 16
+    },
+    {
+      "try": 2,
+      "status": "ready",
+      "reported": 0,
+      "errors": 1,
+      "error_codes": {
+        "dead_page": 1
+      },
+      "good": 0,
+      "elapsed": 9
+    }
+  ],
+  "records": []
+}

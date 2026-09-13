@@ -1,0 +1,41 @@
+[
+  {
+    "label": "P2A_Michael_recentactivity",
+    "url": "https://www.linkedin.com/in/michaeloziransky/recent-activity/all/",
+    "trigger_http": 200,
+    "status": "TIMEOUT",
+    "delivered": 0,
+    "billable": 0,
+    "error_rows": {},
+    "progress_records": null,
+    "progress_errors": null,
+    "progress_error_codes": null,
+    "snapshot_id": "sd_mspbs4jn19yqsosj81"
+  },
+  {
+    "label": "P2A_Yaroslav_recentactivity",
+    "url": "https://www.linkedin.com/in/yaroslavsoloshenko/recent-activity/all/",
+    "trigger_http": 200,
+    "status": "ready",
+    "delivered": 10,
+    "billable": 10,
+    "error_rows": {},
+    "progress_records": 10,
+    "progress_errors": 0,
+    "progress_error_codes": null,
+    "snapshot_id": "sd_mspbs5w02erq2kqqd2"
+  },
+  {
+    "label": "P2A_Control_BillGates_recentactivity",
+    "url": "https://www.linkedin.com/in/williamhgates/recent-activity/all/",
+    "trigger_http": 200,
+    "status": "ready",
+    "delivered": 10,
+    "billable": 10,
+    "error_rows": {},
+    "progress_records": 10,
+    "progress_errors": 0,
+    "progress_error_codes": null,
+    "snapshot_id": "sd_mspbs78v2lhoql4hzn"
+  }
+]

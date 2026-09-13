@@ -1,0 +1,83 @@
+{
+  "target": "https://www.linkedin.com/in/michaeloziransky",
+  "requested_limit": 10,
+  "status": "ready",
+  "elapsed": 25,
+  "records_reported": 10,
+  "records_returned": 10,
+  "limit_bind": "requested 10, observed 10",
+  "authored_by_target": 0,
+  "foreign_authors": 10,
+  "authors": [
+    {
+      "user_id": "vegangster-team",
+      "user_name": "Vegangster",
+      "account_type": "Organization",
+      "use_url": "https://www.linkedin.com/company/vegangster-team?trk=public_post_feed-actor-image",
+      "is_target": false
+    },
+    {
+      "user_id": "vegangster-team",
+      "user_name": "Vegangster",
+      "account_type": "Organization",
+      "use_url": "https://www.linkedin.com/company/vegangster-team",
+      "is_target": false
+    },
+    {
+      "user_id": "kovalentus",
+      "user_name": "Kateryna Kovalova",
+      "account_type": "Person",
+      "use_url": "https://pl.linkedin.com/in/kovalentus?trk=public_post_feed-actor-image",
+      "is_target": false
+    },
+    {
+      "user_id": "igaming-insides",
+      "user_name": "iGaming Insides",
+      "account_type": "Organization",
+      "use_url": "https://www.linkedin.com/company/igaming-insides?trk=public_post_feed-actor-image",
+      "is_target": false
+    },
+    {
+      "user_id": "anastasija-krasavina",
+      "user_name": "Anastasija Krasavina",
+      "account_type": "Person",
+      "use_url": "https://lv.linkedin.com/in/anastasija-krasavina?trk=public_post_feed-actor-image",
+      "is_target": false
+    },
+    {
+      "user_id": "rotemd",
+      "user_name": "Rotem Rise-Dotan 🏳️‍🌈",
+      "account_type": "Person",
+      "use_url": "https://il.linkedin.com/in/rotemd?trk=public_post_feed-actor-image",
+      "is_target": false
+    },
+    {
+      "user_id": "yaroslavsoloshenko",
+      "user_name": "Yaroslav Soloshenko",
+      "account_type": "Person",
+      "use_url": "https://es.linkedin.com/in/yaroslavsoloshenko?trk=public_post_feed-actor-image",
+      "is_target": false
+    },
+    {
+      "user_id": "vegangster-team",
+      "user_name": "Vegangster",
+      "account_type": "Organization",
+      "use_url": "https://www.linkedin.com/company/vegangster-team",
+      "is_target": false
+    },
+    {
+      "user_id": "vegangster-team",
+      "user_name": "Vegangster",
+      "account_type": "Organization",
+      "use_url": "https://www.linkedin.com/company/vegangster-team",
+      "is_target": false
+    },
+    {
+      "user_id": "alexandru-visarion-bb89b687",
+      "user_name": "Alexandru Visarion",
+      "account_type": "Person",
+      "use_url": "https://ro.linkedin.com/in/alexandru-visarion-bb89b687?trk=public_post_feed-actor-image",
+      "is_target": false
+    }
+  ]
+}
