@@ -2,7 +2,7 @@
   "id": "hallucination-detector",
   "name": "Hallucination Detector",
   "description": "Compare generated content claims against original source material to flag statements that aren't supported by any source.",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "step": 6,
   "category": "qa",
   "cost": "medium",
@@ -134,6 +134,14 @@
       "label": "Cache base source window across batches (Unit B)",
       "description": "When true, the stable base (head) source window shared by all of an entity's verification batches is sent once as an Anthropic prompt cache_prefix and re-read at ~10% input cost on later batches, instead of being re-sent in full every batch (measured redundancy 24-60% per entity). The verifier sees the SAME instructions, sources and claims -- only the section order changes (sources before claims), and verdict parity to the single-prompt path is the acceptance gate. Default false = byte-identical single prompt. Anthropic-only: non-anthropic verification providers ignore cache_prefix, so the split falls back to the single prompt for them (never drops the base window). Best paired with source_selection='claim_anchored', which is where the base is the fixed head window.",
       "default": false
+    },
+    {
+      "name": "execution_mode",
+      "type": "select",
+      "label": "Execution mode",
+      "description": "How the LLM calls run. 'sync' (default) executes each extraction + verification call synchronously, one entity at a time, exactly as before -- byte-identical. 'batch' opts this step into the Anthropic Message Batches path (skeleton-driven): all the step's entities are collected and submitted as two Message Batches (round 1 extractions, round 2 verifications), billed at 50% of standard, with an async return (results typically <1h, up to 24h). Verdicts are unchanged -- only WHEN the result arrives and the billing rate differ. Anthropic-only (the batch path requires ai_provider=anthropic). A failed/expired batch request fails that entity loudly (never a silent pass). Rollback is a config flip back to 'sync', not a code revert.",
+      "values": ["sync", "batch"],
+      "default": "sync"
     }
   ],
 
@@ -152,7 +160,8 @@
     "source_selection": "head",
     "extraction_model": null,
     "extraction_provider": null,
-    "cache_base_window": false
+    "cache_base_window": false,
+    "execution_mode": "sync"
   },
 
   "item_key": "entity_name",

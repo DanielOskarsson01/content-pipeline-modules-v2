@@ -3,7 +3,9 @@
 > Compare generated content claims against original source material to flag statements that aren't supported by any source.
 
 **Module ID:** `hallucination-detector` | **Step:** 6 (QA) | **Category:** qa | **Cost:** medium
-**Version:** 1.5.0 | **Data Operation:** add (+)
+**Version:** 1.6.0 | **Data Operation:** add (+)
+
+> **v1.6.0 (Phase 2B — Anthropic Message Batches):** new `execution_mode` option (`sync` default | `batch`). `batch` opts this step into the skeleton-driven Message Batches path — the step's entities are collected and submitted as **two** Message Batches (round 1 extractions, round 2 verifications; verification needs the extracted claims), billed at **50% of standard** with an async return (typically <1h, ceiling 24h). **Verdicts are unchanged** — only *when* the result arrives and the billing rate differ; the sync default is byte-identical to v1.5.0. Anthropic-only. A failed/expired batch request **fails that entity loudly** (`meta.status:'error'` → run `failed`), never a silent pass. Rollback = flip `execution_mode` back to `sync` (config, not a revert). See [Batch mode](#batch-mode-execution_mode-phase-2b).
 
 > **v1.5.0 (UNIT B):** new `severity_model` option (`current` default | `evidence_absent`). `evidence_absent` reserves HIGH severity — and therefore the `severity_floor` force-fail — for claims whose SUBJECT is absent from the corpus entirely; a grounded fact carrying only an over-claimed qualifier (a superlative/absolute/over-extension whose evidence is `in_window`/`beyond_window`) is regraded to MEDIUM. Only severity is regraded — the supported/unsupported verdict and the score never change. Needs `source_selection: claim_anchored` to classify evidence. Default `current` is byte-identical. See [Severity model](#severity-model-severity_model).
 
@@ -60,6 +62,7 @@ This module uses data-shape routing. It finds its input by checking which fields
 | `extraction_model` | select | `null` | **Unit A.** Model for the claim-EXTRACTION call only (`claim_extraction: "llm"`). `null`/empty (default) inherits `ai_model` -- byte-identical. Does **not** touch verification. See [Cost optimisation](#cost-optimisation-v140) | Leave inheriting sonnet. A cheaper extractor must first pass claim-count parity; the Screen-5 candidate `gpt-oss-120b` measured **-12% to -56% under-extraction** and is not safe |
 | `extraction_provider` | select | `null` | **Unit A.** Provider for the extraction call only. `null`/empty (default) inherits `ai_provider`. Set alongside `extraction_model` | Only with a validated cheaper extractor |
 | `cache_base_window` | boolean | `false` | **Unit B.** When `true`, the stable base (head) source window shared by an entity's verification batches is sent once as an Anthropic prompt `cache_prefix` (re-read at ~10% cost on later batches) instead of re-sent every batch. Same instructions/sources/claims, only reordered (sources before claims); verdict parity is the acceptance gate. Anthropic-only (non-anthropic verification providers fall back to the single prompt). See [Cost optimisation](#cost-optimisation-v140) | Set `true` in production with `source_selection: claim_anchored` -- acceptance-proven, ~$0.13/entity saved with no verdict change |
+| `execution_mode` | select | `sync` | **Phase 2B.** `sync` (default) runs each extraction + verification call synchronously, one entity at a time -- byte-identical to v1.5.0. `batch` opts the step into the Anthropic Message Batches path (skeleton-driven): all the step's entities are submitted as two Message Batches (extractions, then verifications), billed at 50% with an async return (<1h typically, up to 24h). Verdicts unchanged. Anthropic-only. Failed/expired request → that entity fails loudly. See [Batch mode](#batch-mode-execution_mode-phase-2b) | Set `batch` (per template/run) to cut the detector's Anthropic cost ~50% with no quality change; the detector is the last LLM step so its async return blocks nothing but QA routing. Flip back to `sync` to roll back |
 
 The model options are no longer hardcoded: the manifest declares `values_from` and the skeleton resolves the actual provider/model lists from the shared LLM registry at load time. Adding a provider or model to the registry makes it available here with no manifest change.
 
@@ -105,6 +108,33 @@ Across an entity's verification batches the base (head) source window is identic
 | Vermantia | 5 | 29,719 | yes, every draw | ~65% | FAIL = FAIL (score 0.77--0.79 vs 0.79) |
 
 Verdict parity held on every draw: ELK and Vermantia still fail their genuine fabrications, PRG still passes, scores stay inside the run-to-run jitter band, and flagged claims match the deployed baseline. The cold-draw reduction scales with batch count (each extra batch is one more avoided base re-send); consecutive runs within the 5-minute cache TTL compound to 66--88%. Recommended: enable `cache_base_window: true` alongside `source_selection: claim_anchored`.
+
+---
+
+## Batch mode (`execution_mode`) — Phase 2B
+
+`execution_mode: batch` runs the detector's LLM calls through the **Anthropic Message Batches API** instead of synchronous calls. It is billed at **50% of standard** with an asynchronous return, and captures the largest single lever of the pipeline's Anthropic bill (the detector is ~40% of it) with **no change to any verdict** — only *when* the result arrives and the billing rate differ. `sync` (default) is byte-identical to v1.5.0.
+
+**Why the detector is safe to batch first:** it is the **last** LLM step, so its async return blocks nothing downstream except QA routing (a decision gate, not a data dependency); it is self-contained; and it is cheaper batched even at a 0% cache-hit rate.
+
+**How it runs (skeleton-driven).** Because a verification prompt needs the *extracted* claims, the step becomes **two Message Batches**:
+
+1. **Round 1 — extractions.** Every entity's `claim_extraction: llm` call is collected and submitted as one batch. (In `regex` mode there is no extraction call and this round is empty.)
+2. **Round 2 — verifications.** Once round 1 returns, each entity's claim batches are built and all verification calls across all entities are submitted as one batch.
+
+Guards (no content / no sources / zero claims) short-circuit **before** any batch call, exactly as in sync. `stream: true` is dropped (unsupported and pointless for an async batch); the same source-window caching applies.
+
+**Loud-fail (never a silent pass).** A batch request can fail or expire independently of the rest of the batch. If any of an entity's requests errors or expires, **that entity fails loudly** — the result carries `meta.status: 'error'` (which the skeleton derives to a `failed` run, surfaced in `failed_count`), not a soft `qa_pass: false` and never a clean pass. Other entities in the batch are unaffected. Note the asymmetry vs sync: the sync path retries a transient blip 3× and, on final failure, degrades the batch's claims to unsupported; the batch path converts an errored request into a hard entity fail (the batch HTTP submit/poll still retries transient errors).
+
+**Rollback** is a config flip back to `execution_mode: sync` — not a code revert.
+
+**Module contract (for the skeleton).** In batch mode the skeleton drives three pure, exported entry points (no LLM call inside them — the skeleton owns submit/poll and assigns every `custom_id`, so the module never sees `entity_submodule_run_id`):
+
+- `prepareExtractionRequests(entities, options, tools)` → `{ state, extractionRequests }`
+- `prepareVerificationRequests(entities, options, state, extractionByEntityIdx, tools)` → `{ state, verificationRequests }`
+- `parseResults(entities, options, state, verificationByEntityIdx, tools)` → `{ results, summary }`
+
+These reuse the **same** staged code as `execute()`, so a parsed batch verdict is byte-identical to the sync verdict given the same responses (proven in `test-batch-mode.js`: round-trip equivalence across the standard, `claim_anchored`, `cache_base_window`, `severity_floor`, and `evidence_absent` configs). Responses are reconciled **by `custom_id`** (`…__x0` extractions, `…__v{n}` verifications), not by arrival order.
 
 ---
 

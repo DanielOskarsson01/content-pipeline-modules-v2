@@ -242,31 +242,6 @@ function parseExtractedClaims(responseText) {
 }
 
 /**
- * LLM claim extraction (claim_extraction:"llm"). Sends the FULL draft (prose +
- * tables + lists) to the code-locked extraction prompt and returns claim strings.
- * On an empty/unparseable result or an LLM error, falls back to the regex extractor
- * (logged) so the entity stays gradeable -- a degraded extraction reverts to the old
- * behavior rather than silently green-lighting or hard-erroring. The zero-claims
- * guard (H21) still fires downstream if regex also finds nothing.
- */
-async function extractClaimsLlm(markdown, ai, model, provider, logger, entityName) {
-  const prompt = CLAIM_EXTRACTION_PROMPT.replace('{{CONTENT}}', markdown);
-  try {
-    const response = await ai.complete({ prompt, model, provider });
-    const claims = parseExtractedClaims(response.text);
-    if (claims.length === 0) {
-      logger.warn(`${entityName}: LLM claim extraction returned no claims -- falling back to regex extractor`);
-      return extractClaims(markdown);
-    }
-    logger.info(`${entityName}: LLM claim extraction found ${claims.length} claim(s)`);
-    return claims;
-  } catch (err) {
-    logger.warn(`${entityName}: LLM claim extraction failed (${err.message}) -- falling back to regex extractor`);
-    return extractClaims(markdown);
-  }
-}
-
-/**
  * Combine source text_content items into a single string,
  * respecting max_source_chars limit. Truncates from the end.
  */
@@ -573,165 +548,87 @@ function decideHallucinationPass({ hallucinationScore, unsupportedClaims, claimE
 }
 
 // ─── Main execute function ───
+//
+// Phase 2B refactor: the per-entity body is split into pure STAGES
+// (stageExtractPrepare → applyExtraction → stageVerifyPrepare → stageFinalize) so the
+// SAME code serves both the synchronous path (execute, default, byte-identical to before)
+// AND the Anthropic Message Batches path (prepareExtractionRequests / prepareVerificationRequests
+// / parseResults, used by the skeleton's step-6 batch executor). A parsed batch verdict is
+// therefore byte-identical to the sync verdict given the same LLM responses -- the only
+// difference is WHEN the response arrives (now vs a batch return up to 24h later) and how a
+// failed request is treated (sync degrades the batch to unverified; batch HARD-FAILS the
+// entity loudly). Nothing about the verdict logic, severity floor, or scoring changes.
 
-async function execute(input, options, tools) {
-  const { entities } = input;
+// Resolve + normalize all options once. Shared by execute() and the batch entry points so
+// both derive an IDENTICAL config -- the sync-vs-batch equivalence rests on this single source.
+function resolveDetectorOptions(options) {
   const { ai_model, ai_provider, ...otherOptions } = options;
-  const { logger, progress, ai } = tools;
   const {
     pass_threshold = 0.9,
     max_source_chars = 100000,
     claims_per_batch = 10,
     allow_empty_content = false,
-    // H20: what to do when there is NO source material to verify against.
-    // 'fail' (default) = fail closed -- unverifiable is not verified (UNIT_50
-    // Decision 1, "THE SEVERE ONE"). 'flag' = pass but needs_review. 'pass' =
-    // legacy skip-with-pass for pipelines that legitimately have no sources.
     no_sources_behavior = 'fail',
-    // H21: content this long (chars) that yields ZERO extractable claims is the
-    // padding-blind signature -- it fails closed instead of auto-passing. Shorter
-    // no-claim content is a low-confidence pass (needs_review). Calibration knob:
-    // measure the trip rate; do not dial down to silence a genuine halt.
     flag_zero_claims_over_chars = 500,
-    // B033: extraction strategy. "regex" (default) = the enumerated numeric/date/
-    // company regex path (byte-identical to today). "llm" = a code-locked LLM pass
-    // that reads the FULL draft incl. tables/lists -- restores claim granularity on
-    // v3 drafts where facts live in Quick-Facts tables the regex cannot see.
     claim_extraction = 'regex',
-    // B033: severity floor. When true, any claim verified as unsupported AND rated
-    // high-severity force-fails the check regardless of the numeric ratio (B031/M3
-    // pattern). Closes the "1 hard fabrication in 10 claims = exactly 0.9 = PASS"
-    // hole (STEP6 sec 0.4). Emits through the same qa_pass:false -> hallucination:fail
-    // routing key -- no new fail key.
     severity_floor = false,
-    // UNIT B: which severity model gates the floor. "current" (default,
-    // byte-identical) = the LLM's raw high/medium/low. "evidence_absent" =
-    // reserve HIGH for claims whose SUBJECT is absent from the corpus entirely:
-    // a high unsupported claim whose evidence IS present (in_window/beyond_window)
-    // is a grounded fact with an over-claimed qualifier (superlative/absolute/
-    // over-extension), not a fabrication, so it is regraded to MEDIUM and the
-    // floor does not force-fail it. Needs the per-claim evidence classification,
-    // which exists only in source_selection:"claim_anchored"; in head mode there
-    // is nothing to classify against, so no HIGH can be regraded (behaves as
-    // "current") — a warning is logged so the mismatch is visible.
     severity_model = 'current',
-    // U1: source selection strategy. "head" (default) = combineSourceText, the
-    // corpus-head truncation, byte-identical to today (window-raise-only is this
-    // mode with a bigger max_source_chars -- no code change). "claim_anchored" =
-    // per-batch window built from the source chunks whose terms overlap the batch's
-    // claims, so evidence beyond the head window is SHOWN (DIAGNOSIS Task 2 fix).
-    // Claim-anchored mode also emits honest-window meta (corpus/shown chars +
-    // per-flagged-claim evidence location) so a truncation artifact is never again
-    // indistinguishable from a fabrication.
     source_selection = 'head',
-    // COST_OPTIMISATION Unit A: the claim-EXTRACTION call (claim_extraction:"llm")
-    // is parsing-grade and can run on a cheaper model than verification. Null/absent
-    // (default) inherits ai_model/ai_provider -- byte-identical to today. Set both to
-    // route extraction elsewhere (e.g. openrouter/gpt-oss-120b); VERIFICATION is
-    // untouched (it is the referee that grades every module).
     extraction_model = null,
     extraction_provider = null,
-    // COST_OPTIMISATION Unit B: reuse the stable base (head) window across an
-    // entity's verification batches via a cache_prefix, instead of re-sending it in
-    // every batch. Default false = byte-identical to today (single filled prompt, no
-    // cache_prefix). When true, the verification prompt is restructured so the
-    // instructions + base window sit in a cache_prefix and only the per-batch
-    // supplement + claims vary -- the model sees the SAME content, only reordered
-    // (sources before claims). ANTHROPIC-ONLY: non-anthropic verification providers
-    // ignore cache_prefix, so the split silently falls back to the single prompt for
-    // them (never drops the base window).
     cache_base_window = false,
   } = otherOptions;
-
-  const useLlmExtraction = claim_extraction === 'llm';
-  // Coerce every boolean through asBool (the string-typed-preset bug class):
-  // "false" is a truthy string, so a naive read would silently enable the option.
-  const severityFloor = asBool(severity_floor);
-  const allowEmptyContent = asBool(allow_empty_content);
-  const claimAnchored = source_selection === 'claim_anchored';
-  const cacheBaseWindow = asBool(cache_base_window);
-  // Unit B cache-split is safe only for anthropic: ai.complete honors cache_prefix
-  // ONLY when the resolved provider === 'anthropic', and it resolves an UNDEFINED
-  // provider to 'anthropic' (destructuring default) but leaves an explicit null as
-  // null. So we mirror that exactly: undefined -> anthropic (cache honored), null or
-  // any other value -> NOT anthropic. A plain `?? 'anthropic'` would wrongly treat
-  // null as anthropic and enable the split -- the skeleton would then DROP the
-  // cache_prefix and the verifier would grade against a stripped source window.
-  const resolvedProvider = ai_provider === undefined ? 'anthropic' : ai_provider;
-  const useCacheSplit = cacheBaseWindow && resolvedProvider === 'anthropic';
-
-  // UNIT B: normalize + validate the severity model. Unknown value -> 'current'
-  // (safe, byte-identical) with a warning, never a silent behavior change.
   const severityModel = severity_model === 'evidence_absent' ? 'evidence_absent' : 'current';
-  if (severity_model && severity_model !== severityModel) {
-    logger.warn(`Unknown severity_model="${severity_model}" -- using "current" (no severity re-grading).`);
+  const resolvedProvider = ai_provider === undefined ? 'anthropic' : ai_provider;
+  return {
+    ai_model, ai_provider,
+    pass_threshold, max_source_chars, claims_per_batch,
+    no_sources_behavior, flag_zero_claims_over_chars,
+    extraction_model, extraction_provider,
+    useLlmExtraction: claim_extraction === 'llm',
+    severityFloor: asBool(severity_floor),
+    allowEmptyContent: asBool(allow_empty_content),
+    claimAnchored: source_selection === 'claim_anchored',
+    useCacheSplit: asBool(cache_base_window) && resolvedProvider === 'anthropic',
+    severityModel,
+    verificationPrompt: MANIFEST_DEFAULT_PROMPT,
+    _severityModelRaw: severity_model,
+  };
+}
+
+// The one-per-call config logs (info + the two severity_model warnings). Side-effect only --
+// never affects the returned result, so it is factored out of the pure stages.
+function logConfig(cfg, logger) {
+  if (cfg._severityModelRaw && cfg._severityModelRaw !== cfg.severityModel) {
+    logger.warn(`Unknown severity_model="${cfg._severityModelRaw}" -- using "current" (no severity re-grading).`);
   }
-  if (severityModel === 'evidence_absent' && !claimAnchored) {
+  if (cfg.severityModel === 'evidence_absent' && !cfg.claimAnchored) {
     logger.warn('severity_model=evidence_absent needs source_selection=claim_anchored to classify evidence; with source_selection=head no HIGH claim can be regraded (behaves as "current").');
   }
-
-  // Verification prompt is code-locked (W2.3) -- NOT template-overridable.
-  // Any `prompt` a template supplies lands in otherOptions and is ignored.
-  const verificationPrompt = MANIFEST_DEFAULT_PROMPT;
-
   logger.info(
-    `Config: pass_threshold=${pass_threshold}, model=${ai_model || 'default'}, ` +
-    `provider=${ai_provider || 'default'}, max_source_chars=${max_source_chars}, ` +
-    `claims_per_batch=${claims_per_batch}`
+    `Config: pass_threshold=${cfg.pass_threshold}, model=${cfg.ai_model || 'default'}, ` +
+    `provider=${cfg.ai_provider || 'default'}, max_source_chars=${cfg.max_source_chars}, ` +
+    `claims_per_batch=${cfg.claims_per_batch}`
   );
+}
 
-  const results = [];
+// STAGE A -- content guard + extraction setup. No LLM call here; the caller (sync or batch)
+// owns it. Returns {final} (no-content guard -> a finished result), {extractionArgs, ctx}
+// (claim_extraction:'llm' -- caller runs one LLM call, then applyExtraction), or {claims, ctx}
+// (regex -- claims already in hand).
+function stageExtractPrepare(entity, cfg, logger) {
+  const contentItems = (entity.items || []).filter(item => item.content_markdown);
+  const sourceItems = (entity.items || []).filter(item => item.text_content);
 
-  for (let i = 0; i < entities.length; i++) {
-    const entity = entities[i];
-    progress.update(i + 1, entities.length, `Processing ${entity.name}`);
-
-    // --- Data-shape routing: find content and source items by field presence ---
-    const contentItems = (entity.items || []).filter(item => item.content_markdown);
-    const sourceItems = (entity.items || []).filter(item => item.text_content);
-
-    // --- Edge case: no content_markdown -- fail closed (A3 / MODERATE M1) ---
-    // content_markdown is base-hydrated and requires_items skips empty-pool
-    // entities upstream, so reaching here with no content means generation
-    // produced nothing -- content was expected but is absent, an ERROR, not
-    // "nothing to check." A QA gate must never emit "pass" for content it never
-    // read: this is the silent-salvage class in its most dangerous form. Fail
-    // closed with qa_pass:false (a QA verdict that routes/flags like any other
-    // fail -- NOT meta.status:error). allow_empty_content restores the legacy
-    // skip-with-pass for pipelines that legitimately have no content to check.
-    if (contentItems.length === 0) {
-      if (allowEmptyContent) {
-        logger.warn(`${entity.name}: no content_markdown found -- skipping (allow_empty_content=true)`);
-        results.push({
-          entity_name: entity.name,
-          items: [{
-            entity_name: entity.name,
-            qa_pass: true,
-            hallucination_score: 1,
-            verified_claims_count: 0,
-            partial_claims_count: 0,
-            total_claims_count: 0,
-            flagged_claims_count: 0,
-            flagged_claims: [],
-            flagged_claims_text: '',
-            partial_claims_text: '',
-            summary_text: 'No content_markdown found -- nothing to verify. Skipped (allow_empty_content=true).',
-          }],
-          meta: { qa_pass: true, hallucination_score: 1, skipped: true, skip_reason: 'no_content_allowed' },
-        });
-        continue;
-      }
-
-      logger.error(
-        `${entity.name}: no content_markdown found -- failing closed ` +
-        `(content expected but absent; set allow_empty_content to skip with a pass)`
-      );
-      const noContentResult = {
+  if (contentItems.length === 0) {
+    if (cfg.allowEmptyContent) {
+      logger.warn(`${entity.name}: no content_markdown found -- skipping (allow_empty_content=true)`);
+      return { final: {
         entity_name: entity.name,
         items: [{
           entity_name: entity.name,
-          qa_pass: false,
-          hallucination_score: 0,
+          qa_pass: true,
+          hallucination_score: 1,
           verified_claims_count: 0,
           partial_claims_count: 0,
           total_claims_count: 0,
@@ -739,416 +636,430 @@ async function execute(input, options, tools) {
           flagged_claims: [],
           flagged_claims_text: '',
           partial_claims_text: '',
-          summary_text: 'No content_markdown found -- content was expected but is absent, so no claims could be verified. Failing closed (unverifiable is not verified). Set allow_empty_content to skip with a pass.',
+          summary_text: 'No content_markdown found -- nothing to verify. Skipped (allow_empty_content=true).',
         }],
-        meta: { qa_pass: false, hallucination_score: 0, error: 'no_content' },
-      };
-      results.push(noContentResult);
-      if (tools._partialItems) tools._partialItems.push(...noContentResult.items);
-      continue;
+        meta: { qa_pass: true, hallucination_score: 1, skipped: true, skip_reason: 'no_content_allowed' },
+      } };
     }
 
-    // --- Select the content_markdown to grade (H18b) ---
-    // content-writer and tone-seo-editor BOTH emit inline content_markdown under
-    // add with different source_submodule, so both drafts survive the pool. The
-    // step-8 output modules publish only the latest (.at(-1) -- tone-seo-editor
-    // refines content-writer: markdown-output:189 / html-output:182 /
-    // json-output:151). Grade the SAME draft, not both concatenated, or the
-    // verdict is about text that was never published.
-    const allMarkdown = contentItems.at(-1).content_markdown;
-
-    // --- Extract factual claims (BEFORE the source guard, so a no-sources ---
-    // --- failure can report how many claims went unverifiable) ---
-    // B033: llm mode routes extraction through the code-locked LLM pass (reads
-    // tables/lists), falling back to regex on empty/error. Default is regex --
-    // byte-identical to the prior contract.
-    // Unit A: extraction can run on a cheaper model; null/absent inherits the
-    // verification model/provider (byte-identical). Verification stays on ai_model.
-    const extractionModel = extraction_model || ai_model;
-    const extractionProvider = extraction_provider || ai_provider;
-    const claims = useLlmExtraction
-      ? await extractClaimsLlm(allMarkdown, ai, extractionModel, extractionProvider, logger, entity.name)
-      : extractClaims(allMarkdown);
-
-    // --- H20: no source text_content -- cannot verify anything ---
-    // UNIT_50 Decision 1 ("THE SEVERE ONE"): content asserting claims with no
-    // grounding to check against is the most dangerous silent pass. Fail closed
-    // by default; no_sources_behavior carves out flag/pass.
-    if (sourceItems.length === 0) {
-      if (no_sources_behavior === 'pass') {
-        logger.warn(`${entity.name}: no source text_content -- skipping with pass (no_sources_behavior=pass)`);
-        results.push({
-          entity_name: entity.name,
-          items: [{
-            entity_name: entity.name,
-            qa_pass: true,
-            hallucination_score: 1,
-            verified_claims_count: 0, partial_claims_count: 0, total_claims_count: claims.length,
-            flagged_claims_count: 0, flagged_claims: [], flagged_claims_text: '', partial_claims_text: '',
-            summary_text: `No source text_content available -- ${claims.length} claim(s) unverifiable. Skipped with pass (no_sources_behavior=pass).`,
-          }],
-          meta: { qa_pass: true, hallucination_score: 1, skipped: true, skip_reason: 'no_sources', total_claims: claims.length },
-        });
-        continue;
-      }
-      const flagOnly = no_sources_behavior === 'flag';
-      const summary = `No source text_content available -- ${claims.length} extracted claim(s) are unverifiable ` +
-        `(nothing to ground them against). ` +
-        (flagOnly
-          ? 'Flagged for manual review (no_sources_behavior=flag).'
-          : 'Failing closed: unverifiable is not verified. Set no_sources_behavior=flag or =pass to soften.');
-      logger[flagOnly ? 'warn' : 'error'](`${entity.name}: ${summary}`);
-      const noSrcResult = {
-        entity_name: entity.name,
-        items: [{
-          entity_name: entity.name,
-          qa_pass: flagOnly,
-          needs_review: true,
-          hallucination_score: 0,
-          verified_claims_count: 0, partial_claims_count: 0, total_claims_count: claims.length,
-          flagged_claims_count: claims.length, flagged_claims: [], flagged_claims_text: '', partial_claims_text: 'None.',
-          summary_text: summary,
-        }],
-        meta: { qa_pass: flagOnly, needs_review: true, hallucination_score: 0, total_claims: claims.length, skip_reason: 'no_sources' },
-      };
-      results.push(noSrcResult);
-      if (tools._partialItems) tools._partialItems.push(...noSrcResult.items);
-      continue;
-    }
-
-    // --- H21: zero extractable claims is NOT a clean green ---
-    // The regex extractor only keeps enumerated numeric/date/company claims, so
-    // purely qualitative content yields zero claims. Substantial content with
-    // zero claims is the padding-blind signature -- fail closed (needs_review).
-    // Short no-claim content is a low-confidence pass (needs_review), not a
-    // confident score:1. The full remedy (LLM faithfulness extractor + de-dup of
-    // the regex shared with citation-coverage) is UNIT_50 #51 -- NOT attempted
-    // here; a regex broadening would manufacture false confidence (UNIT_50 OQ7).
-    if (claims.length === 0) {
-      const substantial = allMarkdown.length > flag_zero_claims_over_chars;
-      const zeroBase = {
-        entity_name: entity.name,
-        needs_review: true,
-        verified_claims_count: 0, partial_claims_count: 0, total_claims_count: 0,
-        flagged_claims_count: 0, flagged_claims: [], flagged_claims_text: '', partial_claims_text: '',
-      };
-      if (substantial) {
-        const summary = `No verifiable factual claims could be extracted from ${allMarkdown.length} chars of content. ` +
-          `The extractor recognizes only enumerated numeric/date/company claims, so purely qualitative content yields ` +
-          `zero claims -- this substantial content cannot be certified as fact-checked (padding-blind signature). ` +
-          `Failing closed pending the LLM-faithfulness extractor (UNIT_50 #51).`;
-        logger.warn(`${entity.name}: ${summary}`);
-        const r = {
-          entity_name: entity.name,
-          items: [{ ...zeroBase, qa_pass: false, hallucination_score: 0, summary_text: summary }],
-          meta: { qa_pass: false, needs_review: true, hallucination_score: 0, total_claims: 0, zero_claims: true },
-        };
-        results.push(r);
-        if (tools._partialItems) tools._partialItems.push(...r.items);
-        continue;
-      }
-      const summary = `No factual claims detected in a short (${allMarkdown.length} chars) content body -- nothing to ` +
-        `verify. Low-confidence pass (needs_review); the regex extractor cannot see qualitative claims (UNIT_50 #51).`;
-      logger.info(`${entity.name}: ${summary}`);
-      const r = {
-        entity_name: entity.name,
-        items: [{ ...zeroBase, qa_pass: true, hallucination_score: 1, summary_text: summary }],
-        meta: { qa_pass: true, needs_review: true, hallucination_score: 1, total_claims: 0, zero_claims: true },
-      };
-      results.push(r);
-      if (tools._partialItems) tools._partialItems.push(...r.items);
-      continue;
-    }
-
-    // --- Prepare source context ---
-    // Head (default): one head-truncated window shared by every batch, byte-identical.
-    // Claim-anchored: per-batch windows built below from ranked chunks of the corpus.
-    const corpusChars = sourceItems.reduce((n, it) => n + (it.text_content || '').length, 0);
-    const chunks = claimAnchored ? chunkSources(sourceItems) : null;
-    // IDF is corpus-wide, so build it once per entity (over all claims' terms) and
-    // share it across batches rather than recomputing per batch.
-    const idf = claimAnchored ? buildIdf(chunks, claims) : null;
-    const sourceText = claimAnchored ? null : combineSourceText(sourceItems, max_source_chars);
-
-    logger.info(
-      `${entity.name}: ${claims.length} claims extracted, ` +
-      `${sourceItems.length} source(s), ` +
-      (claimAnchored
-        ? `${corpusChars} corpus chars, claim-anchored windows <= ${max_source_chars} chars`
-        : `${sourceText.length} chars of source text`)
+    logger.error(
+      `${entity.name}: no content_markdown found -- failing closed ` +
+      `(content expected but absent; set allow_empty_content to skip with a pass)`
     );
-
-    // --- Batch claims and verify with LLM ---
-    const batches = batchClaims(claims, claims_per_batch);
-    const allVerdicts = [];
-    const claimEvidence = {}; // claim text -> 'in_window' | 'beyond_window' | 'absent' (claim_anchored only)
-    let maxShownChars = 0;
-
-    for (let b = 0; b < batches.length; b++) {
-      const batch = batches[b];
-      progress.update(
-        i + 1, entities.length,
-        `${entity.name}: verifying batch ${b + 1}/${batches.length}`
-      );
-
-      const claimsText = batch.map((c, idx) => `${idx + 1}. ${c}`).join('\n');
-
-      // Head mode reuses the shared window; claim_anchored builds a focused window
-      // for THIS batch's claims and records where each claim's evidence sits.
-      // baseText = the stable head window (identical every batch); suppText = the
-      // per-batch far chunks (claim_anchored only). Kept separate for Unit B caching.
-      let batchSourceText, baseSourceText, suppSourceText;
-      if (claimAnchored) {
-        const win = selectAnchoredWindow(chunks, batch, max_source_chars, idf);
-        batchSourceText = win.text;
-        baseSourceText = win.baseText;
-        suppSourceText = win.suppText;
-        maxShownChars = Math.max(maxShownChars, win.shownChars);
-        for (const c of batch) {
-          if (!(c in claimEvidence)) claimEvidence[c] = classifyClaimEvidence(c, chunks, win.selectedOrders, idf);
-        }
-      } else {
-        batchSourceText = sourceText;
-        baseSourceText = sourceText; // head mode: the whole shared window IS the base
-        suppSourceText = '';
-      }
-
-      // Unit B: split the stable block (instructions + base window) into a
-      // cache_prefix and send only the per-batch tail (supplement + claims) as the
-      // varying prompt. The model concatenates them with no separator, so it sees the
-      // SAME instructions + SAME source chunks + SAME claims as the single-prompt path
-      // -- only the section ORDER differs (sources before claims; supplements after
-      // the base instead of interleaved by corpus order). Default (useCacheSplit
-      // false) keeps the exact single filled prompt below, byte-identical to today.
-      let completeArgs;
-      if (useCacheSplit) {
-        const cachePrefix = `${PROMPT_HEADER}\n\nSOURCE MATERIAL:\n${baseSourceText}`;
-        // SOURCE_SEP goes BEFORE the supplement (the base|supp seam), matching the
-        // single-prompt join `chunks.join(SOURCE_SEP)` -- so every page boundary is
-        // preserved and no spurious separator lands before CLAIMS. (Head mode:
-        // suppSourceText is '' so the tail is just the claims block.)
-        const tail = (suppSourceText ? SOURCE_SEP + suppSourceText : '') + `\n\nCLAIMS:\n${claimsText}`;
-        completeArgs = { prompt: tail, cache_prefix: cachePrefix, model: ai_model, provider: ai_provider };
-      } else {
-        const filledPrompt = verificationPrompt
-          .replace('{{CLAIMS}}', claimsText)
-          .replace('{{SOURCES}}', batchSourceText);
-        completeArgs = { prompt: filledPrompt, model: ai_model, provider: ai_provider };
-      }
-
-      try {
-        const response = await ai.complete(completeArgs);
-
-        const verdicts = parseLlmResponse(response.text);
-
-        if (verdicts.length === 0) {
-          logger.warn(
-            `${entity.name}: batch ${b + 1} returned unparseable response -- ` +
-            `treating ${batch.length} claims as unverified`
-          );
-          // Treat unparseable response as all claims being unverifiable
-          for (const claim of batch) {
-            allVerdicts.push({
-              claim,
-              verdict: 'unsupported',
-              quote: null,
-              severity: 'medium',
-              _parse_error: true,
-            });
-          }
-        } else {
-          // Match verdicts back to claims by position
-          for (let v = 0; v < batch.length; v++) {
-            if (v < verdicts.length) {
-              allVerdicts.push({
-                claim: batch[v], // Use our original claim text
-                verdict: verdicts[v].verdict || 'unsupported',
-                quote: verdicts[v].quote || null,
-                severity: verdicts[v].severity || 'medium',
-              });
-            } else {
-              // LLM returned fewer verdicts than claims
-              allVerdicts.push({
-                claim: batch[v],
-                verdict: 'unsupported',
-                quote: null,
-                severity: 'medium',
-                _missing_verdict: true,
-              });
-            }
-          }
-        }
-      } catch (err) {
-        logger.warn(
-          `${entity.name}: LLM call failed for batch ${b + 1}: ${err.message} -- ` +
-          `treating ${batch.length} claims as unverified`
-        );
-        for (const claim of batch) {
-          allVerdicts.push({
-            claim,
-            verdict: 'unsupported',
-            quote: null,
-            severity: 'medium',
-            _error: err.message,
-          });
-        }
-      }
-    }
-
-    // --- Calculate scores ---
-    const totalClaims = allVerdicts.length;
-    const supportedClaims = allVerdicts.filter(v => v.verdict === 'supported');
-    const partialClaims = allVerdicts.filter(v => v.verdict === 'partial');
-    const unsupportedClaims = allVerdicts.filter(v => v.verdict === 'unsupported');
-
-    // Half-weighting of partials lives ONLY in the score. The counts report
-    // supported/partial/unsupported separately and sum to total -- never a
-    // rounded blend that disagrees with meta.supported.
-    const verifiedValue = supportedClaims.length + partialClaims.length * 0.5;
-    const hallucinationScore = totalClaims > 0
-      ? verifiedValue / totalClaims
-      : 1;
-
-    // B033 severity floor (B031/M3 force-fail pattern): a hard, high-severity
-    // fabrication force-fails the check regardless of the numeric ratio. The SCORE
-    // still reports the honest ratio (never masked); only qa_pass is forced false,
-    // and it emits through the same hallucination:fail key -- no new fail key.
-    // UNIT B: severity_model may regrade a grounded-but-over-claimed HIGH to MEDIUM
-    // before the floor is applied; `regraded` is the list used for all flagged
-    // output/summary so the report matches the decision. Under 'current' it is the
-    // same verdict objects -> byte-identical.
-    const { qaPass: qaPassed, floorTripped: severityFloorTripped, highSevUnsupported, regraded: unsupportedRegraded } =
-      decideHallucinationPass({
-        hallucinationScore, unsupportedClaims, claimEvidence,
-        passThreshold: pass_threshold, severityFloor, severityModel,
-      });
-
-    // --- Build flagged claims output ---
-    // Head mode emits {claim, severity} exactly as before (byte-identical). Claim-
-    // anchored adds the evidence location so a truncation artifact is visible.
-    const flaggedClaims = unsupportedRegraded.map(v => (
-      claimAnchored
-        ? { claim: v.claim, severity: v.severity, evidence: claimEvidence[v.claim] || 'unknown' }
-        : { claim: v.claim, severity: v.severity }
-    ));
-
-    const flaggedClaimsText = unsupportedRegraded.length > 0
-      ? unsupportedRegraded
-          .map((v, idx) => {
-            const tag = claimAnchored ? ` {${claimEvidence[v.claim] || 'unknown'}}` : '';
-            return `${idx + 1}. [${(v.severity || 'medium').toUpperCase()}]${tag} ${v.claim}`;
-          })
-          .join('\n')
-      : 'None -- all claims are supported by source material.';
-
-    const partialClaimsText = partialClaims.length > 0
-      ? partialClaims
-          .map((v, idx) => {
-            const quotePart = v.quote ? ` (source: "${v.quote}")` : '';
-            return `${idx + 1}. ${v.claim}${quotePart}`;
-          })
-          .join('\n')
-      : 'None.';
-
-    // --- Summary ---
-    const summaryParts = [
-      `${totalClaims} factual claim(s) extracted from content.`,
-      `${supportedClaims.length} fully supported, ${partialClaims.length} partially supported, ${unsupportedClaims.length} unsupported.`,
-    ];
-
-    if (unsupportedClaims.length > 0) {
-      // Severity tally from the regraded list so it matches the floor decision
-      // (byte-identical under severity_model:'current').
-      const highSeverity = unsupportedRegraded.filter(v => v.severity === 'high').length;
-      const mediumSeverity = unsupportedRegraded.filter(v => v.severity === 'medium').length;
-      const lowSeverity = unsupportedRegraded.filter(v => v.severity === 'low').length;
-      const severityParts = [];
-      if (highSeverity > 0) severityParts.push(`${highSeverity} high`);
-      if (mediumSeverity > 0) severityParts.push(`${mediumSeverity} medium`);
-      if (lowSeverity > 0) severityParts.push(`${lowSeverity} low`);
-      summaryParts.push(`Unsupported severity: ${severityParts.join(', ')}.`);
-    }
-
-    summaryParts.push(
-      `Hallucination score: ${(hallucinationScore * 100).toFixed(1)}% ` +
-      `(threshold: ${(pass_threshold * 100).toFixed(1)}%).`
-    );
-
-    if (severityFloorTripped) {
-      summaryParts.push(
-        `SEVERITY FLOOR: ${highSevUnsupported.length} high-severity unsupported claim(s) ` +
-        `force-fail this check regardless of the score.`
-      );
-    }
-
-    // Claim-anchored only: split the flagged claims by where their evidence sits, so
-    // a truncation artifact (beyond-window) reads differently from a fabrication (absent).
-    const evBeyond = claimAnchored ? unsupportedClaims.filter(v => claimEvidence[v.claim] === 'beyond_window').length : 0;
-    const evAbsent = claimAnchored ? unsupportedClaims.filter(v => claimEvidence[v.claim] === 'absent').length : 0;
-    const evInWindow = claimAnchored ? unsupportedClaims.filter(v => claimEvidence[v.claim] === 'in_window').length : 0;
-    if (claimAnchored && unsupportedClaims.length > 0) {
-      summaryParts.push(
-        `Evidence location of flagged claims: ${evInWindow} in-window, ${evBeyond} beyond-window ` +
-        `(likely truncation), ${evAbsent} absent from source (candidate fabrication).`
-      );
-    }
-
-    const summaryText = summaryParts.join(' ');
-
-    const logFn = qaPassed ? 'info' : 'warn';
-    logger[logFn](
-      `${entity.name}: hallucination_score=${(hallucinationScore * 100).toFixed(1)}% ` +
-      `(${qaPassed ? 'PASS' : 'FAIL'}) -- ` +
-      `${supportedClaims.length} supported, ${partialClaims.length} partial, ` +
-      `${unsupportedClaims.length} unsupported of ${totalClaims} claims`
-    );
-
-    const entityResult = {
+    return { final: {
       entity_name: entity.name,
       items: [{
         entity_name: entity.name,
-        qa_pass: qaPassed,
-        hallucination_score: parseFloat(hallucinationScore.toFixed(3)),
-        verified_claims_count: supportedClaims.length,
-        partial_claims_count: partialClaims.length,
-        total_claims_count: totalClaims,
-        flagged_claims_count: unsupportedClaims.length,
-        flagged_claims: flaggedClaims,
-        flagged_claims_text: flaggedClaimsText,
-        partial_claims_text: partialClaimsText,
-        summary_text: summaryText,
+        qa_pass: false,
+        hallucination_score: 0,
+        verified_claims_count: 0,
+        partial_claims_count: 0,
+        total_claims_count: 0,
+        flagged_claims_count: 0,
+        flagged_claims: [],
+        flagged_claims_text: '',
+        partial_claims_text: '',
+        summary_text: 'No content_markdown found -- content was expected but is absent, so no claims could be verified. Failing closed (unverifiable is not verified). Set allow_empty_content to skip with a pass.',
       }],
-      meta: {
-        qa_pass: qaPassed,
-        hallucination_score: parseFloat(hallucinationScore.toFixed(3)),
-        total_claims: totalClaims,
-        supported: supportedClaims.length,
-        partial: partialClaims.length,
-        unsupported: unsupportedClaims.length,
-        batches_sent: batches.length,
-        // Only present when the floor actually fired -- keeps default output byte-identical.
-        ...(severityFloorTripped ? { severity_floor_tripped: true } : {}),
-        // UNIT B: self-document the non-default severity model (default 'current'
-        // omits this key -> byte-identical).
-        ...(severityModel === 'evidence_absent' ? { severity_model: 'evidence_absent' } : {}),
-        // U1 honest-window instrumentation -- claim_anchored only, so head output
-        // stays byte-identical. Distinguishes truncation artifacts from fabrications.
-        ...(claimAnchored ? {
-          source_selection: 'claim_anchored',
-          source_corpus_chars: corpusChars,
-          source_chars_shown: maxShownChars,
-          evidence_in_window: evInWindow,
-          evidence_beyond_window: evBeyond,
-          evidence_absent: evAbsent,
-        } : {}),
-      },
-    };
-    results.push(entityResult);
-    if (tools._partialItems) tools._partialItems.push(...entityResult.items);
+      meta: { qa_pass: false, hallucination_score: 0, error: 'no_content' },
+    } };
   }
 
-  // --- Build summary ---
-  const totalEntities = entities.length;
+  const allMarkdown = contentItems.at(-1).content_markdown;
+  const extractionModel = cfg.extraction_model || cfg.ai_model;
+  const extractionProvider = cfg.extraction_provider || cfg.ai_provider;
+  const ctx = { name: entity.name, sourceItems, allMarkdown };
+
+  if (cfg.useLlmExtraction) {
+    const prompt = CLAIM_EXTRACTION_PROMPT.replace('{{CONTENT}}', allMarkdown);
+    return { extractionArgs: { prompt, model: extractionModel, provider: extractionProvider }, ctx };
+  }
+  return { claims: extractClaims(allMarkdown), ctx };
+}
+
+// Apply an extraction LLM response to produce claim strings -- mirrors extractClaimsLlm:
+// an errored/empty/unparseable response falls back to the regex extractor (logged), so a
+// degraded extraction reverts to the old behaviour rather than green-lighting or hard-erroring.
+// resp = {ok:true, text} | {ok:false, error}. (Regex entities never call this.)
+function applyExtraction(ctx, resp, logger) {
+  if (!resp || resp.ok === false) {
+    const msg = (resp && resp.error) || 'no response';
+    logger.warn(`${ctx.name}: LLM claim extraction failed (${msg}) -- falling back to regex extractor`);
+    return extractClaims(ctx.allMarkdown);
+  }
+  const claims = parseExtractedClaims(resp.text);
+  if (claims.length === 0) {
+    logger.warn(`${ctx.name}: LLM claim extraction returned no claims -- falling back to regex extractor`);
+    return extractClaims(ctx.allMarkdown);
+  }
+  logger.info(`${ctx.name}: LLM claim extraction found ${claims.length} claim(s)`);
+  return claims;
+}
+
+// STAGE B -- source guards + window building + verification-request construction. No LLM call.
+// Returns {final} (no-sources / zero-claims guards) or {verifyRequests, verifyCtx}. Each
+// verifyRequest.args is EXACTLY the {prompt[,cache_prefix],model,provider} object the sync path
+// hands to ai.complete -- so a batched verification request is byte-identical to the sync call.
+function stageVerifyPrepare(entity, cfg, claims, ctx, logger) {
+  const sourceItems = ctx.sourceItems;
+  const allMarkdown = ctx.allMarkdown;
+
+  // --- H20: no source text_content -- cannot verify anything ---
+  if (sourceItems.length === 0) {
+    if (cfg.no_sources_behavior === 'pass') {
+      logger.warn(`${entity.name}: no source text_content -- skipping with pass (no_sources_behavior=pass)`);
+      return { final: {
+        entity_name: entity.name,
+        items: [{
+          entity_name: entity.name,
+          qa_pass: true,
+          hallucination_score: 1,
+          verified_claims_count: 0, partial_claims_count: 0, total_claims_count: claims.length,
+          flagged_claims_count: 0, flagged_claims: [], flagged_claims_text: '', partial_claims_text: '',
+          summary_text: `No source text_content available -- ${claims.length} claim(s) unverifiable. Skipped with pass (no_sources_behavior=pass).`,
+        }],
+        meta: { qa_pass: true, hallucination_score: 1, skipped: true, skip_reason: 'no_sources', total_claims: claims.length },
+      } };
+    }
+    const flagOnly = cfg.no_sources_behavior === 'flag';
+    const summary = `No source text_content available -- ${claims.length} extracted claim(s) are unverifiable ` +
+      `(nothing to ground them against). ` +
+      (flagOnly
+        ? 'Flagged for manual review (no_sources_behavior=flag).'
+        : 'Failing closed: unverifiable is not verified. Set no_sources_behavior=flag or =pass to soften.');
+    logger[flagOnly ? 'warn' : 'error'](`${entity.name}: ${summary}`);
+    return { final: {
+      entity_name: entity.name,
+      items: [{
+        entity_name: entity.name,
+        qa_pass: flagOnly,
+        needs_review: true,
+        hallucination_score: 0,
+        verified_claims_count: 0, partial_claims_count: 0, total_claims_count: claims.length,
+        flagged_claims_count: claims.length, flagged_claims: [], flagged_claims_text: '', partial_claims_text: 'None.',
+        summary_text: summary,
+      }],
+      meta: { qa_pass: flagOnly, needs_review: true, hallucination_score: 0, total_claims: claims.length, skip_reason: 'no_sources' },
+    } };
+  }
+
+  // --- H21: zero extractable claims is NOT a clean green ---
+  if (claims.length === 0) {
+    const substantial = allMarkdown.length > cfg.flag_zero_claims_over_chars;
+    const zeroBase = {
+      entity_name: entity.name,
+      needs_review: true,
+      verified_claims_count: 0, partial_claims_count: 0, total_claims_count: 0,
+      flagged_claims_count: 0, flagged_claims: [], flagged_claims_text: '', partial_claims_text: '',
+    };
+    if (substantial) {
+      const summary = `No verifiable factual claims could be extracted from ${allMarkdown.length} chars of content. ` +
+        `The extractor recognizes only enumerated numeric/date/company claims, so purely qualitative content yields ` +
+        `zero claims -- this substantial content cannot be certified as fact-checked (padding-blind signature). ` +
+        `Failing closed pending the LLM-faithfulness extractor (UNIT_50 #51).`;
+      logger.warn(`${entity.name}: ${summary}`);
+      return { final: {
+        entity_name: entity.name,
+        items: [{ ...zeroBase, qa_pass: false, hallucination_score: 0, summary_text: summary }],
+        meta: { qa_pass: false, needs_review: true, hallucination_score: 0, total_claims: 0, zero_claims: true },
+      } };
+    }
+    const summary = `No factual claims detected in a short (${allMarkdown.length} chars) content body -- nothing to ` +
+      `verify. Low-confidence pass (needs_review); the regex extractor cannot see qualitative claims (UNIT_50 #51).`;
+    logger.info(`${entity.name}: ${summary}`);
+    return { final: {
+      entity_name: entity.name,
+      items: [{ ...zeroBase, qa_pass: true, hallucination_score: 1, summary_text: summary }],
+      meta: { qa_pass: true, needs_review: true, hallucination_score: 1, total_claims: 0, zero_claims: true },
+    } };
+  }
+
+  // --- Prepare source context ---
+  const corpusChars = sourceItems.reduce((n, it) => n + (it.text_content || '').length, 0);
+  const chunks = cfg.claimAnchored ? chunkSources(sourceItems) : null;
+  const idf = cfg.claimAnchored ? buildIdf(chunks, claims) : null;
+  const sourceText = cfg.claimAnchored ? null : combineSourceText(sourceItems, cfg.max_source_chars);
+
+  logger.info(
+    `${entity.name}: ${claims.length} claims extracted, ` +
+    `${sourceItems.length} source(s), ` +
+    (cfg.claimAnchored
+      ? `${corpusChars} corpus chars, claim-anchored windows <= ${cfg.max_source_chars} chars`
+      : `${sourceText.length} chars of source text`)
+  );
+
+  // --- Build one verification request per claim batch (no LLM call) ---
+  const batches = batchClaims(claims, cfg.claims_per_batch);
+  const claimEvidence = {}; // claim -> 'in_window' | 'beyond_window' | 'absent' (claim_anchored only)
+  let maxShownChars = 0;
+  const verifyRequests = [];
+
+  for (let b = 0; b < batches.length; b++) {
+    const batch = batches[b];
+    const claimsText = batch.map((c, idx) => `${idx + 1}. ${c}`).join('\n');
+
+    let batchSourceText, baseSourceText, suppSourceText;
+    if (cfg.claimAnchored) {
+      const win = selectAnchoredWindow(chunks, batch, cfg.max_source_chars, idf);
+      batchSourceText = win.text;
+      baseSourceText = win.baseText;
+      suppSourceText = win.suppText;
+      maxShownChars = Math.max(maxShownChars, win.shownChars);
+      for (const c of batch) {
+        if (!(c in claimEvidence)) claimEvidence[c] = classifyClaimEvidence(c, chunks, win.selectedOrders, idf);
+      }
+    } else {
+      batchSourceText = sourceText;
+      baseSourceText = sourceText; // head mode: the whole shared window IS the base
+      suppSourceText = '';
+    }
+
+    let args;
+    if (cfg.useCacheSplit) {
+      const cachePrefix = `${PROMPT_HEADER}\n\nSOURCE MATERIAL:\n${baseSourceText}`;
+      const tail = (suppSourceText ? SOURCE_SEP + suppSourceText : '') + `\n\nCLAIMS:\n${claimsText}`;
+      args = { prompt: tail, cache_prefix: cachePrefix, model: cfg.ai_model, provider: cfg.ai_provider };
+    } else {
+      const filledPrompt = cfg.verificationPrompt
+        .replace('{{CLAIMS}}', claimsText)
+        .replace('{{SOURCES}}', batchSourceText);
+      args = { prompt: filledPrompt, model: cfg.ai_model, provider: cfg.ai_provider };
+    }
+    verifyRequests.push({ args });
+  }
+
+  return {
+    verifyRequests,
+    verifyCtx: { batches, claimEvidence, claimAnchored: cfg.claimAnchored, corpusChars, maxShownChars },
+  };
+}
+
+// Build verdict objects for ONE batch from its response text. Mirrors the sync ok-response
+// handling exactly: unparseable -> _parse_error on every claim; fewer verdicts than claims ->
+// _missing_verdict on the tail.
+function buildBatchVerdicts(responseText, batch) {
+  const verdicts = parseLlmResponse(responseText);
+  const out = [];
+  if (verdicts.length === 0) {
+    for (const claim of batch) {
+      out.push({ claim, verdict: 'unsupported', quote: null, severity: 'medium', _parse_error: true });
+    }
+  } else {
+    for (let v = 0; v < batch.length; v++) {
+      if (v < verdicts.length) {
+        out.push({
+          claim: batch[v],
+          verdict: verdicts[v].verdict || 'unsupported',
+          quote: verdicts[v].quote || null,
+          severity: verdicts[v].severity || 'medium',
+        });
+      } else {
+        out.push({
+          claim: batch[v],
+          verdict: 'unsupported',
+          quote: null,
+          severity: 'medium',
+          _missing_verdict: true,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+// Loud-fail result (batch mode) when one of an entity's verification requests errored or
+// expired. meta.status:'error' makes the skeleton's deriveEntityRunStatus mark the run
+// 'failed' (surfaced in failed_count) -- a fact-check that did not complete is NOT a clean
+// pass and NOT a soft qa_pass:false. This is the exact class the Phase-1 loud-fail fix addressed.
+function batchRequestFailedResult(entity, batches, failedBatchIdx, error) {
+  const totalClaims = batches.reduce((n, b) => n + b.length, 0);
+  const summary = `Verification did not complete: batch ${failedBatchIdx + 1}/${batches.length} ` +
+    `errored or expired (${error || 'unknown'}). Failing closed -- the fact-check could not finish ` +
+    `for this entity, so it is not verified (batch-mode loud-fail).`;
+  return {
+    entity_name: entity.name,
+    items: [{
+      entity_name: entity.name,
+      qa_pass: false,
+      needs_review: true,
+      hallucination_score: 0,
+      verified_claims_count: 0, partial_claims_count: 0, total_claims_count: totalClaims,
+      flagged_claims_count: 0, flagged_claims: [], flagged_claims_text: '', partial_claims_text: 'None.',
+      summary_text: summary,
+    }],
+    meta: {
+      status: 'error',
+      qa_pass: false,
+      needs_review: true,
+      hallucination_score: 0,
+      total_claims: totalClaims,
+      error: 'batch_request_failed',
+      failed_batch_index: failedBatchIdx,
+    },
+  };
+}
+
+// STAGE C -- assemble verdicts across batches, score, decide, build the entity result. This is
+// the pre-refactor scoring/decision/output block verbatim. batchResponses[b] = {ok:true, text}
+// | {ok:false, error}. mode 'sync' degrades an errored batch to unsupported/_error (byte-identical
+// to the old catch); mode 'batch' HARD-FAILS the entity on any errored/expired request.
+function stageFinalize(entity, cfg, verifyCtx, batchResponses, mode, logger) {
+  const { batches, claimEvidence, claimAnchored, corpusChars, maxShownChars } = verifyCtx;
+
+  const allVerdicts = [];
+  for (let b = 0; b < batches.length; b++) {
+    const batch = batches[b];
+    const resp = batchResponses[b];
+    if (resp && resp.ok === false) {
+      if (mode === 'batch') {
+        return batchRequestFailedResult(entity, batches, b, resp.error);
+      }
+      // sync: LLM call failed for this batch -> treat its claims as unverified.
+      for (const claim of batch) {
+        allVerdicts.push({ claim, verdict: 'unsupported', quote: null, severity: 'medium', _error: resp.error });
+      }
+      continue;
+    }
+    const bv = buildBatchVerdicts(resp.text, batch);
+    // Truth-critical diagnostic (parity with the pre-refactor sync path + now also in
+    // batch): a RECEIVED-but-unparseable response marks the whole batch _parse_error.
+    if (logger && bv.length > 0 && bv.every(v => v._parse_error)) {
+      logger.warn(
+        `${entity.name}: batch ${b + 1} returned unparseable response -- ` +
+        `treating ${batch.length} claims as unverified`
+      );
+    }
+    allVerdicts.push(...bv);
+  }
+
+  // --- Calculate scores ---
+  const totalClaims = allVerdicts.length;
+  const supportedClaims = allVerdicts.filter(v => v.verdict === 'supported');
+  const partialClaims = allVerdicts.filter(v => v.verdict === 'partial');
+  const unsupportedClaims = allVerdicts.filter(v => v.verdict === 'unsupported');
+
+  const verifiedValue = supportedClaims.length + partialClaims.length * 0.5;
+  const hallucinationScore = totalClaims > 0
+    ? verifiedValue / totalClaims
+    : 1;
+
+  const { qaPass: qaPassed, floorTripped: severityFloorTripped, highSevUnsupported, regraded: unsupportedRegraded } =
+    decideHallucinationPass({
+      hallucinationScore, unsupportedClaims, claimEvidence,
+      passThreshold: cfg.pass_threshold, severityFloor: cfg.severityFloor, severityModel: cfg.severityModel,
+    });
+
+  const flaggedClaims = unsupportedRegraded.map(v => (
+    claimAnchored
+      ? { claim: v.claim, severity: v.severity, evidence: claimEvidence[v.claim] || 'unknown' }
+      : { claim: v.claim, severity: v.severity }
+  ));
+
+  const flaggedClaimsText = unsupportedRegraded.length > 0
+    ? unsupportedRegraded
+        .map((v, idx) => {
+          const tag = claimAnchored ? ` {${claimEvidence[v.claim] || 'unknown'}}` : '';
+          return `${idx + 1}. [${(v.severity || 'medium').toUpperCase()}]${tag} ${v.claim}`;
+        })
+        .join('\n')
+    : 'None -- all claims are supported by source material.';
+
+  const partialClaimsText = partialClaims.length > 0
+    ? partialClaims
+        .map((v, idx) => {
+          const quotePart = v.quote ? ` (source: "${v.quote}")` : '';
+          return `${idx + 1}. ${v.claim}${quotePart}`;
+        })
+        .join('\n')
+    : 'None.';
+
+  const summaryParts = [
+    `${totalClaims} factual claim(s) extracted from content.`,
+    `${supportedClaims.length} fully supported, ${partialClaims.length} partially supported, ${unsupportedClaims.length} unsupported.`,
+  ];
+
+  if (unsupportedClaims.length > 0) {
+    const highSeverity = unsupportedRegraded.filter(v => v.severity === 'high').length;
+    const mediumSeverity = unsupportedRegraded.filter(v => v.severity === 'medium').length;
+    const lowSeverity = unsupportedRegraded.filter(v => v.severity === 'low').length;
+    const severityParts = [];
+    if (highSeverity > 0) severityParts.push(`${highSeverity} high`);
+    if (mediumSeverity > 0) severityParts.push(`${mediumSeverity} medium`);
+    if (lowSeverity > 0) severityParts.push(`${lowSeverity} low`);
+    summaryParts.push(`Unsupported severity: ${severityParts.join(', ')}.`);
+  }
+
+  summaryParts.push(
+    `Hallucination score: ${(hallucinationScore * 100).toFixed(1)}% ` +
+    `(threshold: ${(cfg.pass_threshold * 100).toFixed(1)}%).`
+  );
+
+  if (severityFloorTripped) {
+    summaryParts.push(
+      `SEVERITY FLOOR: ${highSevUnsupported.length} high-severity unsupported claim(s) ` +
+      `force-fail this check regardless of the score.`
+    );
+  }
+
+  const evBeyond = claimAnchored ? unsupportedClaims.filter(v => claimEvidence[v.claim] === 'beyond_window').length : 0;
+  const evAbsent = claimAnchored ? unsupportedClaims.filter(v => claimEvidence[v.claim] === 'absent').length : 0;
+  const evInWindow = claimAnchored ? unsupportedClaims.filter(v => claimEvidence[v.claim] === 'in_window').length : 0;
+  if (claimAnchored && unsupportedClaims.length > 0) {
+    summaryParts.push(
+      `Evidence location of flagged claims: ${evInWindow} in-window, ${evBeyond} beyond-window ` +
+      `(likely truncation), ${evAbsent} absent from source (candidate fabrication).`
+    );
+  }
+
+  const summaryText = summaryParts.join(' ');
+
+  return {
+    entity_name: entity.name,
+    items: [{
+      entity_name: entity.name,
+      qa_pass: qaPassed,
+      hallucination_score: parseFloat(hallucinationScore.toFixed(3)),
+      verified_claims_count: supportedClaims.length,
+      partial_claims_count: partialClaims.length,
+      total_claims_count: totalClaims,
+      flagged_claims_count: unsupportedClaims.length,
+      flagged_claims: flaggedClaims,
+      flagged_claims_text: flaggedClaimsText,
+      partial_claims_text: partialClaimsText,
+      summary_text: summaryText,
+    }],
+    meta: {
+      qa_pass: qaPassed,
+      hallucination_score: parseFloat(hallucinationScore.toFixed(3)),
+      total_claims: totalClaims,
+      supported: supportedClaims.length,
+      partial: partialClaims.length,
+      unsupported: unsupportedClaims.length,
+      batches_sent: batches.length,
+      ...(severityFloorTripped ? { severity_floor_tripped: true } : {}),
+      ...(cfg.severityModel === 'evidence_absent' ? { severity_model: 'evidence_absent' } : {}),
+      ...(claimAnchored ? {
+        source_selection: 'claim_anchored',
+        source_corpus_chars: corpusChars,
+        source_chars_shown: maxShownChars,
+        evidence_in_window: evInWindow,
+        evidence_beyond_window: evBeyond,
+        evidence_absent: evAbsent,
+      } : {}),
+    },
+  };
+}
+
+// _partialItems push mirrors the pre-refactor pattern exactly: every result EXCEPT the two
+// skip-with-pass results (meta.skipped) was pushed (Rule 10 timeout resilience).
+function pushPartial(tools, result) {
+  if (tools._partialItems && !(result.meta && result.meta.skipped)) {
+    tools._partialItems.push(...result.items);
+  }
+}
+
+// Build the run summary from the per-entity results (verbatim from the pre-refactor tail).
+function buildSummary(results, totalEntities) {
   const passCount = results.filter(r => r.items.length > 0 && r.items[0].qa_pass === true).length;
   const failCount = results.filter(r => r.items.length > 0 && r.items[0].qa_pass === false).length;
   const skippedCount = results.filter(r => r.meta && r.meta.skipped).length;
@@ -1168,17 +1079,172 @@ async function execute(input, options, tools) {
   }
 
   return {
-    results,
-    summary: {
-      total_entities: totalEntities,
-      total_items: results.reduce((sum, r) => sum + r.items.length, 0),
-      passed: passCount,
-      failed: failCount,
-      skipped: skippedCount,
-      average_score: parseFloat(avgScore.toFixed(3)),
-      description,
-    },
+    total_entities: totalEntities,
+    total_items: results.reduce((sum, r) => sum + r.items.length, 0),
+    passed: passCount,
+    failed: failCount,
+    skipped: skippedCount,
+    average_score: parseFloat(avgScore.toFixed(3)),
+    description,
   };
+}
+
+// SYNCHRONOUS path (default, byte-identical to pre-refactor). Runs each stage inline, making
+// the extraction + verification LLM calls through tools.ai.complete exactly as before.
+async function execute(input, options, tools) {
+  const { entities } = input;
+  const { logger, progress, ai } = tools;
+  const cfg = resolveDetectorOptions(options);
+  logConfig(cfg, logger);
+
+  const results = [];
+
+  for (let i = 0; i < entities.length; i++) {
+    const entity = entities[i];
+    progress.update(i + 1, entities.length, `Processing ${entity.name}`);
+
+    const a = stageExtractPrepare(entity, cfg, logger);
+    if (a.final) {
+      results.push(a.final);
+      pushPartial(tools, a.final);
+      continue;
+    }
+
+    let claims;
+    if (a.extractionArgs) {
+      let resp;
+      try {
+        const r = await ai.complete({ prompt: a.extractionArgs.prompt, model: a.extractionArgs.model, provider: a.extractionArgs.provider });
+        resp = { ok: true, text: r.text };
+      } catch (err) {
+        resp = { ok: false, error: err.message };
+      }
+      claims = applyExtraction(a.ctx, resp, logger);
+    } else {
+      claims = a.claims;
+    }
+
+    const bstage = stageVerifyPrepare(entity, cfg, claims, a.ctx, logger);
+    if (bstage.final) {
+      results.push(bstage.final);
+      pushPartial(tools, bstage.final);
+      continue;
+    }
+
+    const batchResponses = [];
+    for (let b = 0; b < bstage.verifyRequests.length; b++) {
+      progress.update(
+        i + 1, entities.length,
+        `${entity.name}: verifying batch ${b + 1}/${bstage.verifyRequests.length}`
+      );
+      try {
+        const r = await ai.complete(bstage.verifyRequests[b].args);
+        batchResponses.push({ ok: true, text: r.text });
+      } catch (err) {
+        logger.warn(
+          `${entity.name}: LLM call failed for batch ${b + 1}: ${err.message} -- ` +
+          `treating ${bstage.verifyCtx.batches[b].length} claims as unverified`
+        );
+        batchResponses.push({ ok: false, error: err.message });
+      }
+    }
+
+    const entityResult = stageFinalize(entity, cfg, bstage.verifyCtx, batchResponses, 'sync', logger);
+    const it = entityResult.items[0];
+    logger[it.qa_pass ? 'info' : 'warn'](
+      `${entity.name}: hallucination_score=${(it.hallucination_score * 100).toFixed(1)}% ` +
+      `(${it.qa_pass ? 'PASS' : 'FAIL'}) -- ` +
+      `${it.verified_claims_count} supported, ${it.partial_claims_count} partial, ` +
+      `${it.flagged_claims_count} unsupported of ${it.total_claims_count} claims`
+    );
+    results.push(entityResult);
+    pushPartial(tools, entityResult);
+  }
+
+  return { results, summary: buildSummary(results, entities.length) };
+}
+
+// ─── Batch mode (Phase 2B) — Anthropic Message Batches prepare/parse entry points ───
+//
+// The skeleton's step-6 batch executor drives ALL the step's entities through two Message
+// Batches (round 1 extractions, round 2 verifications -- verification needs the extracted
+// claims). These three functions are PURE (no LLM call). The skeleton owns batch submit/poll
+// and assigns every custom_id (this module never sees entity_submodule_run_id). They reuse the
+// SAME stages as execute(), so a parsed verdict is byte-identical to the sync verdict given the
+// same responses. `state` is threaded across the three calls (held in-memory by the skeleton's
+// single batch job):  { cfg, perEntity: [ { name, done?, final?, ctx?, claims?, needExtraction?, verifyCtx? } ] }.
+//
+// Request objects returned:  { entityIdx[, batchIdx], args:{prompt[,cache_prefix],model,provider} }.
+// Response objects expected back: extractionByEntityIdx[i] = {ok:true,text} | {ok:false,error} |
+// undefined(regex, none needed); verificationByEntityIdx[i] = [ {ok:true,text}|{ok:false,error}, ... ]
+// (one per batchIdx, in order).
+
+const NOOP_LOGGER = { info() {}, warn() {}, error() {} };
+
+function prepareExtractionRequests(entities, options, tools) {
+  const logger = (tools && tools.logger) || NOOP_LOGGER;
+  const cfg = resolveDetectorOptions(options);
+  logConfig(cfg, logger);
+  const perEntity = [];
+  const extractionRequests = [];
+  for (let i = 0; i < entities.length; i++) {
+    const entity = entities[i];
+    const a = stageExtractPrepare(entity, cfg, logger);
+    if (a.final) {
+      perEntity.push({ name: entity.name, done: true, final: a.final });
+    } else if (a.extractionArgs) {
+      perEntity.push({ name: entity.name, ctx: a.ctx, needExtraction: true });
+      extractionRequests.push({ entityIdx: i, args: a.extractionArgs });
+    } else {
+      perEntity.push({ name: entity.name, ctx: a.ctx, claims: a.claims });
+    }
+  }
+  return { state: { cfg, perEntity }, extractionRequests };
+}
+
+function prepareVerificationRequests(entities, options, state, extractionByEntityIdx, tools) {
+  const logger = (tools && tools.logger) || NOOP_LOGGER;
+  const { cfg, perEntity } = state;
+  const verificationRequests = [];
+  for (let i = 0; i < entities.length; i++) {
+    const pe = perEntity[i];
+    if (pe.done) continue;
+    let claims = pe.claims;
+    if (pe.needExtraction) {
+      claims = applyExtraction(pe.ctx, extractionByEntityIdx ? extractionByEntityIdx[i] : null, logger);
+    }
+    const bstage = stageVerifyPrepare(entities[i], cfg, claims, pe.ctx, logger);
+    if (bstage.final) {
+      pe.done = true;
+      pe.final = bstage.final;
+      continue;
+    }
+    pe.verifyCtx = bstage.verifyCtx;
+    bstage.verifyRequests.forEach((req, batchIdx) => {
+      verificationRequests.push({ entityIdx: i, batchIdx, args: req.args });
+    });
+  }
+  return { state, verificationRequests };
+}
+
+function parseResults(entities, options, state, verificationByEntityIdx, tools) {
+  const logger = (tools && tools.logger) || NOOP_LOGGER;
+  const { cfg, perEntity } = state;
+  const results = [];
+  for (let i = 0; i < entities.length; i++) {
+    const pe = perEntity[i];
+    if (pe.done && pe.final) {
+      results.push(pe.final);
+      continue;
+    }
+    // Map the entity's batch responses back in batch order; a missing response is a failure
+    // (loud) -- stageFinalize('batch') hard-fails the entity on any {ok:false} batch.
+    const byBatch = (verificationByEntityIdx && verificationByEntityIdx[i]) || [];
+    const batchResponses = pe.verifyCtx.batches.map((_unused, b) =>
+      byBatch[b] || { ok: false, error: 'missing_batch_response' });
+    results.push(stageFinalize(entities[i], cfg, pe.verifyCtx, batchResponses, 'batch', logger));
+  }
+  return { results, summary: buildSummary(results, entities.length) };
 }
 
 module.exports = execute;
@@ -1194,3 +1260,7 @@ module.exports.selectAnchoredWindow = selectAnchoredWindow;
 module.exports.classifyClaimEvidence = classifyClaimEvidence;
 // Exported for the UNIT B evidence-absent severity-model tests.
 module.exports.decideHallucinationPass = decideHallucinationPass;
+// Phase 2B batch-mode entry points (used by the skeleton's step-6 batch executor).
+module.exports.prepareExtractionRequests = prepareExtractionRequests;
+module.exports.prepareVerificationRequests = prepareVerificationRequests;
+module.exports.parseResults = parseResults;
