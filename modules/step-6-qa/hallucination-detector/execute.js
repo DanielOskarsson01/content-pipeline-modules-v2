@@ -555,9 +555,14 @@ function decideHallucinationPass({ hallucinationScore, unsupportedClaims, claimE
 // AND the Anthropic Message Batches path (prepareExtractionRequests / prepareVerificationRequests
 // / parseResults, used by the skeleton's step-6 batch executor). A parsed batch verdict is
 // therefore byte-identical to the sync verdict given the same LLM responses -- the only
-// difference is WHEN the response arrives (now vs a batch return up to 24h later) and how a
-// failed request is treated (sync degrades the batch to unverified; batch HARD-FAILS the
-// entity loudly). Nothing about the verdict logic, severity floor, or scoring changes.
+// difference is WHEN the response arrives (now vs a batch return up to 24h later). A failed
+// or never-run verification request HARD-FAILS the entity loudly in BOTH modes (v1.7.0):
+// sync previously degraded a failed batch's claims to verdict:'unsupported', which reported
+// an INFRASTRUCTURE failure (rate limit, network blip, refused call) as a CONTENT verdict --
+// the offering-slot draw-2 incident: 2 of 4 batches refused pre-network by a budget guard
+// produced hallucination 0.495 + a spurious QA FAIL on a draft whose every flagged claim
+// greps true in the corpus. ENGINEERING_CONTRACT §5: throw rather than degrade.
+// Nothing about the verdict logic, severity floor, or scoring changes.
 
 // Resolve + normalize all options once. Shared by execute() and the batch entry points so
 // both derive an IDENTICAL config -- the sync-vs-batch equivalence rests on this single source.
@@ -867,19 +872,36 @@ function buildBatchVerdicts(responseText, batch) {
   return out;
 }
 
-// Loud-fail result (batch mode) when one of an entity's verification requests errored or
-// expired. meta.status:'error' makes the skeleton's deriveEntityRunStatus mark the run
-// 'failed' (surfaced in failed_count) -- a fact-check that did not complete is NOT a clean
-// pass and NOT a soft qa_pass:false. This is the exact class the Phase-1 loud-fail fix addressed.
-function batchRequestFailedResult(entity, batches, failedBatchIdx, error) {
+// Loud-fail result (BOTH modes, v1.7.0) when one or more of an entity's verification
+// requests errored, expired, or was never attempted. meta.status:'error' makes the
+// skeleton's deriveEntityRunStatus mark the run 'failed' (surfaced in failed_count) -- an
+// INFRA failure to be retried, never a content verdict: a fact-check that did not complete
+// is NOT a clean pass, NOT a soft qa_pass:false, and above all NOT "these claims are
+// fabricated". No claim from a failed batch is ever reported as 'unsupported'; the score
+// never moves because of a call that did not happen (ENGINEERING_CONTRACT §5).
+// failures = [{batch: 0-based idx, error}]; notAttempted = [0-based idx] (sync stops
+// calling after the first failure -- further spend is discarded on retry anyway).
+function verificationFailedResult(entity, batches, failures, notAttempted) {
   const totalClaims = batches.reduce((n, b) => n + b.length, 0);
-  const summary = `Verification did not complete: batch ${failedBatchIdx + 1}/${batches.length} ` +
-    `errored or expired (${error || 'unknown'}). Failing closed -- the fact-check could not finish ` +
-    `for this entity, so it is not verified (batch-mode loud-fail).`;
+  const unverifiedClaims = failures.reduce((n, f) => n + batches[f.batch].length, 0) +
+    notAttempted.reduce((n, b) => n + batches[b].length, 0);
+  const failedDesc = failures
+    .map(f => `${f.batch + 1}/${batches.length} (${f.error || 'unknown'})`)
+    .join(', ');
+  const skippedDesc = notAttempted.length
+    ? ` Batch(es) ${notAttempted.map(b => b + 1).join(', ')} not attempted after the first failure.`
+    : '';
+  const summary = `Verification did not complete: batch ${failedDesc} errored or expired.${skippedDesc} ` +
+    `${unverifiedClaims} of ${totalClaims} claim(s) were never examined. Failing closed -- ` +
+    `this is an INFRASTRUCTURE failure (retry the run), not a content verdict: no unverified ` +
+    `claim is reported as unsupported and no fabrication was found.`;
   return {
     entity_name: entity.name,
     items: [{
       entity_name: entity.name,
+      // status on the ITEM too: a timeout-salvaged _partialItems copy (Rule 10) carries no
+      // meta, so without this the salvage would read as a content FAIL at score 0.
+      status: 'error',
       qa_pass: false,
       needs_review: true,
       hallucination_score: 0,
@@ -893,33 +915,37 @@ function batchRequestFailedResult(entity, batches, failedBatchIdx, error) {
       needs_review: true,
       hallucination_score: 0,
       total_claims: totalClaims,
-      error: 'batch_request_failed',
-      failed_batch_index: failedBatchIdx,
+      error: 'verification_incomplete',
+      failed_batches: failures.map(f => ({ batch: f.batch + 1, of: batches.length, error: f.error || 'unknown' })),
+      ...(notAttempted.length ? { batches_not_attempted: notAttempted.map(b => b + 1) } : {}),
+      claims_unverified: unverifiedClaims,
     },
   };
 }
 
 // STAGE C -- assemble verdicts across batches, score, decide, build the entity result. This is
 // the pre-refactor scoring/decision/output block verbatim. batchResponses[b] = {ok:true, text}
-// | {ok:false, error}. mode 'sync' degrades an errored batch to unsupported/_error (byte-identical
-// to the old catch); mode 'batch' HARD-FAILS the entity on any errored/expired request.
-function stageFinalize(entity, cfg, verifyCtx, batchResponses, mode, logger) {
+// | {ok:false, error} | undefined (sync stopped calling after an earlier failure). ANY failed
+// or unattempted batch HARD-FAILS the entity (both modes, v1.7.0) -- an unverified claim is
+// not an unsupported claim, so a refused/errored request must never become claim verdicts.
+function stageFinalize(entity, cfg, verifyCtx, batchResponses, logger) {
   const { batches, claimEvidence, claimAnchored, corpusChars, maxShownChars } = verifyCtx;
+
+  const failures = [];
+  const notAttempted = [];
+  for (let b = 0; b < batches.length; b++) {
+    const resp = batchResponses[b];
+    if (!resp) notAttempted.push(b);
+    else if (resp.ok === false) failures.push({ batch: b, error: resp.error });
+  }
+  if (failures.length > 0 || notAttempted.length > 0) {
+    return verificationFailedResult(entity, batches, failures, notAttempted);
+  }
 
   const allVerdicts = [];
   for (let b = 0; b < batches.length; b++) {
     const batch = batches[b];
     const resp = batchResponses[b];
-    if (resp && resp.ok === false) {
-      if (mode === 'batch') {
-        return batchRequestFailedResult(entity, batches, b, resp.error);
-      }
-      // sync: LLM call failed for this batch -> treat its claims as unverified.
-      for (const claim of batch) {
-        allVerdicts.push({ claim, verdict: 'unsupported', quote: null, severity: 'medium', _error: resp.error });
-      }
-      continue;
-    }
     const bv = buildBatchVerdicts(resp.text, batch);
     // Truth-critical diagnostic (parity with the pre-refactor sync path + now also in
     // batch): a RECEIVED-but-unparseable response marks the whole batch _parse_error.
@@ -1142,14 +1168,17 @@ async function execute(input, options, tools) {
         batchResponses.push({ ok: true, text: r.text });
       } catch (err) {
         logger.warn(
-          `${entity.name}: LLM call failed for batch ${b + 1}: ${err.message} -- ` +
-          `treating ${bstage.verifyCtx.batches[b].length} claims as unverified`
+          `${entity.name}: LLM call failed for verification batch ${b + 1}/${bstage.verifyRequests.length}: ` +
+          `${err.message} -- failing this entity closed (INFRA failure, not a content verdict)`
         );
         batchResponses.push({ ok: false, error: err.message });
+        // The entity hard-fails regardless; the remaining batches' results would be
+        // discarded, so stop spending on them (they are reported as not attempted).
+        break;
       }
     }
 
-    const entityResult = stageFinalize(entity, cfg, bstage.verifyCtx, batchResponses, 'sync', logger);
+    const entityResult = stageFinalize(entity, cfg, bstage.verifyCtx, batchResponses, logger);
     const it = entityResult.items[0];
     logger[it.qa_pass ? 'info' : 'warn'](
       `${entity.name}: hallucination_score=${(it.hallucination_score * 100).toFixed(1)}% ` +
@@ -1238,11 +1267,11 @@ function parseResults(entities, options, state, verificationByEntityIdx, tools) 
       continue;
     }
     // Map the entity's batch responses back in batch order; a missing response is a failure
-    // (loud) -- stageFinalize('batch') hard-fails the entity on any {ok:false} batch.
+    // (loud) -- stageFinalize hard-fails the entity on any {ok:false} batch.
     const byBatch = (verificationByEntityIdx && verificationByEntityIdx[i]) || [];
     const batchResponses = pe.verifyCtx.batches.map((_unused, b) =>
       byBatch[b] || { ok: false, error: 'missing_batch_response' });
-    results.push(stageFinalize(entities[i], cfg, pe.verifyCtx, batchResponses, 'batch', logger));
+    results.push(stageFinalize(entities[i], cfg, pe.verifyCtx, batchResponses, logger));
   }
   return { results, summary: buildSummary(results, entities.length) };
 }

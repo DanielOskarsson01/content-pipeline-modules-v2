@@ -3,7 +3,9 @@
 > Compare generated content claims against original source material to flag statements that aren't supported by any source.
 
 **Module ID:** `hallucination-detector` | **Step:** 6 (QA) | **Category:** qa | **Cost:** medium
-**Version:** 1.6.0 | **Data Operation:** add (+)
+**Version:** 1.7.0 | **Data Operation:** add (+)
+
+> **v1.7.0 (verification-failure discipline):** an unverified claim is **not** an unsupported claim. A verification request that fails or is never run (rate limit, network blip, refused call) now hard-fails the entity as an **infrastructure** error in BOTH modes — `meta.status: 'error'`, `meta.error: 'verification_incomplete'`, with `failed_batches` / `batches_not_attempted` / `claims_unverified` on meta — retried by the skeleton, never flagged as content. Previously the sync path degraded failed batches to `verdict: 'unsupported'`, reporting infra failures as content findings (offering-slot draw-2: 2 budget-refused batches → hallucination 0.495 + spurious QA FAIL + severity-floor trip on a fully corpus-grounded draft; 4th instance of the infra-as-content failure family, ENGINEERING_CONTRACT §5). Sync stops calling remaining batches after the first failure. Fully-verified runs are byte-identical to v1.6.0 (proven in `test-verification-failure.js`).
 
 > **v1.6.0 (Phase 2B — Anthropic Message Batches):** new `execution_mode` option (`sync` default | `batch`). `batch` opts this step into the skeleton-driven Message Batches path — the step's entities are collected and submitted as **two** Message Batches (round 1 extractions, round 2 verifications; verification needs the extracted claims), billed at **50% of standard** with an async return (typically <1h, ceiling 24h). **Verdicts are unchanged** — only *when* the result arrives and the billing rate differ; the sync default is byte-identical to v1.5.0. Anthropic-only. A failed/expired batch request **fails that entity loudly** (`meta.status:'error'` → run `failed`), never a silent pass. Rollback = flip `execution_mode` back to `sync` (config, not a revert). See [Batch mode](#batch-mode-execution_mode-phase-2b).
 
@@ -124,7 +126,7 @@ Verdict parity held on every draw: ELK and Vermantia still fail their genuine fa
 
 Guards (no content / no sources / zero claims) short-circuit **before** any batch call, exactly as in sync. `stream: true` is dropped (unsupported and pointless for an async batch); the same source-window caching applies.
 
-**Loud-fail (never a silent pass).** A batch request can fail or expire independently of the rest of the batch. If any of an entity's requests errors or expires, **that entity fails loudly** — the result carries `meta.status: 'error'` (which the skeleton derives to a `failed` run, surfaced in `failed_count`), not a soft `qa_pass: false` and never a clean pass. Other entities in the batch are unaffected. Note the asymmetry vs sync: the sync path retries a transient blip 3× and, on final failure, degrades the batch's claims to unsupported; the batch path converts an errored request into a hard entity fail (the batch HTTP submit/poll still retries transient errors).
+**Loud-fail (never a silent pass).** A batch request can fail or expire independently of the rest of the batch. If any of an entity's requests errors or expires, **that entity fails loudly** — the result carries `meta.status: 'error'` (which the skeleton derives to a `failed` run, surfaced in `failed_count`), not a soft `qa_pass: false` and never a clean pass. Other entities in the batch are unaffected. Since v1.7.0 sync and batch behave **identically** here: a failed or never-run verification request hard-fails the entity as an infrastructure error in both modes (the sync path previously degraded failed batches to `unsupported` — see Special cases).
 
 **Rollback** is a config flip back to `execution_mode: sync` — not a code revert.
 
@@ -204,10 +206,10 @@ Requires `source_selection: claim_anchored` (that mode produces the per-claim ev
 ### Special cases
 
 - No content_markdown available = **fail closed** (`qa_pass: false`) by default -- content was expected but is absent, so nothing could be verified (set `allow_empty_content` to skip with a pass instead)
-- No source text_content available = skip with pass and warning (cannot verify without sources)
-- No factual claims detected = automatic pass (content has no verifiable facts)
-- LLM call fails = that batch's claims treated as unsupported (fail-safe)
-- LLM response unparseable, or fewer verdicts returned than claims sent = affected claims treated as unsupported (fail-safe)
+- No source text_content available = **fail closed** by default (`no_sources_behavior`: `fail` | `flag` | `pass`)
+- No factual claims detected = low-confidence pass on short content; substantial content **fails closed** (padding-blind signature, `flag_zero_claims_over_chars`)
+- **A verification LLM call fails or is never run = the entity fails loudly as an INFRASTRUCTURE error (v1.7.0).** `meta.status: 'error'`, `meta.error: 'verification_incomplete'`, with `failed_batches` / `batches_not_attempted` / `claims_unverified` on meta. The skeleton derives the run to `failed` and it is retried -- an unverified claim is **never** reported as `unsupported`, the score never moves because of a call that did not happen, and `severity_floor` never trips on a claim nobody examined. Remaining batches are not attempted after the first failure (their results would be discarded on retry). Before v1.7.0 the sync path degraded failed batches to `verdict: 'unsupported'`, which reported infra failures (rate limit, network blip, refused call) as content findings -- the offering-slot draw-2 incident: 2 budget-refused batches produced hallucination 0.495 + a spurious QA FAIL on a fully corpus-grounded draft.
+- LLM response **received but unparseable**, or fewer verdicts returned than claims sent = affected claims treated as unsupported (fail-safe; the model DID examine the batch -- this is a degenerate response, not a refused call)
 
 ---
 
@@ -304,6 +306,7 @@ flagged_claims_text: "1. [HIGH] Revenue reached $2.1 billion in 2025.\n2. [MEDIU
 - **Entities passing with `total_claims_count: 0` and "No source text_content available"** -- the pass is a warning-level skip, not a verification. Check why Step 3 scraping produced no text_content for those entities.
 - **`qa_pass: false` with summary "No content_markdown found"** -- the failure is upstream: content-writer produced nothing for this entity. Fix generation, or set `allow_empty_content` if the pipeline legitimately has content-free entities.
 - **Log lines "returned unparseable response"** -- that whole batch was marked unsupported and the score dropped. Try a lower `claims_per_batch` or a stronger model.
+- **Run failed with `verification_incomplete`** -- an infrastructure failure (rate limit, network blip, refused call) interrupted verification. This is NOT a content verdict: no fabrication was found. `meta.failed_batches` names each failed batch and its error; `meta.batches_not_attempted` lists batches skipped after the first failure; `meta.claims_unverified` counts the claims never examined. Retry the run; if it recurs, look at the provider/network, not the draft.
 - **`hallucination_score` of exactly 1 with zero claims** -- no factual claims were detected, so nothing was actually checked; this is normal for opinion-heavy content but worth a spot-check on factual content.
 
 ---
@@ -340,6 +343,6 @@ Results feed into Step 7 (loop-router) for routing decisions. Typical configurat
 - **Depends on:** `content-writer`, `page-scraper` (per manifest; via data-shape routing, any module producing `text_content` -- e.g. browser-scraper -- also qualifies as a source)
 - **Input format:** pool items with `content_markdown` (content to check) and `text_content` (sources), found by field presence, never by `source_submodule`
 - **Output format:** one item per entity matching the output fields table above; `meta` additionally carries `supported` / `partial` / `unsupported` / `batches_sent` (and `skipped` + `skip_reason` on skip paths). In `claim_anchored` mode `meta` also carries `source_selection` / `source_corpus_chars` / `source_chars_shown` / `evidence_in_window` / `evidence_beyond_window` / `evidence_absent`, and each `flagged_claims[]` gains an `evidence` tag
-- **Error handling:** LLM failures and unparseable responses fail safe (affected claims marked unsupported, run continues); missing content fails closed unless `allow_empty_content`; successfully-verified per-entity results are pushed to `tools._partialItems` so a timeout preserves completed entities (the skip and fail-closed paths return immediately and do not push)
+- **Error handling:** a failed or never-run verification request hard-fails the entity as an infrastructure error (`meta.status: 'error'`, `meta.error: 'verification_incomplete'`; v1.7.0) — retried, never a content verdict; a received-but-unparseable response fails safe (affected claims marked unsupported, run continues — the model did examine them); missing content fails closed unless `allow_empty_content`; per-entity results (including error results) are pushed to `tools._partialItems` so a timeout preserves completed entities (the skip-with-pass paths do not push)
 - **External dependencies:** none beyond `tools.ai.complete()` -- no direct HTTP calls
 - **Spec:** `Content-Pipeline/specs/SUBMODULE_DEVELOPMENT.md`
