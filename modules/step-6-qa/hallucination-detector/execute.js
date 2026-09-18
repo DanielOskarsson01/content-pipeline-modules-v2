@@ -32,6 +32,7 @@ Rules:
 - "supported" = the source material contains information that directly or clearly supports this claim, even if paraphrased
 - "unsupported" = the source material does NOT contain information supporting this claim, and it is NOT general common knowledge
 - "partial" = the source material partially supports the claim but key details (numbers, dates, specifics) differ or are missing
+- A claim that pairs real elements in a way the sources CONTRADICT (the sources place the city in a different country, tie the award to a different product or year, or attribute the fact to a different subject) is "unsupported", NOT "partial" -- the false pairing IS the claim, even though each element appears somewhere in the sources.
 - General knowledge claims (e.g. "Paris is the capital of France", "the global economy is growing") should be marked "supported" even if not explicitly in sources
 - If the claim references data from an analysis or summary derived from the sources, mark it "supported"
 
@@ -48,7 +49,7 @@ Return a JSON array (no markdown fences, no extra text) with one object per clai
 Severity guide:
 - "low" = general phrasing, opinion, or common knowledge that is hard to verify
 - "medium" = specific factual claim (company name, product, feature) not found in sources
-- "high" = specific number, date, statistic, or financial claim not found in sources
+- "high" = specific number, date, statistic, or financial claim not found in sources, or a pairing of real elements that the sources contradict (the sources pair the city with a different country, the award with a different product or year, the fact with a different subject)
 
 CLAIMS:
 {{CLAIMS}}
@@ -311,6 +312,14 @@ function hasWord(haystack, term) {
 
 // Weighted match terms for a claim. Proper-noun / acronym tokens and numbers are
 // discriminating (weight 2); ordinary content words weight 1. Lowercased keys.
+//
+// Possessive stems + digit-led tokens (the top-K retrieval unit): the writer's
+// phrasing is possessive ("SoftSwiss's Game Aggregator") while the source states
+// the bare name ("SoftSwiss") -- without the stem the claim's RAREST term never
+// matches its own supporting page and a decoy outranks it (specimen ranks 94->5,
+// 109->3 on the run-9821ed56 set). Digit-led tokens ("1X2", "8ms" from "13.8ms")
+// were dropped entirely by both token passes for the same effect.
+const depossess = t => t.replace(/[’']s$/, '').replace(/[’']$/, '');
 function extractClaimTerms(claim) {
   const terms = new Map();
   const add = (t, w) => {
@@ -318,9 +327,11 @@ function extractClaimTerms(claim) {
     if (k.length < 3 || STOPWORDS.has(k)) return;
     terms.set(k, Math.max(terms.get(k) || 0, w));
   };
-  for (const m of claim.match(/\b[A-Z][A-Za-z0-9&.'\-]{2,}\b/g) || []) add(m, 2); // SNAITECH, Stanleybet, AAMS
+  const addWithStem = (t, w) => { add(t, w); const s = depossess(t); if (s !== t) add(s, w); };
+  for (const m of claim.match(/\b[A-Z][A-Za-z0-9&.'\-]{2,}\b/g) || []) addWithStem(m, 2); // SNAITECH, Stanleybet, AAMS
   for (const m of claim.match(/\b\d[\d,.]*\b/g) || []) add(m, 2);                 // years / stats
-  for (const m of (claim.toLowerCase().match(/[a-z][a-z0-9'\-]{2,}/g) || [])) add(m, 1);
+  for (const m of claim.match(/\b\d[A-Za-z0-9]{2,}\b/g) || []) add(m, 2);         // 1X2, 8ms
+  for (const m of (claim.toLowerCase().match(/[a-z][a-z0-9'\-]{2,}/g) || [])) addWithStem(m, 1);
   return terms;
 }
 
@@ -373,14 +384,29 @@ function scoreChunkForClaim(chunkLower, terms, idf) {
   return s;
 }
 
-function bestChunkForClaim(claim, chunks, idf) {
+// How many candidate chunks the supplement pulls per claim, and how many the
+// repaired in_window instrument requires to be shown. K=5 sits at the knee of the
+// measured rank-coverage curve on the 27-specimen set (run 9821ed56): the true
+// supporting chunk ranks <=5 for 18/25 locatable specimens (K=3: 14, K=6+:
+// plateau), while the supplement budget cap keeps the worst-case window size
+// unchanged. Top-1 (the old behaviour) covered 2/25 -- a decoy chunk sharing many
+// generic terms outranked the short page actually stating the fact, so the true
+// support was never shown and corpus-true claims were flagged.
+const SUPPLEMENT_TOP_K = 5;
+
+// The claim's top-k scoring chunks, ranked by (score desc, corpus order asc) --
+// the earliest-wins tie-break the old single-best selection had. Single source of
+// truth for BOTH the supplement selection and classifyClaimEvidence, so the
+// instrument can never disagree with the retrieval about what "best k" means.
+function topChunksForClaim(claim, chunks, idf = buildIdf(chunks, [claim]), k = SUPPLEMENT_TOP_K) {
   const terms = extractClaimTerms(claim);
-  let best = null, bestScore = 0;
+  const scored = [];
   for (const c of chunks) {
     const s = scoreChunkForClaim(c.lower, terms, idf);
-    if (s > bestScore) { bestScore = s; best = c; }
+    if (s > 0) scored.push({ chunk: c, score: s });
   }
-  return { best, bestScore };
+  scored.sort((a, b) => b.score - a.score || a.chunk.order - b.chunk.order);
+  return scored.slice(0, k);
 }
 
 // Build a per-batch source window. CRITICAL invariant: the window is a SUPERSET of
@@ -411,19 +437,32 @@ function selectAnchoredWindow(chunks, claims, maxChars, idf = buildIdf(chunks, c
   }
   const baseOrders = new Set(base.map(c => c.order));
 
-  // 2. For each claim whose single best chunk is BEYOND the head, pull that chunk in.
-  //    (IDF ranking means the entity name can't make a head chunk win spuriously.)
-  const suppOrders = new Set();
+  // 2. For each claim, nominate its top-K chunks that sit BEYOND the head, tagged
+  //    with the best (lowest) per-claim rank tier that nominated them. Top-1-only
+  //    had two failure modes the 27-specimen set reproduced: a decoy chunk sharing
+  //    many generic terms outranked the true supporting page (23/27), and a decoy
+  //    that happened to sit in the head suppressed the supplement entirely.
+  //    (IDF ranking means the entity name can't make a chunk win spuriously.)
+  const suppTier = new Map(); // order -> best rank tier (0-based) across claims
   for (const claim of claims) {
-    const { best, bestScore } = bestChunkForClaim(claim, chunks, idf);
-    if (best && bestScore > 0 && !baseOrders.has(best.order)) suppOrders.add(best.order);
+    const ranked = topChunksForClaim(claim, chunks, idf, SUPPLEMENT_TOP_K);
+    ranked.forEach(({ chunk }, tier) => {
+      if (baseOrders.has(chunk.order)) return;
+      const t = suppTier.get(chunk.order);
+      if (t === undefined || tier < t) suppTier.set(chunk.order, tier);
+    });
   }
 
-  // 3. Supplement (in corpus order) up to an equal maxChars budget on top of the base.
+  // 3. Supplement up to an equal maxChars budget on top of the base, filled by
+  //    rank tier (every claim's rank-1 chunk before any claim's rank-2), then
+  //    corpus order within a tier -- so a deeper nomination can never crowd out
+  //    another claim's best chunk when the budget binds.
   const selected = [...base];
   let suppUsed = 0;
-  for (const c of chunks) {
-    if (baseOrders.has(c.order) || !suppOrders.has(c.order)) continue;
+  const chunkByOrder = new Map(chunks.map(c => [c.order, c]));
+  const nominated = [...suppTier.entries()].sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+  for (const [order] of nominated) {
+    const c = chunkByOrder.get(order);
     const addLen = SOURCE_SEP.length + c.text.length;
     if (suppUsed + addLen > maxChars) continue;
     selected.push(c);
@@ -443,30 +482,46 @@ function selectAnchoredWindow(chunks, claims, maxChars, idf = buildIdf(chunks, c
   return { text, selectedOrders, shownChars: text.length, baseText, suppText };
 }
 
-// Per-claim evidence location: does the corpus carry the claim's DISCRIMINATING
-// evidence (IDF-scored > 0, so the entity name alone doesn't count), and if so was
-// it inside the selected window? Distinguishes a truncation-driven "unsupported"
-// from a real fabrication:
-//   in_window     -- discriminating evidence is in a shown chunk (a genuine verdict)
-//   beyond_window -- it exists but was dropped from the window (truncation artifact)
-//   absent        -- no chunk carries discriminating evidence (candidate fabrication)
+// Per-claim evidence location. REPAIRED INSTRUMENT (the top-K retrieval unit):
+// the old test credited `in_window` when ANY selected chunk shared ANY single
+// discriminating term with the claim -- so a decoy chunk carrying just the entity
+// name plus one shared token produced `in_window` while the actual supporting page
+// sat outside the window. Every one of the 43 flags in validation run 9821ed56 was
+// tagged `in_window` this way; 23 of the 27 audited specimens had their real
+// support BEYOND the window. The label concealed the retrieval miss for an entire
+// validation run (FABRICATIONS_AND_FLAGS.md §B1).
+//
+// What the labels now mean (truthful, deterministic -- the instrument reports
+// retrieval coverage, which is knowable, not semantic support, which is not):
+//   in_window     -- ALL of the claim's top-K candidate chunks (the same ranked
+//                    set the supplement pulls from) were shown to the verifier.
+//                    Retrieval showed everything it ranked best; the verdict is
+//                    as informed as this retrieval can make it.
+//   beyond_window -- at least one top-K candidate was NOT shown (budget eviction,
+//                    or -- pre-fix -- decoy selection). The flag may be a
+//                    retrieval artifact.
+//   absent        -- no chunk anywhere carries discriminating evidence (candidate
+//                    fabrication). Unchanged; load-bearing for
+//                    severity_model=evidence_absent.
 function classifyClaimEvidence(claim, chunks, selectedOrders, idf = buildIdf(chunks, [claim])) {
   const terms = extractClaimTerms(claim);
-  // Prefer discriminating terms (idf > 0) so the ubiquitous entity name can't mark a
-  // chunk as "evidence". But on a small corpus every term can be in every chunk
+  // Discriminating terms (idf > 0) stop the ubiquitous entity name from counting
+  // as "evidence". But on a small corpus every term can be in every chunk
   // (idf 0 for all) -- there, fall back to raw presence so genuine in-window evidence
   // isn't mislabelled "absent" (a confidently-wrong "candidate fabrication").
   const hasDiscriminating = [...terms.keys()].some(t => (idf.get(t) || 0) > 0);
-  const present = (lower) => hasDiscriminating
-    ? [...terms].some(([t]) => (idf.get(t) || 0) > 0 && hasWord(lower, t))
-    : [...terms.keys()].some(t => hasWord(lower, t));
-  let anywhere = false;
-  for (const c of chunks) {
-    if (!present(c.lower)) continue;
-    anywhere = true;
-    if (selectedOrders.has(c.order)) return 'in_window';
+  if (!hasDiscriminating) {
+    let anywhere = false;
+    for (const c of chunks) {
+      if (![...terms.keys()].some(t => hasWord(c.lower, t))) continue;
+      anywhere = true;
+      if (selectedOrders.has(c.order)) return 'in_window';
+    }
+    return anywhere ? 'beyond_window' : 'absent';
   }
-  return anywhere ? 'beyond_window' : 'absent';
+  // hasDiscriminating implies some chunk scores > 0, so top is never empty.
+  const top = topChunksForClaim(claim, chunks, idf, SUPPLEMENT_TOP_K);
+  return top.every(({ chunk }) => selectedOrders.has(chunk.order)) ? 'in_window' : 'beyond_window';
 }
 
 /**
@@ -1287,6 +1342,8 @@ module.exports.extractClaimTerms = extractClaimTerms;
 module.exports.chunkSources = chunkSources;
 module.exports.selectAnchoredWindow = selectAnchoredWindow;
 module.exports.classifyClaimEvidence = classifyClaimEvidence;
+// Exported for the top-K retrieval tests.
+module.exports.topChunksForClaim = topChunksForClaim;
 // Exported for the UNIT B evidence-absent severity-model tests.
 module.exports.decideHallucinationPass = decideHallucinationPass;
 // Phase 2B batch-mode entry points (used by the skeleton's step-6 batch executor).

@@ -25,10 +25,24 @@ const MANIFEST = require('./manifest.json');
 
 const MANIFEST_DEFAULT_PROMPT = execute.MANIFEST_DEFAULT_PROMPT;
 
-// The two domain-neutral example swaps W2.3 applied (Rule 13).
+// The two domain-neutral example swaps W2.3 applied (Rule 13), plus the weld
+// severity rule the top-K retrieval unit added: a false combination of real
+// elements (the "Málaga, Sweden" class) must grade unsupported/high on the
+// EVIDENCE, not by retrieval accident -- before top-K retrieval, the weld class
+// was only caught when the retrieval failed to show the claim's evidence at all
+// (blindness-driven severity), the same mechanism that false-flagged ~30
+// corpus-true claims in run 9821ed56.
 const SWAPS = [
   ['Malta is a popular iGaming jurisdiction', 'Paris is the capital of France'],
   ['the iGaming industry is growing', 'the global economy is growing'],
+  [
+    '- "partial" = the source material partially supports the claim but key details (numbers, dates, specifics) differ or are missing',
+    '- "partial" = the source material partially supports the claim but key details (numbers, dates, specifics) differ or are missing\n- A claim that pairs real elements in a way the sources CONTRADICT (the sources place the city in a different country, tie the award to a different product or year, or attribute the fact to a different subject) is "unsupported", NOT "partial" -- the false pairing IS the claim, even though each element appears somewhere in the sources.',
+  ],
+  [
+    '- "high" = specific number, date, statistic, or financial claim not found in sources',
+    '- "high" = specific number, date, statistic, or financial claim not found in sources, or a pairing of real elements that the sources contradict (the sources pair the city with a different country, the award with a different product or year, the fact with a different subject)',
+  ],
 ];
 
 let pass = 0;
