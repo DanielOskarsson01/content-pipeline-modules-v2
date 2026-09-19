@@ -64,6 +64,28 @@ SOURCE MATERIAL:
 // the one constant above so the two can never drift.
 const PROMPT_HEADER = MANIFEST_DEFAULT_PROMPT.split('\n\nCLAIMS:\n')[0];
 
+// ─── Code-locked claim-extraction ceiling ───
+//
+// The claim-EXTRACTION call otherwise inherits ai.complete's 16384 default max_tokens.
+// On a heavy draw (a rich profile's 150-200 claims PLUS sonnet-5's adaptive thinking,
+// which is on when `thinking` is omitted and bills against the SAME output cap) that
+// default overflows: the extraction JSON is truncated -> unparseable -> the module used
+// to fall back SILENTLY to the regex extractor (~4 claims on a v3 draft) -> the severity
+// floor never trips -> qa_pass:true. Seventh instance of this codebase's worst failure
+// family, and the FIRST that fails OPEN (a fabrication published, not blocked).
+//
+// Raised to the model's real headroom: sonnet-5's output ceiling is 131072; the deployed
+// draws emit only 4-7k extraction tokens for the fattest (200-claim) entity, so 65536 is
+// ~4x the observed worst case plus generous room for the non-deterministic thinking tail,
+// and half the hard limit. The adapter (stageWorker + buildBatchRequestParams) STREAMS and
+// forwards max_tokens unclamped, so this is safe from HTTP timeouts. CODE-LOCKED (not a
+// manifest option) for the same reason as the extraction prompt: a template must not be
+// able to lower it back into the truncation hole. Same class as the analyzer ceiling
+// (content-pipeline-specs template-v3/ceiling/CEILING.md); different model, different number.
+// A truncation ABOVE this ceiling can no longer produce a verdict -- applyExtraction fails
+// the entity loud (extractionFailedResult) rather than reverting to regex.
+const EXTRACTION_MAX_TOKENS = 65536;
+
 // ─── Code-locked claim-extraction prompt (B033, W2.3) ───
 //
 // Used only when claim_extraction:"llm". Like the verification prompt above it is
@@ -240,6 +262,25 @@ function parseExtractedClaims(responseText) {
     out.push(s.length > 200 ? s.substring(0, 197) + '...' : s);
   }
   return out;
+}
+
+/**
+ * True iff the response text parses to a JSON array (even an empty one) -- mirrors
+ * parseLlmResponse's two parse attempts. Distinguishes a genuine empty/valid response
+ * (`[]`) from a truncated/malformed one (0 claims recovered but NOT a valid array). Used
+ * to fail loud on BATCH truncation, where the skeleton strips the stop_reason signal
+ * (stageWorker.js normalises the extraction result to {ok,text}), leaving the unparseable
+ * body as the only truncation trace.
+ */
+function parsesToArray(responseText) {
+  if (!responseText || typeof responseText !== 'string') return false;
+  let cleaned = responseText.trim();
+  const fenceMatch = cleaned.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+  if (fenceMatch) cleaned = fenceMatch[1].trim();
+  try { if (Array.isArray(JSON.parse(cleaned))) return true; } catch { /* try array recovery */ }
+  const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
+  if (arrayMatch) { try { return Array.isArray(JSON.parse(arrayMatch[0])); } catch { /* not an array */ } }
+  return false;
 }
 
 /**
@@ -846,28 +887,53 @@ function stageExtractPrepare(entity, cfg, logger) {
 
   if (cfg.useLlmExtraction) {
     const prompt = CLAIM_EXTRACTION_PROMPT.replace('{{CONTENT}}', allMarkdown);
-    return { extractionArgs: { prompt, model: extractionModel, provider: extractionProvider }, ctx };
+    return { extractionArgs: { prompt, model: extractionModel, provider: extractionProvider, max_tokens: EXTRACTION_MAX_TOKENS }, ctx };
   }
   return { claims: extractClaims(allMarkdown), ctx };
 }
 
-// Apply an extraction LLM response to produce claim strings -- mirrors extractClaimsLlm:
-// an errored/empty/unparseable response falls back to the regex extractor (logged), so a
-// degraded extraction reverts to the old behaviour rather than green-lighting or hard-erroring.
-// resp = {ok:true, text} | {ok:false, error}. (Regex entities never call this.)
+// Apply an extraction LLM response. Returns {claims} to proceed, or {degraded, detail} to
+// HARD-FAIL the entity loud (extractionFailedResult) -- NEVER a silent regex fallback that
+// produces a verdict.
+//
+// TRUNCATION is the catastrophic case (fails OPEN): a cut-off extraction returns FEWER
+// claims -- the missing ones may be the fabrications -- yet the old code fell back to the
+// regex extractor (~4 claims on a v3 draft) and the entity could PASS. It is now an INFRA
+// failure (v1.7.0 discipline, mirroring a failed verification batch), so a degraded
+// extraction can never yield qa_pass:true. Two truncation signals:
+//   - stop_reason==='max_tokens' -- definitive; present in SYNC (the skeleton strips it in
+//     batch by normalising the result to {ok,text}).
+//   - a NON-EMPTY response that does not parse to a claim array -- the only trace left in
+//     BATCH mode (a truncated JSON array has no closing bracket -> parsesToArray false).
+// PRESERVED (settled, NOT truncation, byte-identical to before): an errored call still falls
+// back to regex (a transient blip), and a genuine empty `[]` still falls back to regex ->
+// the H21 zero-claims guard (which already fails-closed on substantial content).
+// resp = {ok:true, text, stop_reason?} | {ok:false, error}. (Regex-mode entities never call this.)
 function applyExtraction(ctx, resp, logger) {
+  if (resp && resp.ok !== false && resp.stop_reason === 'max_tokens') {
+    return { degraded: 'extraction_truncated',
+      detail: `hit the ${EXTRACTION_MAX_TOKENS}-token extraction ceiling (stop_reason=max_tokens)` };
+  }
   if (!resp || resp.ok === false) {
     const msg = (resp && resp.error) || 'no response';
     logger.warn(`${ctx.name}: LLM claim extraction failed (${msg}) -- falling back to regex extractor`);
-    return extractClaims(ctx.allMarkdown);
+    return { claims: extractClaims(ctx.allMarkdown) };
   }
   const claims = parseExtractedClaims(resp.text);
   if (claims.length === 0) {
+    // A non-empty response that yielded no parseable claim array is a degraded (likely
+    // truncated) extraction -- in batch mode the skeleton strips stop_reason, so this is the
+    // only truncation signal left. A genuine empty `[]` (or empty text) parses fine and
+    // falls through to the settled regex fallback -> H21.
+    if ((resp.text || '').trim().length > 0 && !parsesToArray(resp.text)) {
+      return { degraded: 'extraction_truncated',
+        detail: 'response present but no claim array could be parsed (likely truncated)' };
+    }
     logger.warn(`${ctx.name}: LLM claim extraction returned no claims -- falling back to regex extractor`);
-    return extractClaims(ctx.allMarkdown);
+    return { claims: extractClaims(ctx.allMarkdown) };
   }
   logger.info(`${ctx.name}: LLM claim extraction found ${claims.length} claim(s)`);
-  return claims;
+  return { claims };
 }
 
 // STAGE B -- source guards + window building + verification-request construction. No LLM call.
@@ -1050,6 +1116,45 @@ function buildBatchVerdicts(responseText, batch) {
 // never moves because of a call that did not happen (ENGINEERING_CONTRACT §5).
 // failures = [{batch: 0-based idx, error}]; notAttempted = [0-based idx] (sync stops
 // calling after the first failure -- further spend is discarded on retry anyway).
+// An extraction that did not complete cleanly (truncated at the token ceiling, or a
+// truncated batch response with the stop_reason stripped) is an INFRA failure, never a
+// content verdict: a degraded extraction examines FEWER claims than the draft contains, so
+// the missing claims -- which may be the fabrications -- would go unverified. meta.status:'error'
+// makes the skeleton's deriveEntityRunStatus mark the run 'failed' (surfaced in failed_count),
+// so the degradation is impossible to miss and the entity can NEVER produce qa_pass:true.
+// Mirrors verificationFailedResult (v1.7.0). ENGINEERING_CONTRACT §5: throw rather than degrade.
+function extractionFailedResult(entity, reason, detail, logger) {
+  const summary = `Claim extraction did not complete (${reason}${detail ? ': ' + detail : ''}). ` +
+    `Failing closed -- a degraded extraction examines FEWER claims than the draft contains, so ` +
+    `the missing claims (which may be the fabrications) would go unverified. This is an ` +
+    `INFRASTRUCTURE failure (retry the run at the raised ceiling), not a content verdict: no ` +
+    `fabrication was found and nothing is a clean pass.`;
+  if (logger) logger.error(`${entity.name}: ${summary}`);
+  return {
+    entity_name: entity.name,
+    items: [{
+      entity_name: entity.name,
+      // status on the ITEM too: a timeout-salvaged _partialItems copy (Rule 10) carries no
+      // meta, so without this the salvage would read as a content FAIL at score 0.
+      status: 'error',
+      qa_pass: false,
+      needs_review: true,
+      hallucination_score: 0,
+      verified_claims_count: 0, partial_claims_count: 0, total_claims_count: 0,
+      flagged_claims_count: 0, flagged_claims: [], flagged_claims_text: '', partial_claims_text: 'None.',
+      summary_text: summary,
+    }],
+    meta: {
+      status: 'error',
+      qa_pass: false,
+      needs_review: true,
+      hallucination_score: 0,
+      total_claims: 0,
+      error: reason,
+    },
+  };
+}
+
 function verificationFailedResult(entity, batches, failures, notAttempted) {
   const totalClaims = batches.reduce((n, b) => n + b.length, 0);
   const unverifiedClaims = failures.reduce((n, f) => n + batches[f.batch].length, 0) +
@@ -1316,12 +1421,19 @@ async function execute(input, options, tools) {
     if (a.extractionArgs) {
       let resp;
       try {
-        const r = await ai.complete({ prompt: a.extractionArgs.prompt, model: a.extractionArgs.model, provider: a.extractionArgs.provider });
-        resp = { ok: true, text: r.text };
+        const r = await ai.complete({ prompt: a.extractionArgs.prompt, model: a.extractionArgs.model, provider: a.extractionArgs.provider, max_tokens: a.extractionArgs.max_tokens });
+        resp = { ok: true, text: r.text, stop_reason: r.stop_reason };
       } catch (err) {
         resp = { ok: false, error: err.message };
       }
-      claims = applyExtraction(a.ctx, resp, logger);
+      const ex = applyExtraction(a.ctx, resp, logger);
+      if (ex.degraded) {
+        const er = extractionFailedResult(entity, ex.degraded, ex.detail, logger);
+        results.push(er);
+        pushPartial(tools, er);
+        continue;
+      }
+      claims = ex.claims;
     } else {
       claims = a.claims;
     }
@@ -1431,7 +1543,13 @@ function prepareVerificationRequests(entities, options, state, extractionByEntit
     if (pe.done) continue;
     let claims = pe.claims;
     if (pe.needExtraction) {
-      claims = applyExtraction(pe.ctx, extractionByEntityIdx ? extractionByEntityIdx[i] : null, logger);
+      const ex = applyExtraction(pe.ctx, extractionByEntityIdx ? extractionByEntityIdx[i] : null, logger);
+      if (ex.degraded) {
+        pe.done = true;
+        pe.final = extractionFailedResult(entities[i], ex.degraded, ex.detail, logger);
+        continue;
+      }
+      claims = ex.claims;
     }
     const bstage = stageVerifyPrepare(entities[i], cfg, claims, pe.ctx, logger);
     if (bstage.final) {
