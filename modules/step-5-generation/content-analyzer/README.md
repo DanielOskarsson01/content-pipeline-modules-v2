@@ -108,6 +108,7 @@ Other useful reference docs: classification guidelines, industry glossaries. The
 | `include_page_intent` | `false` *(byte-identical legacy framing)* | Flip `true` when the pool carries Step-2 intent classification (`page_intent`/`intent_confidence`) and you want the analyzer to see it — the v3 template does. ~25 extra tokens per page | B029-1 (v1.6.0). When on, each page in the assembled prompt gets a numbered header: `--- PAGE {n} ---` + `url:`/`title:` lines + `intent: {page_intent} (confidence {intent_confidence})` (intent line omitted for pages without one). `requires_columns` hydrates the two intent fields so they survive §7b rehydration |
 | `json_retry` | `false` *(legacy: degraded raw-text success)* | Flip `true` (the v3 template does) so a non-JSON model response can never reach downstream modules as garbage | B029-3 (v1.6.0). One temperature-0 corrective re-ask embedding the invalid response (seo-planner v2.2.1 pattern; `cache_prefix` stripped on the retry). A second non-JSON response FAILS the entity loud: `meta.status:'error'`, `analysis_json:null`. Off = the old path: raw text in `section_analysis`, status success |
 | `vocabulary_checks` | (empty -- gate inert) | Set for content types that enforce a closed vocabulary. One line per check: `<analysis_json.path[].slug>=<reference_doc_name>`, e.g. `categories.primary[].slug=master_categories.md`. Blank lines and `#` comments ignored. Leave empty for content types without a fixed taxonomy | Opt-in vocabulary-fidelity gate (v1.4.1): after analysis, every slug at each configured path must exist in the named reference doc. An out-of-vocabulary slug FAILS that entity; a missing/empty referenced doc refuses the whole run before any LLM call |
+| `source_check` | `false` *(gate inert -- byte-identical)* | Flip `true` to mechanically enforce currency cite-or-null on the extracted facts. Deterministic, no LLM call, $0 | Source-check gate (v1.7.0). After analysis, every fact carrying a `source` URL has its currency claims verified against the full text of the page it cites (the module's own scraped `items`). A currency **substitution** -- an amount present on the cited page but the claimed currency not adjacent to it (fact says £50m, page says €50m) -- **removes the whole fact** so it never reaches the writer; the removal is recorded on `meta.source_check`. See the section below |
 | `prompt` | (analysis template) | Customize when your taxonomy differs from default, or when you need different output fields (presets enabled -- templates override per run) | The full LLM instruction. Uses `{entity_content}` for scraped pages and `{doc:filename}` for reference docs |
 
 The model options are no longer hardcoded: the manifest declares `values_from` and the skeleton resolves the actual provider/model lists from the shared LLM registry at load time. Adding a provider or model to the registry makes it available here with no manifest change. The two options that most often need attention are `ai_model` (the floor is sonnet) and `max_tokens` (must be raised to 32,768 alongside it) -- forgetting the second is the most common misconfiguration, because truncation on a thinking model fails the run.
@@ -293,6 +294,68 @@ of the map stay resolvable.
   `http/https` or trailing-slash variants of the same page can accrete separate
   indices across loops. The map stays resolvable; it just grows.
 
+## Source-Check Gate (v1.7.0, opt-in via `source_check`)
+
+A deterministic, $0, no-LLM gate that makes the analyzer's own cite-or-null rule
+**mechanical** for currency claims. The analysis already emits a `source` URL on
+every fact (milestones, offerings, awards, licences, key_people, partnerships).
+When `source_check: true`, after the analysis is accepted the module walks the
+analysis **recursively** — keying only on the generic `source` URL, so it is
+fully pipeline-agnostic and hardcodes no schema path — and for each fact verifies
+any currency+amount it asserts against the **full text of the page that fact
+cites** (the module's own scraped `items`, i.e. exactly what the model saw):
+
+- **Currency substitution → remove the fact.** If a magnitude-bearing amount
+  (`m`/`bn`/`k`) appears on the cited page but the claimed currency is not
+  adjacent to it (±25 chars), the claim is a substitution — e.g. the fact says
+  `£50m` but the cited page says `€50m`. The whole fact is removed (currency is
+  embedded in prose and cannot be surgically nulled), so it never reaches
+  content-writer / the draft. Bare-number currency amounts (`£5`, `$10`) are
+  **not** checked — a bare number matches too loosely on a page ("5 free spins")
+  to remove a fact safely.
+- **Uncheckable → left untouched.** If the cited page is absent from the window,
+  or the amount is not on the cited page at all, the fact is left as-is — never a
+  flag. Absence of evidence is not evidence of substitution.
+
+Every removal is recorded on `meta.source_check` (`{ checked, uncheckable,
+removed, violations:[{ path, source, kind, field, reason }] }`) — visible and
+countable; nothing is dropped silently. A `meta`-only flag was rejected on
+purpose: the writer reads `analysis_json`, not `meta`, so a flag alone would not
+keep a bad fact out of the draft.
+
+**Default OFF and byte-identical** — with `source_check` absent or `false`, the
+analysis is untouched and `meta` carries no `source_check` key.
+
+**Scope — currency cite-or-null only, and why.** This was validated against the
+six real banked analyses of run `9821ed56` (855 cited facts): it fired **once** —
+the genuine Better Collective `£50m`-where-the-page-says-`€50m` — with **zero
+false positives**, including on the re-audit's three refuted cases. The re-audit
+(`content-pipeline-specs/template-v3/quality/DEFECT_REAUDIT.md`, 2026-09-19) named
+other genuine defect classes; each was built, tested against the real analyses,
+and **deliberately left out** because on real data it would null legitimate facts:
+
+- **Date cite-or-null** (e.g. "PariuriX 2016" cited to an undated page). Built,
+  then removed on evidence: "cited page lacks the asserted year" fired on 18 real
+  facts — 1 genuine and **17 world-true dates** whose cited page simply carries no
+  year in scraped form, because Step-3 scrapers strip publication dates (the date
+  lives in the URL path, a news-index page, or a stripped press-release dateline).
+  "Year absent" cannot deterministically distinguish a world-*false* uncited date
+  from a world-*true* one, so shipping it would null 17 legitimate dates. FP-safe
+  date checking needs the scraper to preserve publication dates first — a
+  data-layer change out of this module's scope.
+- **Subject / category / relation welds** (award category on the wrong game;
+  a person's shortlist attributed to the company; an uncited "proprietary wallet"
+  relation). In every case the named subject *is* present on the cited page — only
+  the claim or attribution is wrong — so catching them needs fuzzy claim-phrase or
+  cross-page attribution matching that re-introduces false positives. A
+  named-subject-presence check was also built and rejected because on `name`
+  fields it false-positives a refuted case (a true "former CEO" fact whose cited
+  page happens not to name the person).
+
+Those classes route to **human review**, not blind patching. Operators reviewing
+a run should read `meta.source_check.violations` to see exactly which facts the
+gate removed and why.
+
 ## Limitations & Edge Cases
 
 - **Token limits** - Very large companies with 20+ long pages may exceed model context. max_content_chars prevents crashes but means some pages are truncated. **Truncation is now visible (B029-2, v1.6.0, always-on):** when the assembled source exceeds `max_content_chars`, the module logs a warning and stamps `content_truncated: true`, `content_chars_total` (pre-truncation length) and `content_chars_kept` on the result item AND `meta` — previously the only trace was an in-prompt marker the operator never saw. Under-cap runs carry none of these fields, and the prompt bytes are unchanged either way
@@ -309,7 +372,7 @@ of the map stay resolvable.
 
 After the user reviews and approves the analysis, items enter the working pool with `source_submodule: "content-analyzer"`. These are picked up by **seo-planner**, which uses the analysis_json to plan keyword distribution, meta tags, and FAQs. The user reviews the SEO plan, then **content-writer** uses the analysis, SEO plan, and the original scraped source content to write the full company profile.
 
-The analysis_json is the single source of truth for downstream submodules. If a category is wrong here, it propagates through the entire chain. This is why human review at this stage is critical - it's cheaper to fix a category assignment than to regenerate an entire article.
+The analysis_json is the single source of truth for downstream submodules. If a category is wrong here, it propagates through the entire chain. This is why human review at this stage is critical - it's cheaper to fix a category assignment than to regenerate an entire article. With `source_check: true`, currency-substituted facts are removed from analysis_json here — before seo-planner and content-writer ever see them — and recorded on `meta.source_check` for that review.
 
 ## Technical Reference
 

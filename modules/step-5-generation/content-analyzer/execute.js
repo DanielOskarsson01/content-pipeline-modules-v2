@@ -463,9 +463,212 @@ function mergeSourceCitations(prev, next) {
   return merged;
 }
 
+// ---------------------------------------------------------------------------
+// S1 — deterministic source-check gate (pipeline-agnostic, DEFAULT OFF)
+//
+// CURRENCY cite-or-null enforcement against the page each fact cites. The
+// analyzer's own prompt already carries a cite-or-null rule ("state the value
+// exactly as the source gives it; null if the source gives none"); this makes
+// that rule MECHANICAL instead of trusting the model to self-police. For every
+// object that carries a `source` http(s) URL — found by RECURSIVE WALK, so NO
+// schema path is hardcoded and it works for any content type / prompt shape — a
+// currency+amount the fact asserts must appear on the FULL text of the page it
+// cites (item.text_content, the exact page the model was shown) with the SAME
+// currency ADJACENT to the amount (±25 chars). Amount present but the claimed
+// currency not adjacent to it anywhere → a currency SUBSTITUTION → drop the whole
+// element (currency is embedded in prose; it cannot be surgically nulled without
+// mangling the sentence). If the amount is not on the cited page at all, or the
+// page is absent from the window, the fact is left untouched (uncheckable, never
+// a flag).
+//
+// A removed fact NEVER reaches the writer (analysis_json is what the writer
+// serializes) AND the removal is recorded on meta.source_check — visible +
+// countable. A meta-only flag was rejected: the writer reads analysis_json, not
+// meta, so a flag alone would not keep a bad fact out of the draft without a
+// cross-module writer change this unit does not own.
+//
+// SCOPE — this catches the ONE cite-or-null class the run-9821ed56 re-audit
+// (content-pipeline-specs template-v3/quality/DEFECT_REAUDIT.md, 2026-09-19)
+// proved catchable single-page with ZERO false positives across 855 real cited
+// facts: BC "£50m" where the cited page says €50m (currency substitution). The
+// re-audit's other genuine defects were each evaluated against the real banked
+// analyses and deliberately LEFT OUT — every one would null legitimate facts:
+//
+//   - DATE cite-or-null (BC PariuriX "2016" on an undated page). Built, then
+//     REMOVED on evidence: the check "cited page lacks the asserted year" fired
+//     on 18 real facts — 1 genuine (PariuriX) and 17 world-TRUE dates whose
+//     cited page simply does not carry the year in scraped form (Step-3 scrapers
+//     strip publication dates — re-audit §5; the date lives in the URL path, a
+//     news-index page, or a stripped press-release dateline). Deterministically,
+//     "year absent from cited page" cannot separate a world-false uncited date
+//     from a world-true uncited date, so shipping it would null 17 legitimate
+//     dates. FP-safe date checking needs the scraper to preserve publication
+//     dates first — a data-layer change out of this unit's scope.
+//   - subject/category weld (Push "Best High Volatility Game (Dinopolis)") — the
+//     game name IS on the cited page; only the award CATEGORY is welded.
+//   - person→company weld   (BC Søgaard Exec-of-the-Year) — the company IS on
+//     the cited (person) page; catching it needs cross-attribution inference.
+//   - uncited relation      (PayRetailers Kuady "proprietary wallet") — the
+//     subject "Kuady" IS on the page; only the relation is unsupported.
+//   A NAMED-SUBJECT presence check was also built and rejected on evidence: on
+//   `name` fields it FLAGS the refuted Vixio Woolfrey "(former)" (name absent
+//   from its own cited page) — a false positive on a REFUTED case; on
+//   parentheticals it catches none of the above (their subjects are all present).
+//   All of these route to human review, not blind patching — the same call the
+//   re-audit made for the Woolfrey/OC7 cross-page cases.
+// ---------------------------------------------------------------------------
+
+// Currency canonical-form matchers (word-boundary safe so "compound" ≠ "pound").
+const CURRENCY_FORMS = {
+  GBP: /£|\bGBP\b|\bpounds?\b|\bsterling\b/i,
+  EUR: /€|\bEUR\b|\bmEUR\b|\beuros?\b/i,
+  USD: /\$|\bUSD\b|\bdollars?\b/i,
+};
+
+/** Canonicalise a currency marker to an ISO code, or null. */
+function canonCurrency(marker) {
+  const m = String(marker).toLowerCase();
+  if (m === '£' || m.includes('gbp') || m.includes('pound') || m.includes('sterling')) return 'GBP';
+  if (m === '€' || m.includes('eur')) return 'EUR';
+  if (m === '$' || m.includes('usd') || m.includes('dollar')) return 'USD';
+  return null;
+}
+
+/** Build a page-side regex matching the amount (magnitude required if present,
+ *  so a bare "50" never matches "50 employees"). */
+function amountRegex(num, mag) {
+  const nEsc = String(num).replace(/,/g, '').replace(/\.0+$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let magAlt = '';
+  if (mag) {
+    const g = String(mag).toLowerCase();
+    if (/^(m|mn|million)$/.test(g)) magAlt = '\\s?(?:m|mn|million)';
+    else if (/^(bn|billion)$/.test(g)) magAlt = '\\s?(?:bn|billion)';
+    else if (/^(k|thousand)$/.test(g)) magAlt = '\\s?(?:k|thousand)';
+  }
+  return new RegExp(`\\b${nEsc}${magAlt}\\b`, 'gi');
+}
+
+/** Parse currency+amount expressions the fact ASSERTS (currency-prefixed form,
+ *  e.g. "£50m", "EUR 50 million"). Returns [{ currency, amountRe }].
+ *  MAGNITUDE-BEARING ONLY (m/mn/million/bn/billion/k/thousand): a bare-number
+ *  amount ("£5") would build a page regex `\b5\b` that matches any "5" on the
+ *  page ("5 free spins"), so on a currency-sparse page it could wrongly remove a
+ *  legitimate fact. A magnitude makes the amount distinctive enough to reliably
+ *  co-locate with its currency, keeping the fact-DELETING path false-positive
+ *  safe. ponytail: bare-number currency amounts are intentionally uncheckable —
+ *  upgrade to proximity-scored matching only if bare amounts prove worth the FP risk. */
+function parseMoneyExpressions(str) {
+  if (typeof str !== 'string') return [];
+  const out = [];
+  const cur = '£|€|\\$|GBP|EUR|mEUR|USD';
+  const num = '\\d[\\d,]*(?:\\.\\d+)?';
+  const mag = 'm|mn|million|bn|billion|k|thousand';
+  // The magnitude needs a trailing \b or a bare "m" would eat the first letter of
+  // a following word ("£5 minimum" → false "£5m"). \b anchors it to a real unit.
+  const re = new RegExp(`(${cur})\\s?(${num})(?:\\s?(${mag})\\b)?`, 'gi');
+  let m;
+  while ((m = re.exec(str)) !== null) {
+    const c = canonCurrency(m[1]);
+    if (c && m[3]) out.push({ currency: c, amountRe: amountRegex(m[2], m[3]) }); // require a magnitude
+  }
+  return out;
+}
+
+/** Does the claimed currency appear ADJACENT to the amount on the page?
+ *  Returns { sawAmount, found }. sawAmount=false ⇒ uncheckable (never a flag). */
+function currencyNearAmount(pageText, currency, amountRe) {
+  amountRe.lastIndex = 0;
+  let m, sawAmount = false, found = false;
+  const form = CURRENCY_FORMS[currency];
+  while ((m = amountRe.exec(pageText)) !== null) {
+    sawAmount = true;
+    const start = Math.max(0, m.index - 25);
+    const end = Math.min(pageText.length, m.index + m[0].length + 25);
+    if (form && form.test(pageText.slice(start, end))) { found = true; break; }
+    if (m.index === amountRe.lastIndex) amountRe.lastIndex++; // zero-width guard
+  }
+  return { sawAmount, found };
+}
+
+const SOURCE_CHECK_REMOVE = Symbol('source-check-remove');
+
+/** url → full page text, trailing-slash tolerant, from the analyzer's own items. */
+function buildPageIndex(items) {
+  const idx = new Map();
+  for (const it of items || []) {
+    if (it && typeof it.url === 'string' && typeof it.text_content === 'string') {
+      const u = it.url.trim();
+      if (!idx.has(u)) idx.set(u, it.text_content);
+      const noslash = u.replace(/\/+$/, '');
+      if (!idx.has(noslash)) idx.set(noslash, it.text_content);
+    }
+  }
+  return idx;
+}
+function lookupPage(idx, url) {
+  if (idx.has(url)) return idx.get(url);
+  const noslash = url.replace(/\/+$/, '');
+  return idx.has(noslash) ? idx.get(noslash) : undefined;
+}
+
+/**
+ * Verify every cited fact against its cited page. Returns
+ * { cleaned, violations, stats } — `cleaned` is a NEW structure (input not
+ * mutated); a currency substitution removes the whole element; a cited page
+ * absent from the window, or an amount not on the cited page, is uncheckable
+ * (never a violation). Pipeline-agnostic: keyed only on the generic `source` URL.
+ */
+function runSourceCheck(analysis, items) {
+  const pageIndex = buildPageIndex(items);
+  const violations = [];
+  const stats = { cited: 0, uncheckable: 0, removed: 0 };
+
+  function clean(node, path) {
+    if (Array.isArray(node)) {
+      const out = [];
+      node.forEach((el, i) => {
+        const c = clean(el, `${path}[${i}]`);
+        if (c !== SOURCE_CHECK_REMOVE) out.push(c);
+      });
+      return out;
+    }
+    if (node && typeof node === 'object') {
+      const obj = {};
+      for (const [k, v] of Object.entries(node)) {
+        const c = clean(v, path ? `${path}.${k}` : k);
+        obj[k] = (c === SOURCE_CHECK_REMOVE) ? null : c;
+      }
+      const src = (typeof obj.source === 'string' && /^https?:\/\//i.test(obj.source)) ? obj.source.trim() : null;
+      if (!src) return obj;
+      stats.cited++;
+      const pageText = lookupPage(pageIndex, src);
+      if (pageText == null) { stats.uncheckable++; return obj; }
+
+      // CURRENCY substitution check: amount present on the cited page but the
+      // claimed currency not adjacent to it → drop the whole element.
+      for (const [k, v] of Object.entries(obj)) {
+        if (k === 'source' || typeof v !== 'string') continue;
+        for (const money of parseMoneyExpressions(v)) {
+          const { sawAmount, found } = currencyNearAmount(pageText, money.currency, money.amountRe);
+          if (sawAmount && !found) {
+            stats.removed++;
+            violations.push({ path, source: src, kind: 'currency', field: k, offending: v.slice(0, 160), reason: `${money.currency} amount not attributed to ${money.currency} on cited page` });
+            return SOURCE_CHECK_REMOVE;
+          }
+        }
+      }
+      return obj;
+    }
+    return node;
+  }
+
+  const cleaned = clean(analysis, '');
+  return { cleaned, violations, stats };
+}
+
 async function execute(input, options, tools) {
   const { entities } = input;
-  const { ai_model, ai_provider, max_content_chars, prompt: promptTemplate, reference_docs, temperature, max_tokens, vocabulary_checks, include_page_intent, json_retry } = options;
+  const { ai_model, ai_provider, max_content_chars, prompt: promptTemplate, reference_docs, temperature, max_tokens, vocabulary_checks, include_page_intent, json_retry, source_check } = options;
   const { logger, progress, ai } = tools;
 
   // Warn if critical reference docs are missing — the prompt relies on {doc:master_categories.md}
@@ -693,6 +896,25 @@ async function execute(input, options, tools) {
         }
       }
 
+      // S1 source-check gate (default OFF → byte-identical). Verify each cited
+      // fact against the page it cites; remove currency-substituted elements so
+      // they never reach the writer. Runs after the vocab gate so it only sees an
+      // accepted analysis. Re-flatten so the display sections reflect the cleaned
+      // analysis (mirrors the citation-merge path above). Actions recorded on
+      // meta.source_check (visible + countable).
+      let scMeta = null;
+      if (source_check === true && analysis && typeof analysis === 'object') {
+        const sc = runSourceCheck(analysis, items);
+        analysis = sc.cleaned;
+        flat = flattenAnalysis(analysis);
+        scMeta = { checked: sc.stats.cited, uncheckable: sc.stats.uncheckable, removed: sc.stats.removed, violations: sc.violations };
+        if (sc.violations.length > 0) {
+          logger.warn(`${entity.name}: source-check removed ${sc.stats.removed} currency-substituted element(s) across ${sc.stats.cited} cited facts (${sc.stats.uncheckable} uncheckable — cited page not in window)`);
+        } else {
+          logger.info(`${entity.name}: source-check clean — ${sc.stats.cited} cited facts verified (${sc.stats.uncheckable} uncheckable)`);
+        }
+      }
+
       // B029-2: input-truncation visibility — additive fields, only stamped
       // when the assembled source exceeded max_content_chars.
       const truncationFields = assembled.truncated
@@ -721,7 +943,7 @@ async function execute(input, options, tools) {
       results.push({
         entity_name: entity.name,
         items: [resultItem],
-        meta: { pages_analyzed: items.length, total_words: totalWords, status: 'success', ...truncationFields },
+        meta: { pages_analyzed: items.length, total_words: totalWords, status: 'success', ...truncationFields, ...(scMeta ? { source_check: scMeta } : {}) },
       });
 
       logger.info(`${entity.name}: analysis complete — ${flat.summary_preview}`);
@@ -776,4 +998,8 @@ module.exports.__testing = {
   resolveReferenceDoc,
   extractVocabSlugs,
   assembleEntityContent,
+  // S1 source-check gate
+  parseMoneyExpressions,
+  currencyNearAmount,
+  runSourceCheck,
 };
