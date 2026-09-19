@@ -602,6 +602,118 @@ function decideHallucinationPass({ hallucinationScore, unsupportedClaims, claimE
   return { qaPass, floorTripped, highSevUnsupported, regraded };
 }
 
+// ─── Severity-floor confirmation pass (v1.9.0, option `floor_confirmation`) ───
+//
+// At production claim volume (150-200 claims/entity) the per-batch window budget is shared
+// across 25 claims, capping each claim's effective top-K at 1-2 chunks -- so corpus-true
+// claims routinely grade unsupported/HIGH (retrieval starvation, not fabrication) and the
+// all-or-nothing floor blocks clean drafts: run 9821ed56 measured 13 of 16 floor HIGHs as
+// corpus-true FPs and auto-approve at 1/6. The repaired in_window instrument CANNOT gate
+// the floor: at full volume genuine fabrications read beyond_window exactly like the FPs
+// (hdtopk evidence -- Málaga/Sweden, BetMGM 17-Aug, the £50m program, and all three injected
+// corpus-absent controls), while the few in_window tags sit on FPs. So this pass gates on
+// RE-VERIFICATION instead: the floor-tripping HIGH claims are re-verified in small batches
+// (uncontended retrieval -- each claim gets its full top-K supplement), and the floor stands
+// only on a HIGH that survives. Specimen evidence (hdtopk fixed/): genuine fabrications stay
+// HIGH on 13/13 small-batch draw-slots; 21/27 corpus-true FP specimens clear. No severity is
+// ever regraded from an evidence tag (the weld-unsafe hole severity_model 'evidence_absent'
+// has) -- the only release path is the same verifier + code-locked prompt (incl. the v1.8.0
+// weld rule) affirmatively grading the claim below unsupported/HIGH. Fail-closed: an errored
+// call, unparseable response, or missing verdict CONFIRMS those claims (the block stands) --
+// a fabrication must never escape because a confirmation call failed (§5 discipline: the
+// main verification completed; an unavailable confirmation leaves its verdict standing).
+
+// Confirmation batch size. 8 mirrors the specimen batch that measured clean discrimination
+// (LeoVegas: 8 claims -> FPs cleared, weld HIGH, 4/4 draws); at 11-12 claims the iGP batches
+// already showed contention onset (injected controls classifying beyond_window).
+const FLOOR_CONFIRM_BATCH_SIZE = 8;
+
+async function confirmFloorHighs(entity, cfg, ctx, entityResult, tools) {
+  const { ai, logger } = tools;
+  const item = entityResult.items[0];
+  const meta = entityResult.meta;
+  const highClaims = (item.flagged_claims || []).filter(f => f.severity === 'high').map(f => f.claim);
+
+  const confCfg = { ...cfg, claims_per_batch: Math.min(FLOOR_CONFIRM_BATCH_SIZE, cfg.claims_per_batch) };
+  // Guards inside cannot fire here: the floor only trips after a completed verification,
+  // which requires sources and at least one claim.
+  const conf = stageVerifyPrepare(entity, confCfg, highClaims, ctx, logger);
+  const { batches, claimEvidence } = conf.verifyCtx;
+
+  const confirmed = new Set();
+  const confVerdicts = {}; // claim -> {verdict, severity} from the confirmation draw (audit trail)
+  const responses = [];
+  for (let b = 0; b < conf.verifyRequests.length; b++) {
+    try {
+      const r = await ai.complete(conf.verifyRequests[b].args);
+      responses.push({ ok: true, text: r.text });
+    } catch (err) {
+      logger.warn(
+        `${entity.name}: floor-confirmation call ${b + 1}/${conf.verifyRequests.length} failed ` +
+        `(${err.message}) -- its claims stay confirmed (fail-closed); remaining batches skipped ` +
+        `(the floor stands regardless, further spend is moot)`
+      );
+      responses.push({ ok: false, error: err.message });
+      break;
+    }
+  }
+  for (let b = 0; b < batches.length; b++) {
+    const resp = responses[b];
+    if (!resp || resp.ok === false) {
+      for (const c of batches[b]) confirmed.add(c);
+      continue;
+    }
+    for (const v of buildBatchVerdicts(resp.text, batches[b])) {
+      // Release requires re-verified SEVERITY below high -- regardless of verdict. A
+      // verdict-based release (cleared if no longer 'unsupported') lets a weld escape by
+      // flipping to 'partial': measured on the BC £50m/€50m currency error -- substance
+      // true, currency false -- which re-verifies partial/HIGH on 2/2 small-batch draws.
+      // Severity is what the floor gates on, and the v1.8.0 weld rule grades severity on
+      // the evidence, so severity-below-high is the release test.
+      const stillHigh = (v.severity || 'medium') === 'high';
+      const affirmative = !v._parse_error && !v._missing_verdict;
+      if (affirmative) confVerdicts[v.claim] = { verdict: v.verdict, severity: v.severity || 'medium' };
+      if (!affirmative || stillHigh) confirmed.add(v.claim);
+    }
+  }
+
+  const confirmedCount = highClaims.filter(c => confirmed.has(c)).length;
+  const clearedCount = highClaims.length - confirmedCount;
+  const qaPass = confirmedCount > 0 ? false : meta.qa_pass_at_threshold === true;
+
+  item.flagged_claims = item.flagged_claims.map(f =>
+    f.severity === 'high' ? { ...f, floor_confirmed: confirmed.has(f.claim) } : f);
+  item.qa_pass = qaPass;
+  meta.qa_pass = qaPass;
+  delete meta.floor_confirmation_pending;
+  delete meta.qa_pass_at_threshold;
+  meta.floor_confirmation = {
+    highs_initial: highClaims.length,
+    highs_confirmed: confirmedCount,
+    highs_cleared: clearedCount,
+    batches: batches.length,
+    claims: highClaims.map(c => ({
+      claim: c,
+      confirmed: confirmed.has(c),
+      ...(confVerdicts[c] || { verdict: 'unverified', severity: 'high' }), // no affirmative verdict -> fail-closed
+      // evidence tag under the CONFIRMATION window (diagnostic only, never a gate)
+      evidence: claimEvidence[c] || 'unknown',
+    })),
+  };
+  item.summary_text += confirmedCount > 0
+    ? ` FLOOR CONFIRMATION: ${confirmedCount} of ${highClaims.length} high-severity claim(s) ` +
+      `re-verified as unsupported/high in a focused batch (uncontended retrieval) -- the floor stands.`
+    : ` FLOOR CONFIRMATION: 0 of ${highClaims.length} high-severity claim(s) survived focused ` +
+      `re-verification (uncontended retrieval) -- retrieval-starved false positives; the floor is ` +
+      `released and the score decides (${qaPass ? 'PASS' : 'FAIL at threshold'}). Flags retained for review.`;
+
+  logger.info(
+    `${entity.name}: floor confirmation -- ${confirmedCount}/${highClaims.length} HIGH(s) confirmed, ` +
+    `${clearedCount} cleared, qa_pass=${qaPass}`
+  );
+  return entityResult;
+}
+
 // ─── Main execute function ───
 //
 // Phase 2B refactor: the per-entity body is split into pure STAGES
@@ -637,6 +749,7 @@ function resolveDetectorOptions(options) {
     extraction_model = null,
     extraction_provider = null,
     cache_base_window = false,
+    floor_confirmation = false,
   } = otherOptions;
   const severityModel = severity_model === 'evidence_absent' ? 'evidence_absent' : 'current';
   const resolvedProvider = ai_provider === undefined ? 'anthropic' : ai_provider;
@@ -651,6 +764,7 @@ function resolveDetectorOptions(options) {
     claimAnchored: source_selection === 'claim_anchored',
     useCacheSplit: asBool(cache_base_window) && resolvedProvider === 'anthropic',
     severityModel,
+    floorConfirmation: asBool(floor_confirmation),
     verificationPrompt: MANIFEST_DEFAULT_PROMPT,
     _severityModelRaw: severity_model,
   };
@@ -1118,6 +1232,13 @@ function stageFinalize(entity, cfg, verifyCtx, batchResponses, logger) {
       unsupported: unsupportedClaims.length,
       batches_sent: batches.length,
       ...(severityFloorTripped ? { severity_floor_tripped: true } : {}),
+      // Handshake for the sync-path confirmation pass (v1.9.0): carries the EXACT
+      // unrounded threshold decision so a released floor never re-decides off the
+      // rounded stored score. Gated on the option -- absent = byte-identical output.
+      ...(severityFloorTripped && cfg.floorConfirmation ? {
+        floor_confirmation_pending: true,
+        qa_pass_at_threshold: hallucinationScore >= cfg.pass_threshold,
+      } : {}),
       ...(cfg.severityModel === 'evidence_absent' ? { severity_model: 'evidence_absent' } : {}),
       ...(claimAnchored ? {
         source_selection: 'claim_anchored',
@@ -1233,7 +1354,11 @@ async function execute(input, options, tools) {
       }
     }
 
-    const entityResult = stageFinalize(entity, cfg, bstage.verifyCtx, batchResponses, logger);
+    let entityResult = stageFinalize(entity, cfg, bstage.verifyCtx, batchResponses, logger);
+    if (cfg.floorConfirmation && entityResult.meta.severity_floor_tripped) {
+      progress.update(i + 1, entities.length, `${entity.name}: confirming severity-floor HIGH claim(s)`);
+      entityResult = await confirmFloorHighs(entity, cfg, a.ctx, entityResult, tools);
+    }
     const it = entityResult.items[0];
     logger[it.qa_pass ? 'info' : 'warn'](
       `${entity.name}: hallucination_score=${(it.hallucination_score * 100).toFixed(1)}% ` +
@@ -1267,8 +1392,19 @@ const NOOP_LOGGER = { info() {}, warn() {}, error() {} };
 
 function prepareExtractionRequests(entities, options, tools) {
   const logger = (tools && tools.logger) || NOOP_LOGGER;
-  const cfg = resolveDetectorOptions(options);
+  let cfg = resolveDetectorOptions(options);
   logConfig(cfg, logger);
+  if (cfg.floorConfirmation) {
+    // The confirmation pass needs a third synchronous round-trip; the Message-Batches flow
+    // has exactly two (extract, verify). Force it off here so the floor keeps today's
+    // all-or-nothing behaviour in batch mode -- conservative: nothing escapes, and
+    // stageFinalize never emits the pending-handshake meta on a path that cannot resolve it.
+    logger.warn(
+      'floor_confirmation is sync-only -- Message-Batches mode keeps the unconfirmed ' +
+      'all-or-nothing severity floor (a tripped floor blocks without re-verification).'
+    );
+    cfg = { ...cfg, floorConfirmation: false };
+  }
   const perEntity = [];
   const extractionRequests = [];
   for (let i = 0; i < entities.length; i++) {
